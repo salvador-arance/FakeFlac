@@ -6,6 +6,11 @@ targets = ["x86_64-pc-windows-msvc"]
 
 [advisories]
 version = 2
+ignore = [
+    # `paste` is archived (unmaintained), not vulnerable. It is a build-time proc-macro required by
+    # specta 2.0.0-rc.25 (ADR-0033). Revisit when specta drops it or a vulnerability appears.
+    { id = "RUSTSEC-2024-0436", reason = "build-time proc-macro of specta; unmaintained, no known vulnerability (ADR-0033)" },
+]
 
 [licenses]
 version = 2
