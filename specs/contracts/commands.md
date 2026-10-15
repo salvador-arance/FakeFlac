@@ -2,7 +2,7 @@
 id: SPEC-CONTRACT-H1
 requirements: [RF-01, RF-02, RF-05, RF-06, RF-07]
 status: proposed
-version: 1
+version: 2
 ---
 
 # Backend ↔ frontend contract (H1)
@@ -14,11 +14,19 @@ version: 1
 | Command | Input | Output | Errors (`AppError.code`) | Req. |
 |---|---|---|---|---|
 | `pick_folder` | — | `string \| null` (absolute path; `null` if the dialog is cancelled) | — | RF-01 |
-| `start_analysis` | `root: string`, `onProgress: Channel<ProgressEvent>` | `AnalysisSummary` when the run ends (finished or cancelled) | `FOLDER_UNREADABLE`, `NO_AUDIO_FOUND`, `ANALYSIS_RUNNING` | RF-01..06 |
+| `start_analysis` | `root: string` (absolute path), `onProgress: Channel<ProgressEvent>` | `AnalysisSummary` when the run ends (finished or cancelled) | `NOT_A_FOLDER`, `FOLDER_UNREADABLE`, `NO_AUDIO_FOUND`, `ANALYSIS_RUNNING`, `INTERNAL` | RF-01..06 |
 | `cancel_analysis` | — | `void` (no-op if nothing is running) | — | RF-05 |
 | `get_spectrogram` | `path: string` | `Spectrogram` | `NOT_ANALYZED` is not used in H1; `INTERNAL` if the file cannot be decoded | RF-07 |
 
-Drag and drop uses Tauri's native drag-drop event; the frontend takes the first dropped path that is a folder and calls `start_analysis`. Dropped files (not folders) are ignored in H1.
+Drag and drop uses Tauri's native drag-drop event. The frontend cannot tell a folder from a file (it has no file-system access), so it calls `start_analysis` with each dropped path in order until one does not fail with `NOT_A_FOLDER`. Dropped files are ignored in H1: if every dropped path is a file, nothing starts and no error is shown. Any other error is shown as usual.
+
+`start_analysis` errors before the run starts (no event is sent):
+- `NOT_A_FOLDER`: `root` exists but is a file.
+- `FOLDER_UNREADABLE`: `root` does not exist, cannot be listed, or is not an absolute path.
+- `NO_AUDIO_FOUND`: the folder has no supported file.
+- `ANALYSIS_RUNNING`: another run holds the analysis.
+
+`INTERNAL` means the run failed unexpectedly, possibly after some events were sent. No `finished`/`cancelled` event follows: a rejected `start_analysis` is always the end of the run. When the call resolves, every event of the run has already been delivered.
 
 Only one analysis runs at a time: a second `start_analysis` while one is running fails with `ANALYSIS_RUNNING`.
 
@@ -27,6 +35,8 @@ Only one analysis runs at a time: a second `start_analysis` while one is running
 Ordered per run. Exactly one of `finished` / `cancelled` is the last event.
 
 ```ts
+// Paths are strings. A Windows name that is not valid Unicode arrives with U+FFFD replacement
+// characters, so a path may not be unique: the frontend keys rows by `index` within a run.
 type ProgressEvent =
   | { kind: 'scanned'; total: number }                          // files found (supported formats only)
   | { kind: 'trackStarted'; index: number; path: string }       // RF-05 per-track progress
@@ -85,7 +95,7 @@ type Spectrogram = {
 }
 
 type AppError = {
-  code: 'NO_AUDIO_FOUND' | 'FOLDER_UNREADABLE' | 'ANALYSIS_RUNNING' | 'NOT_ANALYZED' | 'EXPORT_FAILED' | 'INTERNAL'
+  code: 'NO_AUDIO_FOUND' | 'NOT_A_FOLDER' | 'FOLDER_UNREADABLE' | 'ANALYSIS_RUNNING' | 'NOT_ANALYZED' | 'EXPORT_FAILED' | 'INTERNAL'
   message: string
 }
 ```
