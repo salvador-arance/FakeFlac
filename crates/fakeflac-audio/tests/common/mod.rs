@@ -151,7 +151,7 @@ fn signal(name: &str) -> Spec {
                 samples: noise,
             };
         }
-        "silence" => vec![0.0; (f64::from(sr) * secs) as usize],
+        "silence" => vec![0.0; frames(sr, secs)],
         other => panic!("unknown fixture {other}"),
     };
     let mut samples = samples;
@@ -167,6 +167,15 @@ fn signal(name: &str) -> Spec {
     }
 }
 
+/// Number of frames for `secs` seconds, rounded down to a multiple of the FLAC block size (4096).
+/// flacenc writes the (shorter) last block's size as the stream's minimum block size; strict
+/// decoders such as symphonia then reject every fixed-size frame. Real encoders (libFLAC) write
+/// min = max for fixed blocking, so the fixtures avoid a short last block.
+fn frames(sr: u32, secs: f64) -> usize {
+    const FLAC_BLOCK: usize = 4096;
+    (f64::from(sr) * secs) as usize / FLAC_BLOCK * FLAC_BLOCK
+}
+
 fn brick(f: f64, fc: f64) -> f64 {
     if f < fc {
         1.0
@@ -178,7 +187,7 @@ fn brick(f: f64, fc: f64) -> f64 {
 /// Noise with magnitude response `gain(f)` and random phases, built in the frequency domain with
 /// a single inverse FFT (no block boundaries inside the signal, so the low-pass is exact).
 fn shaped_noise(sr: u32, secs: f64, gain: impl Fn(f64) -> f64, seed: u64) -> Vec<f64> {
-    let len = (f64::from(sr) * secs) as usize;
+    let len = frames(sr, secs);
     let n = len.next_power_of_two();
     let mut rng = ChaCha8Rng::seed_from_u64(seed);
     let mut planner = RealFftPlanner::<f64>::new();
