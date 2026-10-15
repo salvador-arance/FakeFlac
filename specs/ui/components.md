@@ -33,7 +33,7 @@ status: proposed
 |---|---|---|---|---|
 | `TitleBar` | `title: string` | `minimize`, `toggleMaximize`, `close` | — | `data-tauri-drag-region` |
 | `Toolbar` | `canOpen: boolean`, `canCancel: boolean` | `open`, `cancel` | idle · running | Groups and separators like the reference; H2 adds remove, export, filters and search |
-| `ResultsTable` | `rows: TrackAnalysis[]`, `selectedPath: string \| null`, `sort: SortState` | `select(path)`, `sort(column)` | empty · rows · many rows (virtualised) | Columns of `main-screen.md`; virtualised rows (row height token); keyboard navigation |
+| `ResultsTable` | `rows: ResultRow[]` (`{ index: number; analysis: TrackAnalysis }`, `index` from the progress events), `selectedIndex: number \| null`, `sort: SortState` | `select(index)`, `sort(column)` | empty · rows · many rows (virtualised) | Columns of `main-screen.md`; virtualised rows (row height token); keyboard navigation |
 | `SpectrogramView` | `spectrogram: Spectrogram \| null`, `cutoffHz: number \| null`, `loading: boolean` | — | loading · image · none | `<canvas>`; colour map from tokens; frequency axis in kHz; cutoff line |
 | `DetailPanel` | `track: TrackAnalysis \| null`, `spectrogram`, `loading` | — | nothing selected · loading · spectrogram · error | Text line: "Cutoff 16.0 kHz · Fake · <reason>"; for errors shows the error text |
 | `StatusBar` | `phase: 'ready' \| 'scanning' \| 'analysing' \| 'finished' \| 'cancelled' \| 'error'`, `summary`, `message?` | — | one per phase | Uses `ProgressBar` |

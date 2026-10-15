@@ -35,7 +35,7 @@ Minimum window: 900 × 500 (already in `tauri.conf.json`).
 | Analysing | Rows appear as `trackDone` arrives (batched ≤ 1 update / 100 ms) | Spectrogram of the selected row, if any | Open disabled, Cancel enabled | Determinate progress `done/total` + counters |
 | Finished | All rows | Selected row | Open enabled, Cancel disabled | "31 tracks · 28 real · 2 suspicious · 1 fake · 0 errors" |
 | Cancelled | Rows done so far | Selected row | Open enabled | "Cancelled · 18 of 31" |
-| Error (`AppError`) | Previous content kept | — | Open enabled | Error message in the status bar (e.g. "No WAV or FLAC files in this folder") |
+| Error (`AppError`) | Previous content kept (after `INTERNAL`, the rows already reported stay) | — | Open enabled, Cancel disabled | Error message in the status bar (e.g. "No WAV or FLAC files in this folder") |
 
 ## Interaction
 
@@ -47,4 +47,4 @@ Minimum window: 900 × 500 (already in `tauri.conf.json`).
 
 ## Texts (English and Spanish keys in `src/lib/i18n/`; English is the H1 default)
 
-`app.title` FakeFlac · `toolbar.open` Open folder · `toolbar.cancel` Cancel · `empty.hint` Drop a folder here or click Open folder · `status.ready` Ready · `status.scanning` Scanning… · `verdict.real` Genuine · `verdict.suspicious` Suspicious · `verdict.fake` Fake · `verdict.error` Error · `reason.lowHighFrequencyContent` Little high-frequency content: cannot confirm · `reason.gradualRolloff` High frequencies fade out gradually · `reason.ambiguousCutoff` Sharp cutoff at a high frequency · `error.tooShort` Too short to analyse · `error.corruptStream` Corrupt stream · `error.unreadable` Cannot read the file · `error.NO_AUDIO_FOUND` No WAV or FLAC files in this folder.
+`app.title` FakeFlac · `toolbar.open` Open folder · `toolbar.cancel` Cancel · `empty.hint` Drop a folder here or click Open folder · `status.ready` Ready · `status.scanning` Scanning… · `verdict.real` Genuine · `verdict.suspicious` Suspicious · `verdict.fake` Fake · `verdict.error` Error · `reason.lowHighFrequencyContent` Little high-frequency content: cannot confirm · `reason.gradualRolloff` High frequencies fade out gradually · `reason.ambiguousCutoff` Sharp cutoff at a high frequency · `error.tooShort` Too short to analyse · `error.corruptStream` Corrupt stream · `error.unreadable` Cannot read the file · `error.NO_AUDIO_FOUND` No WAV or FLAC files in this folder · `error.FOLDER_UNREADABLE` Cannot open this folder · `error.ANALYSIS_RUNNING` An analysis is already running · `error.INTERNAL` The analysis stopped because of an unexpected error. `NOT_A_FOLDER` has no text: dropped files are ignored silently.

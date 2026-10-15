@@ -25,6 +25,28 @@ Feature: Analyse a folder
     When I drop the folder "Album A" anywhere on the window
     Then an analysis of "Album A" starts
 
+  @RF-01
+  Scenario: Dropped files are ignored
+    When I drop the file "cover.jpg" anywhere on the window
+    Then no analysis starts
+    And no error is shown
+
+  @RF-01
+  Scenario: Drop files and a folder together
+    When I drop the file "a.flac" and the folder "Album A" together
+    Then an analysis of "Album A" starts
+
+  @RF-01
+  Scenario: Analysing a file instead of a folder
+    Given a file "a.flac"
+    When I start an analysis of "a.flac"
+    Then it fails with error "NOT_A_FOLDER"
+
+  @RF-01
+  Scenario: Relative paths are rejected
+    When I start an analysis of the relative path "Album A"
+    Then it fails with error "FOLDER_UNREADABLE"
+
   @RF-02 @RF-14
   Scenario: Supported files are found recursively
     Given a folder "Library" containing "a.flac", "b.WAV", "notes.txt", "cover.jpg" and a subfolder "CD2" containing "c.flac"
@@ -43,6 +65,14 @@ Feature: Analyse a folder
     When I analyse "Docs"
     Then the analysis fails with error "NO_AUDIO_FOUND"
     And the table stays empty
+
+  @RNF-04
+  Scenario: An unexpected failure ends the run
+    Given an analysis of "Album A" is running and has reported 2 tracks
+    When the run fails unexpectedly
+    Then the analysis fails with error "INTERNAL"
+    And the 2 tracks already reported stay in the table
+    And the toolbar allows opening a folder again
 
   @RF-05
   Scenario: Progress is reported per track and globally
