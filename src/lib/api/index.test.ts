@@ -16,7 +16,7 @@ vi.mock('@tauri-apps/api/core', () => {
   return { invoke, Channel }
 })
 
-import { ApiError, cancelAnalysis, pickFolder, startAnalysis } from './index'
+import { ApiError, cancelAnalysis, pickFolder, startAnalysis, startAnalysisOfDropped } from './index'
 import type { AnalysisSummary, ProgressEvent } from './index'
 
 const summary: AnalysisSummary = {
@@ -137,6 +137,65 @@ describe('startAnalysis ordering and errors', () => {
     expect(error).toBeInstanceOf(ApiError)
     expect((error as ApiError).code).toBe('INTERNAL')
     expect((error as ApiError).message).toContain('invalid args')
+  })
+})
+
+describe('startAnalysisOfDropped', () => {
+  // Fake backend: paths ending in an audio/image extension are files; anything else is a folder.
+  function backend(folderError?: { code: string; message: string }) {
+    invoke.mockImplementation(async (_cmd: string, args: { root: string }) => {
+      if (/\.(flac|wav|jpg)$/.test(args.root)) {
+        throw { code: 'NOT_A_FOLDER', message: 'a file' }
+      }
+      if (folderError) throw folderError
+      const channel = channels[channels.length - 1]
+      channel.onmessage({ kind: 'scanned', total: 1 })
+      channel.onmessage({ kind: 'finished', summary: { ...summary, root: args.root } })
+      return { ...summary, root: args.root }
+    })
+  }
+
+  // @RF-01 Drop a folder on the window
+  it('analyses a dropped folder', async () => {
+    backend()
+    const result = await startAnalysisOfDropped(['C:/Album A'], () => {})
+    expect(result?.root).toBe('C:/Album A')
+    expect(invoke).toHaveBeenCalledTimes(1)
+  })
+
+  // @RF-01 Drop files and a folder together
+  it('skips files and analyses the first folder', async () => {
+    backend()
+    const received: ProgressEvent[] = []
+    const result = await startAnalysisOfDropped(['C:/a.flac', 'C:/Album A', 'C:/Album B'], (e) =>
+      received.push(e),
+    )
+    expect(result?.root).toBe('C:/Album A')
+    expect(invoke).toHaveBeenCalledTimes(2)
+    expect(invoke).toHaveBeenLastCalledWith('start_analysis', expect.objectContaining({ root: 'C:/Album A' }))
+    expect(received.map((e) => e.kind)).toEqual(['scanned', 'finished'])
+  })
+
+  // @RF-01 Dropped files are ignored: no analysis and no error
+  it('resolves with null when every dropped path is a file', async () => {
+    backend()
+    await expect(startAnalysisOfDropped(['C:/cover.jpg', 'C:/a.flac'], () => {})).resolves.toBeNull()
+  })
+
+  it('resolves with null for an empty drop without calling the backend', async () => {
+    backend()
+    await expect(startAnalysisOfDropped([], () => {})).resolves.toBeNull()
+    expect(invoke).not.toHaveBeenCalled()
+  })
+
+  // Any other error is shown as usual (contract v2)
+  it('rejects with other contract errors', async () => {
+    backend({ code: 'NO_AUDIO_FOUND', message: 'nothing here' })
+    const error = await startAnalysisOfDropped(['C:/a.flac', 'C:/Docs'], () => {}).catch(
+      (e: unknown) => e,
+    )
+    expect(error).toBeInstanceOf(ApiError)
+    expect((error as ApiError).code).toBe('NO_AUDIO_FOUND')
   })
 })
 

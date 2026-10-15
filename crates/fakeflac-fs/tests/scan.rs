@@ -107,13 +107,26 @@ fn rf02_missing_root_is_folder_unreadable() {
     assert_eq!(err.code, AppErrorCode::FolderUnreadable);
 }
 
+// Scenario: Analysing a file instead of a folder (@RF-01), contract v2
 #[test]
-fn rf02_root_that_is_a_file_is_folder_unreadable() {
+fn rf01_root_that_is_a_file_is_not_a_folder() {
     let root = temp_root("file-root");
     write(&root, "a.flac", b"x");
     let err = WalkDirScanner
         .scan(&root.join("a.flac"))
         .expect_err("error");
+    assert_eq!(err.code, AppErrorCode::NotAFolder);
+}
+
+// Scenario: Relative paths are rejected (@RF-01), contract v2. `tests` exists relative to the
+// test process (cargo runs it from the package folder) and must still be rejected.
+#[test]
+fn rf01_relative_root_is_folder_unreadable() {
+    assert!(
+        Path::new("tests").is_dir(),
+        "precondition: relative folder exists"
+    );
+    let err = WalkDirScanner.scan(Path::new("tests")).expect_err("error");
     assert_eq!(err.code, AppErrorCode::FolderUnreadable);
 }
 

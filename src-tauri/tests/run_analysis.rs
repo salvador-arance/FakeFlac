@@ -72,6 +72,24 @@ fn missing_folder_is_folder_unreadable() {
     assert!(events.is_empty());
 }
 
+// @RF-01 Analysing a file instead of a folder (contract v2)
+#[test]
+fn file_root_is_not_a_folder() {
+    let dir = temp_dir("file-root");
+    std::fs::write(dir.join("a.flac"), garbage(7, 512)).unwrap();
+    let (result, events) = collect(&AnalysisSlot::new(), &dir.join("a.flac"));
+    assert_eq!(result.unwrap_err().code, AppErrorCode::NotAFolder);
+    assert!(events.is_empty());
+}
+
+// @RF-01 Relative paths are rejected (contract v2)
+#[test]
+fn relative_root_is_folder_unreadable() {
+    let (result, events) = collect(&AnalysisSlot::new(), Path::new("tests"));
+    assert_eq!(result.unwrap_err().code, AppErrorCode::FolderUnreadable);
+    assert!(events.is_empty());
+}
+
 // @RNF-04 A corrupt file does not stop the analysis; @RF-06 row content
 #[test]
 fn corrupt_file_does_not_stop_the_analysis() {
