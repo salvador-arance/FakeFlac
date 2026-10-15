@@ -30,7 +30,7 @@ export type AppError = {
 	message: string,
 };
 
-export type AppErrorCode = "NO_AUDIO_FOUND" | "FOLDER_UNREADABLE" | "ANALYSIS_RUNNING" | "NOT_ANALYZED" | "EXPORT_FAILED" | "INTERNAL";
+export type AppErrorCode = "NO_AUDIO_FOUND" | "NOT_A_FOLDER" | "FOLDER_UNREADABLE" | "ANALYSIS_RUNNING" | "NOT_ANALYZED" | "EXPORT_FAILED" | "INTERNAL";
 
 export type AudioFormat = "wav" | "flac" | "mp3" | "m4a" | "opus";
 

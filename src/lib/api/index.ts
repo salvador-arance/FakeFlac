@@ -67,6 +67,27 @@ function toAppError(error: unknown): AppError {
   return { code: 'INTERNAL', message: String(error) }
 }
 
+/**
+ * RF-01 drag and drop: analyses the first dropped path that is a folder. Paths are tried in order;
+ * one that answers `NOT_A_FOLDER` is skipped. Resolves with `null` when every path is a file
+ * (dropped files are ignored, no error). Any other error rejects as in `startAnalysis`.
+ */
+export async function startAnalysisOfDropped(
+  paths: string[],
+  onEvent: (event: ProgressEvent) => void,
+): Promise<AnalysisSummary | null> {
+  for (const path of paths) {
+    try {
+      return await startAnalysis(path, onEvent)
+    } catch (error) {
+      // `NOT_A_FOLDER` is reported before any event is sent, so nothing leaks to `onEvent`.
+      if (error instanceof ApiError && error.code === 'NOT_A_FOLDER') continue
+      throw error
+    }
+  }
+  return null
+}
+
 /** RF-05: cancels the running analysis; no-op if none is running. */
 export async function cancelAnalysis(): Promise<void> {
   await commands.cancelAnalysis()

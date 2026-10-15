@@ -519,3 +519,21 @@ fn rnf04_decoder_panic_does_not_stop_analysis() {
     assert_eq!(summary.done, 3);
     assert_eq!(summary.errors, 1);
 }
+
+// Scenario: Analysing a file instead of a folder (@RF-01): the scanner's NOT_A_FOLDER is
+// propagated before any event, like the other pre-run errors.
+#[test]
+fn rf01_not_a_folder_is_propagated_without_events() {
+    let sc = FakeScanner(Err(AppError::new(AppErrorCode::NotAFolder, "a file")));
+    let an = FakeAnalyzer::new(0);
+    let events = Events::default();
+    let err = run(&sc, &an, 2, &CancelToken::new(), &events).expect_err("error");
+    assert_eq!(err.code, AppErrorCode::NotAFolder);
+    assert!(events.into_inner().expect("lock").is_empty());
+}
+
+#[test]
+fn not_a_folder_serializes_as_in_the_contract() {
+    let json = serde_json::to_string(&AppErrorCode::NotAFolder).expect("serialize");
+    assert_eq!(json, "\"NOT_A_FOLDER\"");
+}

@@ -41,6 +41,7 @@ pub trait SpectrumAnalyzer: Send + Sync {
 pub trait FileScanner: Send + Sync {
     /// Every supported file under `root`, recursively. Hidden files and folders (name starting
     /// with `.`) are skipped and symbolic links are not followed. Order is unspecified.
-    /// Fails with `FOLDER_UNREADABLE` when `root` is not a readable folder.
+    /// Fails with `NOT_A_FOLDER` when `root` is a file, and with `FOLDER_UNREADABLE` when it is
+    /// not an absolute path, does not exist or cannot be listed (`specs/contracts/commands.md`).
     fn scan(&self, root: &std::path::Path) -> Result<Vec<FileEntry>, AppError>;
 }

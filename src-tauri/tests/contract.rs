@@ -222,6 +222,7 @@ fn app_errors_map_every_code() {
     use core::AppErrorCode as C;
     for (c, s) in [
         (C::NoAudioFound, "NO_AUDIO_FOUND"),
+        (C::NotAFolder, "NOT_A_FOLDER"),
         (C::FolderUnreadable, "FOLDER_UNREADABLE"),
         (C::AnalysisRunning, "ANALYSIS_RUNNING"),
         (C::NotAnalyzed, "NOT_ANALYZED"),

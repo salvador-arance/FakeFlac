@@ -8,9 +8,11 @@ on:
 permissions:
   contents: read
 
+# A new push to a PR replaces its previous run. On `main` every merge gets its own group (by
+# commit), so quick consecutive merges never cancel or drop each other's runs.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always

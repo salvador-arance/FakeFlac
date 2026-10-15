@@ -8,6 +8,7 @@ use thiserror::Error;
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum AppErrorCode {
     NoAudioFound,
+    NotAFolder,
     FolderUnreadable,
     AnalysisRunning,
     NotAnalyzed,
@@ -20,6 +21,7 @@ impl AppErrorCode {
     pub fn as_str(self) -> &'static str {
         match self {
             AppErrorCode::NoAudioFound => "NO_AUDIO_FOUND",
+            AppErrorCode::NotAFolder => "NOT_A_FOLDER",
             AppErrorCode::FolderUnreadable => "FOLDER_UNREADABLE",
             AppErrorCode::AnalysisRunning => "ANALYSIS_RUNNING",
             AppErrorCode::NotAnalyzed => "NOT_ANALYZED",

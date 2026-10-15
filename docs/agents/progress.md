@@ -2,6 +2,22 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-15 - H1: contract v2 in the backend (RF-01)
+
+**Done**
+- Merged: #18 (Tauri adapter, bindings, API client; CI Rust tests on Windows only) and #19 (contract v2: dropped files, `NOT_A_FOLDER`, `INTERNAL` terminal, rows keyed by index, absolute root).
+- Branch `feat/RF-01-not-a-folder`: `NOT_A_FOLDER` for a file root, relative roots rejected first (`FOLDER_UNREADABLE`), client helper `startAnalysisOfDropped` (tries dropped paths in order, skips files, `null` if all are files). CI: runs on `main` are never cancelled (one concurrency group per commit); PR runs still replace each other. Review: no blocking findings; 4 improvements applied.
+
+**Pending**
+- G2: human merges the `feat/RF-01-not-a-folder` PR.
+- Main-screen UI (RF-01 dialog + drop, RF-05 status bar and cancel, RF-06 table, `INTERNAL` scenario): ignore drops while a run is in progress (a drop of files during a run would otherwise show `ANALYSIS_RUNNING`).
+- Earlier follow-ups (RF-02/RF-05 block) still open; `build-windows` takes ~17 min (Tauri built twice).
+
+**Blockers / questions for the human**
+- Offered: the student writes the main-screen UI with Claude guiding and reviewing, instead of agents writing it. Waiting for the answer.
+
+**Next step:** main-screen UI: UI specs are in `specs/ui/`; start with atoms/molecules + stories (S6), then `AnalysisPage` wiring `src/lib/api/`.
+
 ## 2026-10-15 - H1: Tauri adapter and API client (RF-01, RF-05)
 
 **Done**

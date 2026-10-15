@@ -118,6 +118,7 @@ pub enum ProgressEvent {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum AppErrorCode {
     NoAudioFound,
+    NotAFolder,
     FolderUnreadable,
     AnalysisRunning,
     NotAnalyzed,
@@ -273,6 +274,7 @@ impl From<core::AppErrorCode> for AppErrorCode {
     fn from(c: core::AppErrorCode) -> Self {
         match c {
             core::AppErrorCode::NoAudioFound => AppErrorCode::NoAudioFound,
+            core::AppErrorCode::NotAFolder => AppErrorCode::NotAFolder,
             core::AppErrorCode::FolderUnreadable => AppErrorCode::FolderUnreadable,
             core::AppErrorCode::AnalysisRunning => AppErrorCode::AnalysisRunning,
             core::AppErrorCode::NotAnalyzed => AppErrorCode::NotAnalyzed,
