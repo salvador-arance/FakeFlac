@@ -4,7 +4,7 @@
 
 | Requirement | Milestone | Spec | Tests | Module |
 |---|---|---|---|---|
-| RF-10 | H0 smoke test (H2 feature) | `specs/detection/album-summary.md`, `specs/features/album-summary.feature` | pending | `fakeflac-core` |
+| RF-10 | H0 smoke test (H2 feature) | `specs/detection/album-summary.md`, `specs/features/album-summary.feature` | `crates/fakeflac-core/tests/album_summary.rs` (11) | `fakeflac-core::summary` |
 | other RF | see `specs/requirements/` | pending (`/new-spec`) | — | — |
 | RNF-01 … RNF-11 | see `specs/requirements/` | pending | — | — |
 
