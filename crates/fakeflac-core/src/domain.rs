@@ -26,6 +26,14 @@ pub enum AudioFormat {
     Opus,
 }
 
+impl AudioFormat {
+    /// Format for a file extension (case-insensitive, without the dot). H1 supports WAV and FLAC (RF-14).
+    pub fn from_extension(ext: &str) -> Option<AudioFormat> {
+        let _ = ext;
+        todo!("RF-14")
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SuspicionReason {
