@@ -11,7 +11,7 @@ H1 needs decoding (WAV, FLAC), a real FFT, parallelism, a recursive scan, a fold
 
 | Crate / package | Where | Why | Covered by |
 |---|---|---|---|
-| `symphonia` 0.5 (features `flac`, `wav`, `pcm`) | `fakeflac-audio` | Pure-Rust decoding, streaming, seek | ADR-0030 |
+| `symphonia` 0.6 (features `flac`, `wav`, `pcm`) | `fakeflac-audio` | Pure-Rust decoding, streaming, seek | ADR-0030 |
 | `realfft` 3 (+ `rustfft` 6) | `fakeflac-audio` | Real FFT | ADR-0026 |
 | `rayon` 1 | `src-tauri` (use case runner) | Parallel analysis | ADR-0006 |
 | `walkdir` 2 | `fakeflac-fs` | Recursive scan without following links | this ADR |
@@ -31,6 +31,12 @@ H1 needs decoding (WAV, FLAC), a real FFT, parallelism, a recursive scan, a fold
 - `claxon` for FLAC: decode-only and FLAC-only; symphonia covers every format we need except Opus.
 - `rfd` for the dialog: works, but the official plugin integrates with Tauri capabilities.
 - Committing fixture files: rejected by ADR-0022 (generated in code instead).
+
+## Notes from implementation (RF-03/RF-04)
+
+- Current majors at implementation time: `symphonia` 0.6 (the 0.5 line is superseded; the 0.6 API differs), `realfft` 3, `rand` 0.10, `toml` 1, `flacenc` 0.5, `hound` 3.
+- `flacenc` writes the short last block's size as the stream minimum block size; symphonia 0.6 then rejects every fixed-size frame. Fixtures avoid it by using a whole number of blocks. Files from libFLAC are not affected.
+- A workspace `[profile.dev.package."*"] opt-level = 3` keeps DSP and decoding tests fast in debug builds.
 
 ## Consequences
 
