@@ -10,7 +10,7 @@ status: proposed
 
 | Id | Signal | Truth |
 |---|---|---|
-| `full_band` | White noise, 44.1 kHz, 16-bit, 30 s, −12 dBFS, no low-pass | Real |
+| `full_band` | White noise, 44.1 kHz, 16-bit, 30 s, −12 dBFS RMS (see levels below), no low-pass | Real |
 | `lp16k` | Same noise through a brick-wall low-pass at 16 kHz (≥ 100 dB/oct) | Fake, cutoff ≈ 16 kHz |
 | `lp19k` | Same, low-pass at 19 kHz | Fake, cutoff ≈ 19 kHz |
 | `lp20k` | Same, low-pass at 20 kHz | Fake, cutoff ≈ 20 kHz |
@@ -21,5 +21,7 @@ status: proposed
 | `silence` | Digital silence, 30 s | Suspicious, `LowHighFrequencyContent` |
 | `short` | `full_band`, 2 s | Error, `TooShort` |
 | `corrupt` | A FLAC file with its bytes truncated after the header | Error, `CorruptStream` |
+
+**Levels.** Every signal is set to −12 dBFS RMS and then scaled down, if needed, so that its peak does not exceed −1 dBFS: clipping would create content above the low-pass and invalidate the fixture. Relative levels inside a fixture (noise vs. tone) are preserved. **Length.** Signal lengths are rounded down to a whole number of 4096-frame FLAC blocks, so encoders write equal minimum and maximum block sizes.
 
 Tolerance for cutoff assertions: ± `2 · smoothing_hz` (± 200 Hz with v1 parameters).
