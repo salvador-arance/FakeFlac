@@ -1,6 +1,8 @@
 # cargo-deny: licences, advisories, sources (R11).
 [graph]
-# v1 ships for Windows only (RNF-07). Linux-only transitive crates of Tauri (gtk stack, e.g. the\n# unmaintained proc-macro-error, RUSTSEC-2024-0370) are not part of the shipped artefact.\ntargets = ["x86_64-pc-windows-msvc"]
+# v1 ships for Windows only (RNF-07). Linux-only transitive crates of Tauri (gtk stack, e.g. the
+# unmaintained proc-macro-error, RUSTSEC-2024-0370) are not part of the shipped artefact.
+targets = ["x86_64-pc-windows-msvc"]
 
 [advisories]
 version = 2
