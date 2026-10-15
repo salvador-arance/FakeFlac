@@ -5,8 +5,10 @@
 
 pub mod domain;
 pub mod ports;
+pub mod summary;
 
 pub use domain::{
     AlbumSummary, AudioFormat, CutoffEstimate, SuspicionReason, TrackAnalysis, TrackError,
     TrackInfo, Verdict,
 };
+pub use summary::summarize_album;
