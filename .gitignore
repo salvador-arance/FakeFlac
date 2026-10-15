@@ -1,0 +1,37 @@
+# Rust
+/target
+**/*.rs.bk
+
+# Node / frontend
+node_modules/
+/dist
+/build
+.svelte-kit/
+storybook-static/
+
+# Tauri
+/src-tauri/target
+/src-tauri/gen/schemas
+
+# Agent harness: personal and local state (never versioned)
+.claude/settings.local.json
+.claude/stage
+.claude/worktrees/
+
+# Test corpus lives OUTSIDE the repo (ADR-022); never commit audio
+*.flac
+*.wav
+*.mp3
+*.m4a
+*.opus
+*.ogg
+!fixtures/**/.gitkeep
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
+.env
+.env.*

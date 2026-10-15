@@ -1,0 +1,34 @@
+{
+  "name": "fakeflac",
+  "private": true,
+  "version": "0.0.1",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
+    "test": "vitest run",
+    "tauri": "tauri",
+    "hooks:test": "node --test \".claude/hooks/*.test.mjs\"",
+    "lint:arch": "node scripts/lint-arch.mjs",
+    "trace": "node scripts/trace.mjs"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.3.0",
+    "@tauri-apps/cli": "^2",
+    "@tsconfig/svelte": "^5.0.8",
+    "@types/node": "^24.13.3",
+    "svelte": "^5.57.0",
+    "svelte-check": "^4.7.6",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0",
+    "vitest": "^5"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2"
+  }
+}
+
+

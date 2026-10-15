@@ -1,0 +1,33 @@
+name: CI nightly
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mutants:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with: { tool: "cargo-mutants" }
+      - run: cargo mutants --package fakeflac-core --package fakeflac-audio --no-shuffle || true  # report-only until tests exist
+
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@v2
+        with: { tool: "cargo-deny,cargo-audit" }
+      - run: cargo deny check
+      - run: cargo audit
+  # Benchmarks (criterion, window bench with synthetic fixtures) are added with the first DSP task (3.4.7).

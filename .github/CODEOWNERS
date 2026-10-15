@@ -1,0 +1,6 @@
+# Human-owned areas (gates G1/G2, RP-02): specs, decisions, harness and CI.
+/specs/            @salvador-arance
+/docs/adr/         @salvador-arance
+/.claude/          @salvador-arance
+/.github/          @salvador-arance
+/CLAUDE.md         @salvador-arance

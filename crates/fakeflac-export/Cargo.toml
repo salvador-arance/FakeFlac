@@ -1,0 +1,15 @@
+[package]
+name = "fakeflac-export"
+description = "CSV export adapter."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+fakeflac-core = { path = "../fakeflac-core" }
+
+[lints]
+workspace = true
