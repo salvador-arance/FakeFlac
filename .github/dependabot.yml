@@ -3,9 +3,22 @@ updates:
   - package-ecosystem: cargo
     directory: /
     schedule: { interval: weekly }
+    groups:
+      cargo-minor:
+        update-types: [minor, patch]
   - package-ecosystem: npm
     directory: /
     schedule: { interval: weekly }
+    ignore:
+      # @types/node must match the Node major used in CI and development (24).
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
+    groups:
+      npm-minor:
+        update-types: [minor, patch]
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
+    groups:
+      actions:
+        patterns: ["*"]
