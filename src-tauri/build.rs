@@ -17,6 +17,10 @@ fn embed_manifest_in_tests_and_examples() {
     println!("cargo:rerun-if-changed={}", manifest.display());
     // Cargo rejects `rustc-link-arg-<target>` for a target kind the package does not have.
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    // Rerun when `tests/` or `examples/` appear, so the link args follow them.
+    for t in ["tests", "examples"] {
+        println!("cargo:rerun-if-changed={}", dir.join(t).display());
+    }
     for target in ["tests", "examples"]
         .into_iter()
         .filter(|t| dir.join(t).is_dir())

@@ -1,5 +1,7 @@
 // API client: the only place the frontend talks to the backend (no `invoke()` elsewhere).
 // Contract: specs/contracts/commands.md. Types come from the generated `bindings.ts` (S3).
+import { Channel } from '@tauri-apps/api/core'
+import { commands } from './bindings'
 import type { AnalysisSummary, AppError, AppErrorCode, ProgressEvent } from './bindings'
 
 export type {
@@ -29,7 +31,7 @@ export class ApiError extends Error {
 
 /** RF-01: native folder dialog; `null` if the user cancels it. */
 export async function pickFolder(): Promise<string | null> {
-  throw new Error('not implemented: pickFolder')
+  return commands.pickFolder()
 }
 
 /**
@@ -40,12 +42,14 @@ export async function startAnalysis(
   root: string,
   onEvent: (event: ProgressEvent) => void,
 ): Promise<AnalysisSummary> {
-  void root
-  void onEvent
-  throw new Error('not implemented: startAnalysis')
+  const channel = new Channel<ProgressEvent>()
+  channel.onmessage = onEvent
+  const result = await commands.startAnalysis(root, channel)
+  if (result.status === 'error') throw new ApiError(result.error)
+  return result.data
 }
 
 /** RF-05: cancels the running analysis; no-op if none is running. */
 export async function cancelAnalysis(): Promise<void> {
-  throw new Error('not implemented: cancelAnalysis')
+  await commands.cancelAnalysis()
 }
