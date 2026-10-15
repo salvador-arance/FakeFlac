@@ -99,7 +99,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with: { workspaces: ". -> target" }
+      - uses: extractions/setup-just@v4
       - run: npm ci
+      - name: Tauri adapter checks (clippy, tests, bindings up to date)
+        run: just check-app
       - run: npm run tauri build
       - name: Installer size (RNF-06, < 20 MB)
         shell: pwsh
