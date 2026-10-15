@@ -182,6 +182,15 @@ describe('startAnalysisOfDropped', () => {
     await expect(startAnalysisOfDropped(['C:/cover.jpg', 'C:/a.flac'], () => {})).resolves.toBeNull()
   })
 
+  it('stops at the first error that is not NOT_A_FOLDER', async () => {
+    invoke.mockRejectedValue({ code: 'FOLDER_UNREADABLE', message: 'locked' })
+    const error = await startAnalysisOfDropped(['C:/Locked', 'C:/Album A'], () => {}).catch(
+      (e: unknown) => e,
+    )
+    expect((error as ApiError).code).toBe('FOLDER_UNREADABLE')
+    expect(invoke).toHaveBeenCalledTimes(1)
+  })
+
   it('resolves with null for an empty drop without calling the backend', async () => {
     backend()
     await expect(startAnalysisOfDropped([], () => {})).resolves.toBeNull()

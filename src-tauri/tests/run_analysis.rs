@@ -85,6 +85,10 @@ fn file_root_is_not_a_folder() {
 // @RF-01 Relative paths are rejected (contract v2)
 #[test]
 fn relative_root_is_folder_unreadable() {
+    assert!(
+        Path::new("tests").is_dir(),
+        "precondition: relative folder exists"
+    );
     let (result, events) = collect(&AnalysisSlot::new(), Path::new("tests"));
     assert_eq!(result.unwrap_err().code, AppErrorCode::FolderUnreadable);
     assert!(events.is_empty());

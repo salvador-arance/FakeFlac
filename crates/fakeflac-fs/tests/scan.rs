@@ -130,6 +130,20 @@ fn rf01_relative_root_is_folder_unreadable() {
     assert_eq!(err.code, AppErrorCode::FolderUnreadable);
 }
 
+// Contract v2: "not an absolute path" is FOLDER_UNREADABLE even when it names an existing file
+// relative to the process (the relative check comes first).
+#[test]
+fn rf01_relative_file_is_folder_unreadable() {
+    assert!(
+        Path::new("Cargo.toml").is_file(),
+        "precondition: relative file exists"
+    );
+    let err = WalkDirScanner
+        .scan(Path::new("Cargo.toml"))
+        .expect_err("error");
+    assert_eq!(err.code, AppErrorCode::FolderUnreadable);
+}
+
 // Scenario: Unicode names (@RNF-09)
 #[test]
 fn rnf09_unicode_names() {
