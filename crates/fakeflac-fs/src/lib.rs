@@ -13,7 +13,9 @@ pub struct WalkDirScanner;
 
 impl FileScanner for WalkDirScanner {
     fn scan(&self, root: &Path) -> Result<Vec<FileEntry>, AppError> {
-        if !root.is_dir() {
+        // `is_dir` alone is not enough: a folder can exist and still deny listing, which
+        // would otherwise end as an empty scan (`NO_AUDIO_FOUND`).
+        if !root.is_dir() || std::fs::read_dir(root).is_err() {
             return Err(AppError::new(
                 AppErrorCode::FolderUnreadable,
                 format!("cannot read folder {}", root.display()),
@@ -44,9 +46,10 @@ fn to_entry(entry: &DirEntry) -> Option<FileEntry> {
     let metadata = entry.metadata().ok()?;
     let modified_unix = metadata
         .modified()
-        .ok()
-        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-        .map_or(0, |d| d.as_secs() as i64);
+        .map_or(0, |t| match t.duration_since(UNIX_EPOCH) {
+            Ok(after) => after.as_secs() as i64,
+            Err(before) => -(before.duration().as_secs() as i64),
+        });
     Some(FileEntry {
         path: path.to_path_buf(),
         folder: path.parent()?.to_path_buf(),

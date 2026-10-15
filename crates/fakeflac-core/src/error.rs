@@ -15,8 +15,22 @@ pub enum AppErrorCode {
     Internal,
 }
 
+impl AppErrorCode {
+    /// The code as it appears in the contract (`NO_AUDIO_FOUND`, ...).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            AppErrorCode::NoAudioFound => "NO_AUDIO_FOUND",
+            AppErrorCode::FolderUnreadable => "FOLDER_UNREADABLE",
+            AppErrorCode::AnalysisRunning => "ANALYSIS_RUNNING",
+            AppErrorCode::NotAnalyzed => "NOT_ANALYZED",
+            AppErrorCode::ExportFailed => "EXPORT_FAILED",
+            AppErrorCode::Internal => "INTERNAL",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Error, Serialize, Deserialize)]
-#[error("{code:?}: {message}")]
+#[error("{}: {message}", code.as_str())]
 pub struct AppError {
     pub code: AppErrorCode,
     pub message: String,

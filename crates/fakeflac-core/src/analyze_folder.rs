@@ -2,13 +2,14 @@
 //! events → summary. Contract: `specs/contracts/commands.md`; scenarios: `specs/features/analyze-folder.feature`.
 
 use crate::analysis::analyze_track;
-use crate::domain::{TrackAnalysis, Verdict};
+use crate::domain::{TrackAnalysis, TrackError, Verdict};
 use crate::error::{AppError, AppErrorCode};
 use crate::params::DetectionParams;
-use crate::ports::{FileEntry, FileScanner, SpectrumAnalyzer};
+use crate::ports::{AudioProbe, FileEntry, FileScanner, SpectrumAnalyzer};
 use serde::{Deserialize, Serialize};
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
@@ -67,10 +68,11 @@ pub enum ProgressEvent {
 ///
 /// Files are indexed in path order (case-insensitive). A per-track failure becomes a
 /// `Verdict::Error` track and the run continues (RNF-04). When `cancel` fires, no new track
-/// starts and the run ends with `Cancelled`. Errors (`FOLDER_UNREADABLE`, `NO_AUDIO_FOUND`)
+/// starts and the run ends with `Cancelled`. A panic while analysing one track (a decoder bug)
+/// is caught and becomes a `CorruptStream` error track (ADR-0013). Errors (`FOLDER_UNREADABLE`, `NO_AUDIO_FOUND`)
 /// are returned before any event is sent. `workers` is chosen by the composition root
-/// (cores − 1); 0 is treated as 1. Threads come from `std` so the core keeps no dependencies.
-#[allow(clippy::too_many_arguments)]
+/// (cores − 1); 0 is treated as 1. Threads come from `std` so the core keeps no dependencies
+/// (ADR-0034).
 pub fn analyze_folder(
     scanner: &dyn FileScanner,
     analyzer: &dyn SpectrumAnalyzer,
@@ -88,11 +90,14 @@ pub fn analyze_folder(
             format!("no supported audio files in {}", root.display()),
         ));
     }
+    // Component by component, so a folder's files stay together ("Album\x" before "Album (Deluxe)\y").
     entries.sort_by_cached_key(|e| {
-        (
-            e.path.to_string_lossy().to_lowercase(),
-            e.path.to_string_lossy().into_owned(),
-        )
+        let key: Vec<String> = e
+            .path
+            .components()
+            .map(|c| c.as_os_str().to_string_lossy().to_lowercase())
+            .collect();
+        (key, e.path.clone())
     });
     let total = entries.len();
     on_progress(ProgressEvent::Scanned {
@@ -100,21 +105,30 @@ pub fn analyze_folder(
     });
 
     let counts = Counts::default();
-    let next = AtomicUsize::new(0);
-    let worker_count = workers.max(1).min(total);
+    let next = Mutex::new(0usize);
+    let analyzer = PanicSafe(analyzer);
+    let worker = || {
+        run_worker(
+            &entries,
+            &next,
+            &counts,
+            &analyzer,
+            params,
+            cancel,
+            on_progress,
+        )
+    };
     std::thread::scope(|scope| {
-        for _ in 0..worker_count {
-            scope.spawn(|| {
-                run_worker(
-                    &entries,
-                    &next,
-                    &counts,
-                    analyzer,
-                    params,
-                    cancel,
-                    on_progress,
-                )
-            });
+        let spawned = (0..workers.max(1).min(total))
+            .filter(|_| {
+                std::thread::Builder::new()
+                    .spawn_scoped(scope, worker)
+                    .is_ok()
+            })
+            .count();
+        // The OS refused every thread: analyse on the calling thread instead.
+        if spawned == 0 {
+            worker();
         }
     });
 
@@ -165,10 +179,23 @@ impl Counts {
     }
 }
 
+/// Turns a panic inside the analyzer into a per-track error (ADR-0013, RNF-04).
+struct PanicSafe<'a>(&'a dyn SpectrumAnalyzer);
+
+impl SpectrumAnalyzer for PanicSafe<'_> {
+    fn analyze(&self, path: &Path, params: &DetectionParams) -> Result<AudioProbe, TrackError> {
+        catch_unwind(AssertUnwindSafe(|| self.0.analyze(path, params))).unwrap_or_else(|_| {
+            Err(TrackError::CorruptStream(
+                "the decoder failed unexpectedly".into(),
+            ))
+        })
+    }
+}
+
 /// Pulls track indexes until none are left or the run is cancelled.
 fn run_worker(
     entries: &[FileEntry],
-    next: &AtomicUsize,
+    next: &Mutex<usize>,
     counts: &Counts,
     analyzer: &dyn SpectrumAnalyzer,
     params: &DetectionParams,
@@ -176,17 +203,24 @@ fn run_worker(
     on_progress: &(dyn Fn(ProgressEvent) + Sync),
 ) {
     loop {
-        if cancel.is_cancelled() {
-            return;
-        }
-        let index = next.fetch_add(1, Ordering::SeqCst);
-        let Some(entry) = entries.get(index) else {
-            return;
+        // Taking the index and reporting `TrackStarted` under one lock keeps those events
+        // in index order (only `TrackDone` may arrive out of order, per the contract).
+        let (index, entry) = {
+            let mut next = lock(next);
+            if cancel.is_cancelled() {
+                return;
+            }
+            let index = *next;
+            let Some(entry) = entries.get(index) else {
+                return;
+            };
+            *next += 1;
+            on_progress(ProgressEvent::TrackStarted {
+                index: index as u32,
+                path: entry.path.clone(),
+            });
+            (index, entry)
         };
-        on_progress(ProgressEvent::TrackStarted {
-            index: index as u32,
-            path: entry.path.clone(),
-        });
         let analysis = analyze_track(analyzer, entry, params);
         counts.record(analysis.verdict);
         on_progress(ProgressEvent::TrackDone {
@@ -251,7 +285,7 @@ impl Drop for ActiveRun {
     }
 }
 
-/// Locks the slot, recovering the value if a thread panicked while holding it.
-fn lock(slot: &Mutex<Option<CancelToken>>) -> MutexGuard<'_, Option<CancelToken>> {
-    slot.lock().unwrap_or_else(|e| e.into_inner())
+/// Locks a mutex, recovering the value if a thread panicked while holding it.
+fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(|e| e.into_inner())
 }
