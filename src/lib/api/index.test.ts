@@ -1,0 +1,110 @@
+// Tests of the API client (RF-01, RF-02, RF-05) against a mocked Tauri runtime.
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const { invoke, channels } = vi.hoisted(() => ({
+  invoke: vi.fn(),
+  channels: [] as { onmessage: (message: unknown) => void }[],
+}))
+
+vi.mock('@tauri-apps/api/core', () => {
+  class Channel {
+    onmessage: (message: unknown) => void = () => {}
+    constructor() {
+      channels.push(this)
+    }
+  }
+  return { invoke, Channel }
+})
+
+import { ApiError, cancelAnalysis, pickFolder, startAnalysis } from './index'
+import type { AnalysisSummary, ProgressEvent } from './index'
+
+const summary: AnalysisSummary = {
+  root: 'C:/A',
+  total: 1,
+  done: 1,
+  real: 1,
+  suspicious: 0,
+  fake: 0,
+  errors: 0,
+  cancelled: false,
+  elapsedMs: 10,
+}
+
+beforeEach(() => {
+  invoke.mockReset()
+  channels.length = 0
+})
+
+describe('pickFolder', () => {
+  // @RF-01 Choose a folder with the dialog
+  it('returns the chosen path', async () => {
+    invoke.mockResolvedValue('C:/Music')
+    expect(await pickFolder()).toBe('C:/Music')
+    expect(invoke).toHaveBeenCalledWith('pick_folder')
+  })
+
+  // @RF-01 Cancel the folder dialog
+  it('returns null when the dialog is cancelled', async () => {
+    invoke.mockResolvedValue(null)
+    expect(await pickFolder()).toBeNull()
+  })
+})
+
+describe('startAnalysis', () => {
+  // @RF-05 progress events reach the caller in order
+  it('passes a channel to the command and forwards events in order', async () => {
+    const events: ProgressEvent[] = [
+      { kind: 'scanned', total: 1 },
+      { kind: 'trackStarted', index: 0, path: 'C:/A/a.wav' },
+      { kind: 'finished', summary },
+    ]
+    invoke.mockImplementation(async () => {
+      for (const e of events) channels[0].onmessage(e)
+      return summary
+    })
+    const received: ProgressEvent[] = []
+    const result = await startAnalysis('C:/A', (e) => received.push(e))
+
+    expect(invoke).toHaveBeenCalledWith('start_analysis', {
+      root: 'C:/A',
+      onProgress: channels[0],
+    })
+    expect(received).toEqual(events)
+    expect(result).toEqual(summary)
+  })
+
+  // @RF-05 Only one analysis at a time
+  it('rejects with an ApiError carrying the contract code', async () => {
+    invoke.mockRejectedValue({ code: 'ANALYSIS_RUNNING', message: 'busy' })
+    const error = await startAnalysis('C:/A', () => {}).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(ApiError)
+    expect((error as ApiError).code).toBe('ANALYSIS_RUNNING')
+    expect((error as ApiError).message).toBe('busy')
+  })
+
+  // @RF-02 Folder without supported audio
+  it('rejects with NO_AUDIO_FOUND', async () => {
+    invoke.mockRejectedValue({ code: 'NO_AUDIO_FOUND', message: 'nothing here' })
+    const error = await startAnalysis('C:/A', () => {}).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(ApiError)
+    expect((error as ApiError).code).toBe('NO_AUDIO_FOUND')
+  })
+
+  it('rethrows a JS Error as is', async () => {
+    const boom = new Error('boom')
+    invoke.mockRejectedValue(boom)
+    const error = await startAnalysis('C:/A', () => {}).catch((e: unknown) => e)
+    expect(error).toBe(boom)
+    expect(error).not.toBeInstanceOf(ApiError)
+  })
+})
+
+describe('cancelAnalysis', () => {
+  // @RF-05 cancel
+  it('invokes cancel_analysis', async () => {
+    invoke.mockResolvedValue(undefined)
+    await cancelAnalysis()
+    expect(invoke).toHaveBeenCalledWith('cancel_analysis')
+  })
+})
