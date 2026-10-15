@@ -13,14 +13,7 @@ pub struct WalkDirScanner;
 
 impl FileScanner for WalkDirScanner {
     fn scan(&self, root: &Path) -> Result<Vec<FileEntry>, AppError> {
-        // `is_dir` alone is not enough: a folder can exist and still deny listing, which
-        // would otherwise end as an empty scan (`NO_AUDIO_FOUND`).
-        if !root.is_dir() || std::fs::read_dir(root).is_err() {
-            return Err(AppError::new(
-                AppErrorCode::FolderUnreadable,
-                format!("cannot read folder {}", root.display()),
-            ));
-        }
+        check_root(root)?;
         let walker = WalkDir::new(root)
             .follow_links(false)
             .into_iter()
@@ -30,6 +23,26 @@ impl FileScanner for WalkDirScanner {
             .filter_map(|e| to_entry(&e))
             .collect())
     }
+}
+
+/// Pre-run checks of `root` (`specs/contracts/commands.md`, `start_analysis` errors).
+fn check_root(root: &Path) -> Result<(), AppError> {
+    if root.is_file() {
+        return Err(AppError::new(
+            AppErrorCode::NotAFolder,
+            format!("not a folder: {}", root.display()),
+        ));
+    }
+    // A relative path would resolve against the process working directory, not the user's.
+    // `is_dir` alone is not enough either: a folder can exist and still deny listing, which
+    // would otherwise end as an empty scan (`NO_AUDIO_FOUND`).
+    if !root.is_absolute() || !root.is_dir() || std::fs::read_dir(root).is_err() {
+        return Err(AppError::new(
+            AppErrorCode::FolderUnreadable,
+            format!("cannot read folder {}", root.display()),
+        ));
+    }
+    Ok(())
 }
 
 fn is_hidden(entry: &DirEntry) -> bool {

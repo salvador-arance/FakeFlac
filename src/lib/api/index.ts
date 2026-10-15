@@ -76,9 +76,16 @@ export async function startAnalysisOfDropped(
   paths: string[],
   onEvent: (event: ProgressEvent) => void,
 ): Promise<AnalysisSummary | null> {
-  void paths
-  void onEvent
-  throw new Error('not implemented: startAnalysisOfDropped')
+  for (const path of paths) {
+    try {
+      return await startAnalysis(path, onEvent)
+    } catch (error) {
+      // `NOT_A_FOLDER` is reported before any event is sent, so nothing leaks to `onEvent`.
+      if (error instanceof ApiError && error.code === 'NOT_A_FOLDER') continue
+      throw error
+    }
+  }
+  return null
 }
 
 /** RF-05: cancels the running analysis; no-op if none is running. */
