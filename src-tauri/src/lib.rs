@@ -8,6 +8,7 @@ pub mod run;
 use fakeflac_core::AnalysisSlot;
 use std::path::Path;
 use std::sync::Arc;
+use tauri::Manager;
 
 /// Commands and types of the contract, shared by the app and the bindings export.
 pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
@@ -36,6 +37,13 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(Arc::new(AnalysisSlot::new()))
         .invoke_handler(builder.invoke_handler())
+        // A reload (F5, dev server) leaves no listener for the running analysis: cancel it so the
+        // new page is not told `ANALYSIS_RUNNING` until the old run ends.
+        .on_page_load(|webview, payload| {
+            if payload.event() == tauri::webview::PageLoadEvent::Started {
+                webview.state::<Arc<AnalysisSlot>>().cancel();
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running the FakeFlac application");
 }

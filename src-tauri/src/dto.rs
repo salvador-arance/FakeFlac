@@ -49,7 +49,7 @@ pub struct TrackInfo {
 }
 
 /// Exported as plain `number` (specta would add `| null` for floats, because JSON has no NaN):
-/// the conversion only produces finite values.
+/// a non-finite estimate is sent as no cutoff (`finite_cutoff`).
 #[derive(Debug, Clone, PartialEq, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct CutoffEstimate {
@@ -62,7 +62,11 @@ pub struct CutoffEstimate {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Type)]
-#[serde(tag = "kind", rename_all = "camelCase")]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum TrackError {
     Unreadable { detail: String },
     CorruptStream { detail: String },
@@ -97,7 +101,11 @@ pub struct AnalysisSummary {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Type)]
-#[serde(tag = "kind", rename_all = "camelCase")]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum ProgressEvent {
     Scanned { total: u32 },
     TrackStarted { index: u32, path: String },
@@ -127,13 +135,11 @@ fn path_string(p: &std::path::Path) -> String {
     p.to_string_lossy().into_owned()
 }
 
-/// The contract type is a plain `number`, which cannot carry NaN or infinity: those become 0.0.
-fn finite(v: f32) -> f32 {
-    if v.is_finite() {
-        v
-    } else {
-        0.0
-    }
+/// The contract's `number` cannot carry NaN or infinity. An estimate with such a value is not
+/// shown as a plausible-looking number: the track is sent without a cutoff instead.
+fn finite_cutoff(c: &core::CutoffEstimate) -> Option<CutoffEstimate> {
+    let values = [c.frequency_hz, c.steepness_db_per_khz, c.noise_floor_db];
+    values.iter().all(|v| v.is_finite()).then(|| c.into())
 }
 
 impl From<core::Verdict> for Verdict {
@@ -191,9 +197,9 @@ impl From<&core::TrackInfo> for TrackInfo {
 impl From<&core::CutoffEstimate> for CutoffEstimate {
     fn from(c: &core::CutoffEstimate) -> Self {
         CutoffEstimate {
-            frequency_hz: finite(c.frequency_hz),
-            steepness_db_per_khz: finite(c.steepness_db_per_khz),
-            noise_floor_db: finite(c.noise_floor_db),
+            frequency_hz: c.frequency_hz,
+            steepness_db_per_khz: c.steepness_db_per_khz,
+            noise_floor_db: c.noise_floor_db,
         }
     }
 }
@@ -216,7 +222,7 @@ impl From<&core::TrackAnalysis> for TrackAnalysis {
         TrackAnalysis {
             info: (&a.info).into(),
             verdict: a.verdict.into(),
-            cutoff: a.cutoff.as_ref().map(Into::into),
+            cutoff: a.cutoff.as_ref().and_then(finite_cutoff),
             estimated_source_bitrate_kbps: a.estimated_source_bitrate_kbps,
             reasons: a.reasons.iter().copied().map(Into::into).collect(),
             error: a.error.as_ref().map(Into::into),

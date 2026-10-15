@@ -42,8 +42,7 @@ jobs:
       - run: just trace
       - run: just lint-arch
       - run: just guard-tests
-      # S3 (contract drift): enabled when the first contract exists.
-      # - run: just gen && git diff --exit-code
+      # S3 (contract drift) runs in build-windows (`just check-app`): generating needs Tauri.
 
   test-rust:
     strategy:
@@ -91,12 +90,13 @@ jobs:
 
   build-windows:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with: { node-version: 24, cache: npm }
       - uses: dtolnay/rust-toolchain@stable
+        with: { components: clippy }
       - uses: Swatinem/rust-cache@v2
         with: { workspaces: ". -> target" }
       - uses: extractions/setup-just@v4

@@ -36,7 +36,7 @@ export type AudioFormat = "wav" | "flac" | "mp3" | "m4a" | "opus";
 
 /**
  *  Exported as plain `number` (specta would add `| null` for floats, because JSON has no NaN):
- *  the conversion only produces finite values.
+ *  a non-finite estimate is sent as no cutoff (`finite_cutoff`).
  */
 export type CutoffEstimate = {
 	frequencyHz: number,

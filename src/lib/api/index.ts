@@ -36,17 +36,35 @@ export async function pickFolder(): Promise<string | null> {
 
 /**
  * RF-01..06: analyses `root`. Every progress event is passed to `onEvent`; resolves with the
- * summary when the run ends (finished or cancelled). Rejects with `ApiError` on a contract error.
+ * summary when the run ends (finished or cancelled) and only after the terminal event has been
+ * delivered: channel messages and the command reply travel separately in Tauri, so no event of
+ * this run arrives after the promise settles. Rejects with `ApiError` on a contract error.
  */
 export async function startAnalysis(
   root: string,
   onEvent: (event: ProgressEvent) => void,
 ): Promise<AnalysisSummary> {
+  let terminalDelivered = () => {}
+  const terminal = new Promise<void>((resolve) => {
+    terminalDelivered = resolve
+  })
   const channel = new Channel<ProgressEvent>()
-  channel.onmessage = onEvent
+  channel.onmessage = (event) => {
+    onEvent(event)
+    if (event.kind === 'finished' || event.kind === 'cancelled') terminalDelivered()
+  }
   const result = await commands.startAnalysis(root, channel)
-  if (result.status === 'error') throw new ApiError(result.error)
+  if (result.status === 'error') throw new ApiError(toAppError(result.error))
+  await terminal
   return result.data
+}
+
+/** Tauri rejects with a plain string for IPC-level failures; those become `INTERNAL`. */
+function toAppError(error: unknown): AppError {
+  if (typeof error === 'object' && error !== null && 'code' in error && 'message' in error) {
+    return error as AppError
+  }
+  return { code: 'INTERNAL', message: String(error) }
 }
 
 /** RF-05: cancels the running analysis; no-op if none is running. */

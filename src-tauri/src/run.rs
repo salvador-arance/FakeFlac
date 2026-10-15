@@ -10,8 +10,9 @@ use std::path::Path;
 /// Runs one analysis of `root` with the file-system scanner and the symphonia analyzer.
 ///
 /// Takes the `slot` for the whole run (`ANALYSIS_RUNNING` if another run holds it), converts
-/// every event to its contract type and hands it to `send`. When `send` returns `false` (the
-/// window is gone) the run is cancelled. Uses `cores − 1` workers (at least 1).
+/// every event to its contract type and hands it to `send`. When `send` returns `false` the run
+/// is cancelled (Tauri rarely reports a closed page this way; a page reload cancels the run in
+/// `lib.rs`). Uses `cores − 1` workers (at least 1).
 pub fn run_analysis(
     slot: &AnalysisSlot,
     root: &Path,

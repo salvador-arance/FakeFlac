@@ -4,14 +4,25 @@ use crate::{dto, run};
 use fakeflac_core::AnalysisSlot;
 use std::path::Path;
 use tauri::ipc::Channel;
-use tauri::{AppHandle, State};
+use tauri::{State, WebviewWindow};
 use tauri_plugin_dialog::DialogExt;
 
 /// RF-01: native folder dialog. `None` when the user cancels it.
 #[tauri::command]
 #[specta::specta]
-pub async fn pick_folder(app: AppHandle) -> Option<String> {
-    let picked = app.dialog().file().blocking_pick_folder()?;
+pub async fn pick_folder(window: WebviewWindow) -> Option<String> {
+    // Modal to the window (one dialog at a time); waits on a blocking thread, not on an async
+    // runtime worker.
+    let picked = tauri::async_runtime::spawn_blocking(move || {
+        window
+            .dialog()
+            .file()
+            .set_parent(&window)
+            .blocking_pick_folder()
+    })
+    .await
+    .ok()
+    .flatten()?;
     Some(match picked.into_path() {
         Ok(path) => path.to_string_lossy().into_owned(),
         Err(other) => other.to_string(),
