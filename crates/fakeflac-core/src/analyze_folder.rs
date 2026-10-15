@@ -1,14 +1,16 @@
 //! Use case: analyse a folder (RF-02, RF-05, RNF-04). Scan → per track in parallel → progress
 //! events → summary. Contract: `specs/contracts/commands.md`; scenarios: `specs/features/analyze-folder.feature`.
 
-use crate::domain::TrackAnalysis;
-use crate::error::AppError;
+use crate::analysis::analyze_track;
+use crate::domain::{TrackAnalysis, Verdict};
+use crate::error::{AppError, AppErrorCode};
 use crate::params::DetectionParams;
-use crate::ports::{FileScanner, SpectrumAnalyzer};
+use crate::ports::{FileEntry, FileScanner, SpectrumAnalyzer};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::Instant;
 
 /// Cooperative cancellation token (RF-05). Cloning shares the same flag.
 #[derive(Debug, Clone, Default)]
@@ -78,16 +80,120 @@ pub fn analyze_folder(
     cancel: &CancelToken,
     on_progress: &(dyn Fn(ProgressEvent) + Sync),
 ) -> Result<AnalysisSummary, AppError> {
-    let _ = (
-        scanner,
-        analyzer,
-        params,
-        root,
-        workers,
-        cancel,
-        on_progress,
-    );
-    todo!("RF-02/RF-05: analyze_folder")
+    let started = Instant::now();
+    let mut entries = scanner.scan(root)?;
+    if entries.is_empty() {
+        return Err(AppError::new(
+            AppErrorCode::NoAudioFound,
+            format!("no supported audio files in {}", root.display()),
+        ));
+    }
+    entries.sort_by_cached_key(|e| {
+        (
+            e.path.to_string_lossy().to_lowercase(),
+            e.path.to_string_lossy().into_owned(),
+        )
+    });
+    let total = entries.len();
+    on_progress(ProgressEvent::Scanned {
+        total: total as u32,
+    });
+
+    let counts = Counts::default();
+    let next = AtomicUsize::new(0);
+    let worker_count = workers.max(1).min(total);
+    std::thread::scope(|scope| {
+        for _ in 0..worker_count {
+            scope.spawn(|| {
+                run_worker(
+                    &entries,
+                    &next,
+                    &counts,
+                    analyzer,
+                    params,
+                    cancel,
+                    on_progress,
+                )
+            });
+        }
+    });
+
+    let done = counts.done.load(Ordering::SeqCst);
+    let summary = AnalysisSummary {
+        root: root.to_path_buf(),
+        total: total as u32,
+        done,
+        real: counts.real.load(Ordering::SeqCst),
+        suspicious: counts.suspicious.load(Ordering::SeqCst),
+        fake: counts.fake.load(Ordering::SeqCst),
+        errors: counts.errors.load(Ordering::SeqCst),
+        cancelled: (done as usize) < total,
+        elapsed_ms: started.elapsed().as_millis() as u64,
+    };
+    if summary.cancelled {
+        on_progress(ProgressEvent::Cancelled {
+            summary: summary.clone(),
+        });
+    } else {
+        on_progress(ProgressEvent::Finished {
+            summary: summary.clone(),
+        });
+    }
+    Ok(summary)
+}
+
+/// Verdict tallies shared by the workers.
+#[derive(Default)]
+struct Counts {
+    done: AtomicU32,
+    real: AtomicU32,
+    suspicious: AtomicU32,
+    fake: AtomicU32,
+    errors: AtomicU32,
+}
+
+impl Counts {
+    fn record(&self, verdict: Verdict) {
+        let counter = match verdict {
+            Verdict::Real => &self.real,
+            Verdict::Suspicious => &self.suspicious,
+            Verdict::Fake => &self.fake,
+            Verdict::Error => &self.errors,
+        };
+        counter.fetch_add(1, Ordering::SeqCst);
+        self.done.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+/// Pulls track indexes until none are left or the run is cancelled.
+fn run_worker(
+    entries: &[FileEntry],
+    next: &AtomicUsize,
+    counts: &Counts,
+    analyzer: &dyn SpectrumAnalyzer,
+    params: &DetectionParams,
+    cancel: &CancelToken,
+    on_progress: &(dyn Fn(ProgressEvent) + Sync),
+) {
+    loop {
+        if cancel.is_cancelled() {
+            return;
+        }
+        let index = next.fetch_add(1, Ordering::SeqCst);
+        let Some(entry) = entries.get(index) else {
+            return;
+        };
+        on_progress(ProgressEvent::TrackStarted {
+            index: index as u32,
+            path: entry.path.clone(),
+        });
+        let analysis = analyze_track(analyzer, entry, params);
+        counts.record(analysis.verdict);
+        on_progress(ProgressEvent::TrackDone {
+            index: index as u32,
+            analysis,
+        });
+    }
 }
 
 /// Holds the running analysis, so only one runs at a time (RF-05, `ANALYSIS_RUNNING`).
@@ -110,13 +216,26 @@ impl AnalysisSlot {
 
     /// Takes the slot, or fails with `ANALYSIS_RUNNING` if a run holds it.
     pub fn begin(&self) -> Result<ActiveRun, AppError> {
-        let _ = &self.current;
-        todo!("RF-05: AnalysisSlot::begin")
+        let mut current = lock(&self.current);
+        if current.is_some() {
+            return Err(AppError::new(
+                AppErrorCode::AnalysisRunning,
+                "an analysis is already running",
+            ));
+        }
+        let token = CancelToken::new();
+        *current = Some(token.clone());
+        Ok(ActiveRun {
+            token,
+            slot: Arc::clone(&self.current),
+        })
     }
 
     /// Cancels the running analysis; no-op if nothing is running.
     pub fn cancel(&self) {
-        todo!("RF-05: AnalysisSlot::cancel")
+        if let Some(token) = lock(&self.current).as_ref() {
+            token.cancel();
+        }
     }
 }
 
@@ -128,6 +247,11 @@ impl ActiveRun {
 
 impl Drop for ActiveRun {
     fn drop(&mut self) {
-        let _ = &self.slot;
+        *lock(&self.slot) = None;
     }
+}
+
+/// Locks the slot, recovering the value if a thread panicked while holding it.
+fn lock(slot: &Mutex<Option<CancelToken>>) -> MutexGuard<'_, Option<CancelToken>> {
+    slot.lock().unwrap_or_else(|e| e.into_inner())
 }
