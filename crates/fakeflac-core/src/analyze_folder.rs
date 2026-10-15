@@ -1,0 +1,133 @@
+//! Use case: analyse a folder (RF-02, RF-05, RNF-04). Scan → per track in parallel → progress
+//! events → summary. Contract: `specs/contracts/commands.md`; scenarios: `specs/features/analyze-folder.feature`.
+
+use crate::domain::TrackAnalysis;
+use crate::error::AppError;
+use crate::params::DetectionParams;
+use crate::ports::{FileScanner, SpectrumAnalyzer};
+use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+
+/// Cooperative cancellation token (RF-05). Cloning shares the same flag.
+#[derive(Debug, Clone, Default)]
+pub struct CancelToken(Arc<AtomicBool>);
+
+impl CancelToken {
+    pub fn new() -> CancelToken {
+        CancelToken::default()
+    }
+
+    pub fn cancel(&self) {
+        self.0.store(true, Ordering::SeqCst);
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        self.0.load(Ordering::SeqCst)
+    }
+}
+
+/// Totals of one run, sent with the last event and returned by `analyze_folder`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AnalysisSummary {
+    pub root: PathBuf,
+    /// Supported files found by the scan.
+    pub total: u32,
+    /// Tracks with a `TrackDone` event (errors included).
+    pub done: u32,
+    pub real: u32,
+    pub suspicious: u32,
+    pub fake: u32,
+    pub errors: u32,
+    pub cancelled: bool,
+    pub elapsed_ms: u64,
+}
+
+/// Progress of one run, in order: `Scanned`, then `TrackStarted`/`TrackDone` per track
+/// (`TrackDone` may arrive out of index order), then exactly one of `Finished` / `Cancelled`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum ProgressEvent {
+    Scanned { total: u32 },
+    TrackStarted { index: u32, path: PathBuf },
+    TrackDone { index: u32, analysis: TrackAnalysis },
+    Finished { summary: AnalysisSummary },
+    Cancelled { summary: AnalysisSummary },
+}
+
+/// Scans `root`, analyses every supported file on `workers` threads and reports progress.
+///
+/// Files are indexed in path order (case-insensitive). A per-track failure becomes a
+/// `Verdict::Error` track and the run continues (RNF-04). When `cancel` fires, no new track
+/// starts and the run ends with `Cancelled`. Errors (`FOLDER_UNREADABLE`, `NO_AUDIO_FOUND`)
+/// are returned before any event is sent. `workers` is chosen by the composition root
+/// (cores − 1); 0 is treated as 1. Threads come from `std` so the core keeps no dependencies.
+#[allow(clippy::too_many_arguments)]
+pub fn analyze_folder(
+    scanner: &dyn FileScanner,
+    analyzer: &dyn SpectrumAnalyzer,
+    params: &DetectionParams,
+    root: &Path,
+    workers: usize,
+    cancel: &CancelToken,
+    on_progress: &(dyn Fn(ProgressEvent) + Sync),
+) -> Result<AnalysisSummary, AppError> {
+    let _ = (
+        scanner,
+        analyzer,
+        params,
+        root,
+        workers,
+        cancel,
+        on_progress,
+    );
+    todo!("RF-02/RF-05: analyze_folder")
+}
+
+/// Holds the running analysis, so only one runs at a time (RF-05, `ANALYSIS_RUNNING`).
+#[derive(Debug, Default)]
+pub struct AnalysisSlot {
+    current: Arc<Mutex<Option<CancelToken>>>,
+}
+
+/// The running analysis. Dropping it frees the slot.
+#[derive(Debug)]
+pub struct ActiveRun {
+    token: CancelToken,
+    slot: Arc<Mutex<Option<CancelToken>>>,
+}
+
+impl AnalysisSlot {
+    pub fn new() -> AnalysisSlot {
+        AnalysisSlot::default()
+    }
+
+    /// Takes the slot, or fails with `ANALYSIS_RUNNING` if a run holds it.
+    pub fn begin(&self) -> Result<ActiveRun, AppError> {
+        let _ = &self.current;
+        todo!("RF-05: AnalysisSlot::begin")
+    }
+
+    /// Cancels the running analysis; no-op if nothing is running.
+    pub fn cancel(&self) {
+        todo!("RF-05: AnalysisSlot::cancel")
+    }
+}
+
+impl ActiveRun {
+    pub fn token(&self) -> &CancelToken {
+        &self.token
+    }
+}
+
+impl Drop for ActiveRun {
+    fn drop(&mut self) {
+        let _ = &self.slot;
+    }
+}
