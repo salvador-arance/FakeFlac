@@ -2,6 +2,7 @@
 //! Only the ports listed in the architecture document exist; adding one requires an ADR (D3).
 
 use crate::domain::{AudioFormat, TrackError};
+use crate::error::AppError;
 use crate::params::DetectionParams;
 use crate::spectrum::AverageSpectrum;
 use std::path::PathBuf;
@@ -34,4 +35,12 @@ pub trait SpectrumAnalyzer: Send + Sync {
         path: &std::path::Path,
         params: &DetectionParams,
     ) -> Result<AudioProbe, TrackError>;
+}
+
+/// Lists the supported files under a folder (RF-02, RF-14). Read-only (RNF-05).
+pub trait FileScanner: Send + Sync {
+    /// Every supported file under `root`, recursively. Hidden files and folders (name starting
+    /// with `.`) are skipped and symbolic links are not followed. Order is unspecified.
+    /// Fails with `FOLDER_UNREADABLE` when `root` is not a readable folder.
+    fn scan(&self, root: &std::path::Path) -> Result<Vec<FileEntry>, AppError>;
 }

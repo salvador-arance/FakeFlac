@@ -30,14 +30,15 @@ See `crates/fakeflac-core/src/domain.rs`: `Verdict { Real, Suspicious, Fake, Err
 
 ## 4. Use cases
 
-- `AnalyzeFolder(root, params, cancel, progress)`: scan → per track (rayon): cache lookup → analyse → store → report progress. A `TrackError` becomes `Verdict::Error` and the batch continues (RNF-04).
+- `AnalyzeFolder(root, params, cancel, progress)`: scan → per track (`workers` std scoped threads, ADR-0034): cache lookup → analyse → store → report progress. A `TrackError` becomes `Verdict::Error` and the batch continues (RNF-04).
 - `GetSpectrogram(path, opts)`: on demand; not cached on disk in v1 (measured in phase 5; if it misses the 2 s target, add thumbnails via a new ADR).
 - `ExportCsv(results, dest)`; `SummarizeByFolder(results)` (RF-10).
 
 ## 5. Concurrency and resources
 
-- rayon pool with `cores − 1` threads. One track per thread, reused window buffers → bounded memory (RNF-02).
-- Cancellation: the token is checked between windows; the batch stops in < 500 ms.
+- `cores − 1` worker threads (chosen by the composition root, ADR-0034), each taking the next track from a shared counter. One track per thread, reused window buffers → bounded memory (RNF-02).
+- Cancellation: the token is checked before each track; tracks already running finish, so the batch stops in < 500 ms as long as one track takes less than that. Checking it between windows inside the analyzer (the `cancel` argument of `SpectrumAnalyzer::analyze`) is pending until per-track times are measured (RNF-01).
+- A panic while analysing one track is caught and becomes an error track (ADR-0013).
 - Read-only: files are opened read-only; no port can write audio (RNF-05).
 
 ## 6. Errors
