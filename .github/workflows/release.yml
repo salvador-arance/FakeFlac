@@ -17,7 +17,7 @@ jobs:
         with: { node-version: 24, cache: npm }
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - uses: extractions/setup-just@v2
+      - uses: extractions/setup-just@v4
       - run: npm ci
       - name: Tag matches versions
         shell: pwsh

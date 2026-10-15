@@ -26,7 +26,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with: { components: "rustfmt, clippy" }
       - uses: Swatinem/rust-cache@v2
-      - uses: extractions/setup-just@v2
+      - uses: extractions/setup-just@v4
       - run: npm ci
       - run: just check-fast
 
@@ -38,7 +38,7 @@ jobs:
         with: { fetch-depth: 0 }
       - uses: actions/setup-node@v4
         with: { node-version: 24 }
-      - uses: extractions/setup-just@v2
+      - uses: extractions/setup-just@v4
       - run: just trace
       - run: just lint-arch
       - run: just guard-tests
