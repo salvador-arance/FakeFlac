@@ -55,7 +55,7 @@ jobs:
             "$h  $($_.Name)" | Add-Content $out
           }
           Get-Content $out
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             target/release/bundle/nsis/*.exe
