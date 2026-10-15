@@ -30,9 +30,9 @@
 - Earlier follow-ups (RF-02/RF-05 block) still open; `build-windows` takes ~17 min (Tauri built twice).
 
 **Blockers / questions for the human**
-- Offered: the student writes the main-screen UI with Claude guiding and reviewing, instead of agents writing it. Waiting for the answer.
+- None. Decided: the main-screen UI is written by the agents (normal `/feature` cycle), in a new session.
 
-**Next step:** main-screen UI: UI specs are in `specs/ui/`; start with atoms/molecules + stories (S6), then `AnalysisPage` wiring `src/lib/api/`.
+**Next step:** after #20 is merged, `/feature` for the main-screen UI (RF-01 dialog + drop, RF-05 status bar and cancel, RF-06 table): UI specs in `specs/ui/`; atoms/molecules with stories first (S6), then `AnalysisPage` wiring `src/lib/api/` (`startAnalysisOfDropped` for drops). Environment notes for this machine: in Git Bash every command ends with a harmless "cwd file" error and exit code 1; run frontend tests via `just`/PowerShell (`npx vitest` fails); `git push` needs `-c credential.helper= -c "credential.helper=!gh auth git-credential"`.
 
 ## 2026-10-15 - H1: Tauri adapter and API client (RF-01, RF-05)
 
