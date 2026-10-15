@@ -53,7 +53,7 @@ fn spectrum(db: impl Fn(f64) -> f64) -> AverageSpectrum {
 }
 
 /// Behaviour chosen by file name: `fake*` cliff at 16 kHz, `susp*` cliff at 20.9 kHz,
-/// `corrupt*` corrupt stream, anything else flat (real). Optional sleep per track.
+/// `corrupt*` corrupt stream, `panic*` panics (a decoder bug), anything else flat (real). Optional sleep per track.
 struct FakeAnalyzer {
     delay: Duration,
     calls: AtomicUsize,
@@ -80,6 +80,9 @@ impl SpectrumAnalyzer for FakeAnalyzer {
             .unwrap_or_default();
         if name.starts_with("corrupt") {
             return Err(TrackError::CorruptStream("bad frame".into()));
+        }
+        if name.starts_with("panic") {
+            panic!("decoder bug (expected by the test)");
         }
         let s = if name.starts_with("fake") {
             spectrum(|f| if f < 16_000.0 { 0.0 } else { -100.0 })
@@ -435,4 +438,84 @@ fn fake_spectra_yield_intended_verdicts() {
     assert_eq!(detect(Some(&flat), &p).verdict, Verdict::Real);
     assert_eq!(detect(Some(&cliff16), &p).verdict, Verdict::Fake);
     assert_eq!(detect(Some(&cliff209), &p).verdict, Verdict::Suspicious);
+}
+
+fn count_started(events: &[ProgressEvent], i: u32) -> usize {
+    events
+        .iter()
+        .filter(|e| matches!(e, ProgressEvent::TrackStarted { index, .. } if *index == i))
+        .count()
+}
+
+fn count_done(events: &[ProgressEvent], i: u32) -> usize {
+    events
+        .iter()
+        .filter(|e| matches!(e, ProgressEvent::TrackDone { index, .. } if *index == i))
+        .count()
+}
+
+// Scenario: Progress is reported per track and globally (@RF-05): exactly one
+// trackStarted and one trackDone per file, and 2 + 2 * total events in all.
+#[test]
+fn rf05_exactly_one_started_and_done_per_track() {
+    let sc = scanner(&["real1.flac", "fake1.flac", "susp1.flac", "real2.wav"]);
+    let an = FakeAnalyzer::new(1);
+    let events = Events::default();
+    run(&sc, &an, 3, &CancelToken::new(), &events).expect("ok");
+    let ev = events.into_inner().expect("lock");
+    for i in 0..4u32 {
+        assert_eq!(count_started(&ev, i), 1, "trackStarted for {i}");
+        assert_eq!(count_done(&ev, i), 1, "trackDone for {i}");
+    }
+    assert_eq!(ev.len(), 2 + 2 * 4);
+}
+
+// Contract (`specs/contracts/commands.md`): only `trackDone` may arrive out of index
+// order, so `trackStarted` events arrive in index order even with several workers.
+#[test]
+fn rf05_track_started_in_index_order() {
+    let names: Vec<String> = (0..64).map(|i| format!("t{i:02}.flac")).collect();
+    let refs: Vec<&str> = names.iter().map(String::as_str).collect();
+    let sc = scanner(&refs);
+    let an = FakeAnalyzer::new(0);
+    // The race is between taking an index and reporting it: repeat to make it show up.
+    for _ in 0..50 {
+        let events = Events::default();
+        run(&sc, &an, 8, &CancelToken::new(), &events).expect("ok");
+        let started: Vec<u32> = events
+            .into_inner()
+            .expect("lock")
+            .iter()
+            .filter_map(|e| match e {
+                ProgressEvent::TrackStarted { index, .. } => Some(*index),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(started, (0..64).collect::<Vec<u32>>());
+    }
+}
+
+// Scenario: A corrupt file does not stop the analysis (@RNF-04), ADR-0013: a panic in the
+// decoder of one track becomes an error track and the run still finishes.
+#[test]
+fn rnf04_decoder_panic_does_not_stop_analysis() {
+    let sc = scanner(&["a_real.flac", "panic.flac", "z_real.flac"]);
+    let an = FakeAnalyzer::new(0);
+    let events = Events::default();
+    let summary = run(&sc, &an, 2, &CancelToken::new(), &events).expect("ok");
+    let ev = events.into_inner().expect("lock");
+
+    let done = done_by_index(&ev);
+    assert_eq!(done.len(), 3);
+    assert_eq!(done[1].1.verdict, Verdict::Error);
+    assert!(
+        matches!(done[1].1.error, Some(TrackError::CorruptStream(_))),
+        "{:?}",
+        done[1].1.error
+    );
+    assert_eq!(done[0].1.verdict, Verdict::Real);
+    assert_eq!(done[2].1.verdict, Verdict::Real);
+    assert!(matches!(ev.last(), Some(ProgressEvent::Finished { .. })));
+    assert_eq!(summary.done, 3);
+    assert_eq!(summary.errors, 1);
 }
