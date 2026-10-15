@@ -27,16 +27,23 @@ impl FileScanner for WalkDirScanner {
 
 /// Pre-run checks of `root` (`specs/contracts/commands.md`, `start_analysis` errors).
 fn check_root(root: &Path) -> Result<(), AppError> {
+    // First, before touching the disk: a relative path would resolve against the process
+    // working directory, not the user's.
+    if !root.is_absolute() {
+        return Err(AppError::new(
+            AppErrorCode::FolderUnreadable,
+            format!("not an absolute path: {}", root.display()),
+        ));
+    }
     if root.is_file() {
         return Err(AppError::new(
             AppErrorCode::NotAFolder,
             format!("not a folder: {}", root.display()),
         ));
     }
-    // A relative path would resolve against the process working directory, not the user's.
-    // `is_dir` alone is not enough either: a folder can exist and still deny listing, which
-    // would otherwise end as an empty scan (`NO_AUDIO_FOUND`).
-    if !root.is_absolute() || !root.is_dir() || std::fs::read_dir(root).is_err() {
+    // `is_dir` alone is not enough: a folder can exist and still deny listing, which would
+    // otherwise end as an empty scan (`NO_AUDIO_FOUND`).
+    if !root.is_dir() || std::fs::read_dir(root).is_err() {
         return Err(AppError::new(
             AppErrorCode::FolderUnreadable,
             format!("cannot read folder {}", root.display()),
