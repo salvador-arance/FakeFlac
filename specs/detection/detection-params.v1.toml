@@ -1,0 +1,45 @@
+# DetectionParams v1 (S4, ADR-0011). Provisional values; calibrated in phase 5.
+# Changing any value means a new file version and a new algorithm_version (cache invalidation).
+algorithm_version = 1
+
+[input]
+min_duration_s = 5.0          # shorter tracks -> Error(TooShort)
+edge_skip_percent = 5.0       # skip intros/outros
+segments = 32                 # analysis positions spread over the track
+silence_dbfs = -70.0          # frames quieter than this are ignored
+
+[fft]
+target_bin_hz = 5.4           # N = nearest power of two to sample_rate / target_bin_hz
+window = "blackman_harris_4"  # hann | blackman_harris_4 | nuttall_4 | kaiser (ADR-0025)
+kaiser_beta = 10.0            # only used when window = "kaiser"
+overlap = 0.75                # 0.5 for hann
+smoothing_hz = 100.0          # running median width over the dB spectrum
+
+[bands]
+ref_band_low_hz = 1000.0
+ref_band_high_hz = 10000.0
+hf_band_low_hz = 10000.0
+hf_band_high_hz = 16000.0
+nyquist_guard_hz = 100.0
+noise_floor_percentile = 5.0  # reported only
+
+[cutoff]
+content_drop_db = 60.0        # content = less than this below the reference level (L_ref)
+content_min_width_hz = 200.0
+steepness_span_hz = 500.0
+full_band_margin_hz = 1000.0  # a cutoff closer than this to Nyquist is not a cliff
+
+[verdict]
+low_hf_threshold_db = -60.0           # H below this -> Suspicious(LowHighFrequencyContent)
+cliff_min_steepness_db_per_khz = 30.0
+fake_max_cutoff_hz = 20500.0          # cliffs at or below this -> Fake
+gradual_min_cutoff_hz = 19000.0       # no cliff but content ends below this -> Suspicious(GradualRolloff)
+
+[spectrogram]
+window = "hann"
+fft_size = 2048
+overlap = 0.75
+max_width = 1200              # time bins
+height = 512                  # frequency bins
+db_floor = -120.0
+db_ceiling = 0.0
