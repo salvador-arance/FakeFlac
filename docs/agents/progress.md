@@ -2,6 +2,22 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-15 - H1: Tauri adapter and API client (RF-01, RF-05)
+
+**Done**
+- RF-02/RF-05 analyze-folder backend merged (#17, ADR-0034 approved with it).
+- Branch `feat/RF-01-05-adapter`: commands `pick_folder` (dialog from Rust, modal), `start_analysis` (Channel), `cancel_analysis`; contract DTOs in `src-tauri/src/dto.rs`; generated `src/lib/api/bindings.ts` (`just gen`); API client `src/lib/api/index.ts` (resolves only after the terminal event; non-contract rejections → `INTERNAL`); a page reload cancels the running analysis. New recipes `gen`, `gen-check`, `check-app` (CI: Windows build job). 26 adapter tests (17 Rust, 10 vitest, incl. 1 bindings drift). Review: 1 blocking (ADR-0033 out of date) fixed with implementation notes; improvements applied.
+
+**Pending**
+- G2: human merges the `feat/RF-01-05-adapter` PR.
+- Spec clarifications for G1 before the UI (from the review): dropped items that are files, not folders (frontend can't tell them apart; `start_analysis` on a file gives `FOLDER_UNREADABLE`); `INTERNAL` as a possible `start_analysis` error with no terminal event; paths are lossy for non-UTF-8 names (rows must be keyed by `index`, not `path`); relative `root`.
+- Earlier follow-ups (RF-02/RF-05 block) still open.
+
+**Blockers / questions for the human**
+- None. Note: in this Git Bash, `npx vitest` fails ("failed to find the runner", likely drive-letter case); run frontend tests through `just` or PowerShell.
+
+**Next step:** `spec/H1-contract-clarifications` (the four points above) → G1; then the main-screen UI (RF-01 dialog + drop, RF-05 status bar and cancel, RF-06 table) with UI specs, stories and component tests.
+
 ## 2026-10-15 - H1: analyze-folder backend (RF-02, RF-05)
 
 **Done**
