@@ -100,6 +100,46 @@ describe('startAnalysis', () => {
   })
 })
 
+describe('startAnalysis ordering and errors', () => {
+  // Channel messages and the command reply travel on different paths: the promise must not
+  // resolve before the terminal event has reached the caller (@RF-05).
+  it('resolves only after the terminal event was delivered', async () => {
+    invoke.mockImplementation(async () => {
+      const channel = channels[0]
+      setTimeout(() => {
+        channel.onmessage({ kind: 'scanned', total: 1 })
+        channel.onmessage({ kind: 'finished', summary })
+      }, 20)
+      return summary
+    })
+    const received: ProgressEvent[] = []
+    const result = await startAnalysis('C:/A', (e) => received.push(e))
+    expect(result).toEqual(summary)
+    expect(received.map((e) => e.kind)).toEqual(['scanned', 'finished'])
+  })
+
+  it('also waits for a cancelled terminal event', async () => {
+    const cancelled = { ...summary, cancelled: true, done: 0 }
+    invoke.mockImplementation(async () => {
+      const channel = channels[0]
+      setTimeout(() => channel.onmessage({ kind: 'cancelled', summary: cancelled }), 20)
+      return cancelled
+    })
+    const received: ProgressEvent[] = []
+    await startAnalysis('C:/A', (e) => received.push(e))
+    expect(received.map((e) => e.kind)).toEqual(['cancelled'])
+  })
+
+  // Tauri rejects with a plain string for IPC-level failures (e.g. invalid arguments).
+  it('wraps a non-contract rejection as INTERNAL', async () => {
+    invoke.mockRejectedValue('invalid args `root` for command `start_analysis`')
+    const error = await startAnalysis('C:/A', () => {}).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(ApiError)
+    expect((error as ApiError).code).toBe('INTERNAL')
+    expect((error as ApiError).message).toContain('invalid args')
+  })
+})
+
 describe('cancelAnalysis', () => {
   // @RF-05 cancel
   it('invokes cancel_analysis', async () => {

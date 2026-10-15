@@ -235,3 +235,18 @@ fn app_errors_map_every_code() {
         );
     }
 }
+
+// A non-finite estimate must not reach the table as a plausible "0.0 kHz": the contract's
+// `number` cannot carry NaN, so the track is sent without a cutoff.
+#[test]
+fn non_finite_cutoff_is_sent_as_no_cutoff() {
+    for bad in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+        let mut t = track(core::Verdict::Suspicious, None);
+        t.cutoff = Some(core::CutoffEstimate {
+            frequency_hz: 16_000.0,
+            steepness_db_per_khz: bad,
+            noise_floor_db: -90.0,
+        });
+        assert_eq!(track_json(&t)["cutoff"], Value::Null, "{bad}");
+    }
+}

@@ -110,7 +110,12 @@ fn corrupt_file_does_not_stop_the_analysis() {
         .find(|a| a.info.path.ends_with("bad.flac"))
         .expect("bad row");
     assert_eq!(bad.verdict, Verdict::Error);
-    assert!(bad.error.is_some());
+    // The scenario expects the reason "Corrupt stream".
+    assert!(
+        matches!(bad.error, Some(dto::TrackError::CorruptStream { .. })),
+        "{:?}",
+        bad.error
+    );
     let good = analyses
         .iter()
         .find(|a| a.info.path.ends_with("good.wav"))
@@ -184,4 +189,38 @@ fn worker_count_is_between_one_and_the_cores() {
     let n = worker_count();
     let cores = std::thread::available_parallelism().map_or(1, |c| c.get());
     assert!((1..=cores).contains(&n), "n = {n}, cores = {cores}");
+}
+
+// @RF-05 Progress is reported per track and globally: trackStarted in index order 0..n and
+// exactly one trackDone per index.
+#[test]
+fn progress_events_cover_every_index_once() {
+    let dir = temp_dir("progress");
+    for i in 0..12u64 {
+        std::fs::write(dir.join(format!("t{i:02}.flac")), garbage(100 + i, 2048)).unwrap();
+    }
+    let (result, events) = collect(&AnalysisSlot::new(), &dir);
+    let summary = result.expect("run ok");
+    assert_eq!(summary.total, 12);
+    let started: Vec<u32> = events
+        .iter()
+        .filter_map(|e| match e {
+            ProgressEvent::TrackStarted { index, .. } => Some(*index),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(started, (0..12).collect::<Vec<u32>>());
+    let mut done: Vec<u32> = events
+        .iter()
+        .filter_map(|e| match e {
+            ProgressEvent::TrackDone { index, .. } => Some(*index),
+            _ => None,
+        })
+        .collect();
+    done.sort_unstable();
+    assert_eq!(done, (0..12).collect::<Vec<u32>>());
+    assert!(matches!(
+        events.last(),
+        Some(ProgressEvent::Finished { .. })
+    ));
 }
