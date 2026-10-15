@@ -2,6 +2,19 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-15 - H0 smoke test: RF-10 through the full cycle
+
+**Done**
+- CI green on `main` (PR #8: supply-chain check limited to the Windows target; dependency graph enabled).
+- Dependabot: updates grouped (PR #9); closed #4 (`@types/node` 26 must match Node 24) and #7 (TypeScript 7 is not supported by `svelte-check` 4.7).
+- RF-10 album summary: spec approved at G1 (PR #10); branch `feat/RF-10` with stub, `test(RF-10)` (11 failing tests), `feat(RF-10)` (all green), review without blocking findings.
+
+**Pending**
+- G2: human merges the `feat/RF-10` PR. That closes step 0.13 and the H0 acceptance criteria can be checked.
+- Dependabot actions group PR #11 (asked to rebase; its CI had not run because of a conflict).
+- Rest of the harness listed in the previous block.
+
+**Next step:** H1 specs, grouped in one `spec/H1` PR for gate G1: detection rules and `DetectionParams` v1, contract, `analyze-folder.feature`, `inspect-track.feature` and UI specs for the MVP (RF-01..07, RF-14 for WAV/FLAC).
 ## 2026-10-15 - Repository bootstrap (H0, in progress)
 
 **Done**
