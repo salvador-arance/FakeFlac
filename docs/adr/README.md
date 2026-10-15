@@ -36,3 +36,4 @@ Format: MADR-style. New ADRs are created with `/new-adr` and approved at gate G1
 | [0030](0030-formats-in-stages-and-rust-decoders-wav-and-flac-h1-mp3-m4a.md) | Formats in stages and Rust decoders: WAV and FLAC (H1); MP3, M4A (AAC) and Opus (H2). symphonia for WAV/FLAC/MP3/M4A; Opus with a separate decoder chosen in a spike (opus crate/libopus bundled vs a pure-Rust alternative) | accepted |
 | [0031](0031-common-verdict-model-for-all-formats-real-suspicious-fake-re.md) | Common verdict model for all formats: Real / Suspicious / Fake relative to the declared quality, plus estimated_source_bitrate_kbps for lossy formats | accepted |
 | [0032](0032-the-installer-is-not-code-signed-in-v1.md) | The installer is not code-signed in v1 | accepted |
+| [0033](0033-h1-dependency-set.md) | H1 dependency set | proposed |
