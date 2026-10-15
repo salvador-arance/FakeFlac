@@ -37,3 +37,4 @@ Format: MADR-style. New ADRs are created with `/new-adr` and approved at gate G1
 | [0031](0031-common-verdict-model-for-all-formats-real-suspicious-fake-re.md) | Common verdict model for all formats: Real / Suspicious / Fake relative to the declared quality, plus estimated_source_bitrate_kbps for lossy formats | accepted |
 | [0032](0032-the-installer-is-not-code-signed-in-v1.md) | The installer is not code-signed in v1 | accepted |
 | [0033](0033-h1-dependency-set.md) | H1 dependency set | proposed |
+| [0034](0034-analysis-runs-on-std-scoped-threads-in-the-core.md) | The analysis runs on std scoped threads in the core (partially supersedes 0006) | proposed |

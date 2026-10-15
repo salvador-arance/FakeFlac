@@ -38,6 +38,11 @@ H1 needs decoding (WAV, FLAC), a real FFT, parallelism, a recursive scan, a fold
 - `flacenc` writes the short last block's size as the stream minimum block size; symphonia 0.6 then rejects every fixed-size frame. Fixtures avoid it by using a whole number of blocks. Files from libFLAC are not affected.
 - A workspace `[profile.dev.package."*"] opt-level = 3` keeps DSP and decoding tests fast in debug builds.
 
+## Notes from implementation (RF-02/RF-05)
+
+- `walkdir` 2.5 is used by `fakeflac-fs` as listed.
+- `rayon` is not used in H1: the analysis runs on std scoped threads inside the core (ADR-0034).
+
 ## Consequences
 
 More crates in the lock file to audit (`cargo deny`, Dependabot). `tauri-specta` is a community crate (risk D1, fallback `ts-rs`). Adding anything not in this list still needs a new ADR.

@@ -1,6 +1,6 @@
 # ADR-0006: Parallelism with rayon and cooperative cancellation (atomic flag/token)
 
-- Status: accepted
+- Status: accepted; thread pool partially superseded by ADR-0034 (cooperative cancellation stays)
 - Date: 2026-10-15
 
 ## Context and rationale
