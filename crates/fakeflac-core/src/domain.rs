@@ -29,8 +29,11 @@ pub enum AudioFormat {
 impl AudioFormat {
     /// Format for a file extension (case-insensitive, without the dot). H1 supports WAV and FLAC (RF-14).
     pub fn from_extension(ext: &str) -> Option<AudioFormat> {
-        let _ = ext;
-        todo!("RF-14")
+        match ext.to_ascii_lowercase().as_str() {
+            "wav" => Some(AudioFormat::Wav),
+            "flac" => Some(AudioFormat::Flac),
+            _ => None,
+        }
     }
 }
 

@@ -90,6 +90,50 @@ pub struct SpectrogramParams {
 impl Default for DetectionParams {
     /// DetectionParams v1.
     fn default() -> Self {
-        todo!("RF-04: v1 values")
+        DetectionParams {
+            algorithm_version: 1,
+            input: InputParams {
+                min_duration_s: 5.0,
+                edge_skip_percent: 5.0,
+                segments: 32,
+                silence_dbfs: -70.0,
+            },
+            fft: FftParams {
+                target_bin_hz: 5.4,
+                window: WindowKind::BlackmanHarris4,
+                kaiser_beta: 10.0,
+                overlap: 0.75,
+                smoothing_hz: 100.0,
+            },
+            bands: BandParams {
+                ref_band_low_hz: 1000.0,
+                ref_band_high_hz: 10000.0,
+                hf_band_low_hz: 10000.0,
+                hf_band_high_hz: 16000.0,
+                nyquist_guard_hz: 100.0,
+                noise_floor_percentile: 5.0,
+            },
+            cutoff: CutoffParams {
+                content_drop_db: 60.0,
+                content_min_width_hz: 200.0,
+                steepness_span_hz: 500.0,
+                full_band_margin_hz: 1000.0,
+            },
+            verdict: VerdictParams {
+                low_hf_threshold_db: -60.0,
+                cliff_min_steepness_db_per_khz: 30.0,
+                fake_max_cutoff_hz: 20500.0,
+                gradual_min_cutoff_hz: 19000.0,
+            },
+            spectrogram: SpectrogramParams {
+                window: WindowKind::Hann,
+                fft_size: 2048,
+                overlap: 0.75,
+                max_width: 1200,
+                height: 512,
+                db_floor: -120.0,
+                db_ceiling: 0.0,
+            },
+        }
     }
 }
