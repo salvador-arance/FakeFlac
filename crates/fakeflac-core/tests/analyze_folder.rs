@@ -92,7 +92,7 @@ impl SpectrumAnalyzer for FakeAnalyzer {
             sample_rate: 44_100,
             bit_depth: Some(16),
             channels: 2,
-            duration_ms: 1000,
+            duration_ms: 180_000,
             spectrum: Some(s),
         })
     }
@@ -422,4 +422,17 @@ fn contract_serialization() {
         serde_json::to_string(&AppErrorCode::AnalysisRunning).expect("json"),
         "\"ANALYSIS_RUNNING\""
     );
+}
+
+// Sanity: the fake spectra yield the intended verdicts under the v1 rules (detect_rules.rs V6/V3/V4)
+#[test]
+fn fake_spectra_yield_intended_verdicts() {
+    use fakeflac_core::detect::detect;
+    let p = DetectionParams::default();
+    let flat = spectrum(|_| 0.0);
+    let cliff16 = spectrum(|f| if f < 16_000.0 { 0.0 } else { -100.0 });
+    let cliff209 = spectrum(|f| if f < 20_900.0 { 0.0 } else { -100.0 });
+    assert_eq!(detect(Some(&flat), &p).verdict, Verdict::Real);
+    assert_eq!(detect(Some(&cliff16), &p).verdict, Verdict::Fake);
+    assert_eq!(detect(Some(&cliff209), &p).verdict, Verdict::Suspicious);
 }
