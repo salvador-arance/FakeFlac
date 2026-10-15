@@ -48,13 +48,42 @@ pub fn fixture(name: &str, container: Container) -> PathBuf {
             .clone()
     };
     cell.get_or_init(|| {
-        let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("fixtures");
+        let dir = fixture_dir();
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join(format!("{name}.{}", container.ext()));
-        build(name, container, &path);
+        if !path.exists() {
+            // nextest runs every test in its own process, so the in-process cache does not stop
+            // two processes from building the same fixture. Each builds a private copy and links it
+            // into place only if no complete file is there yet: an existing fixture is never
+            // replaced (its modification time stays stable while other tests read it).
+            let tmp = dir.join(format!(
+                "{name}.{}.{}.tmp",
+                std::process::id(),
+                container.ext()
+            ));
+            build(name, container, &tmp);
+            let _ = std::fs::hard_link(&tmp, &path);
+            let _ = std::fs::remove_file(&tmp);
+            assert!(path.exists(), "fixture {} missing", path.display());
+        }
         path
     })
     .clone()
+}
+
+/// Fixture folder of this build of the test binary: all its processes share it, and a rebuild
+/// (possibly with a changed generator) starts from an empty folder.
+fn fixture_dir() -> PathBuf {
+    let exe = std::env::current_exe().unwrap();
+    let built = std::fs::metadata(&exe)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map_or(0, |d| d.as_millis());
+    let stem = exe.file_stem().unwrap().to_string_lossy().into_owned();
+    Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join("fixtures")
+        .join(format!("{stem}-{built}"))
 }
 
 /// `FileEntry` as the scanner would produce it.

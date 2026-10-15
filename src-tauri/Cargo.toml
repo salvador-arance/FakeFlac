@@ -22,6 +22,15 @@ fakeflac-audio = { path = "../crates/fakeflac-audio" }
 fakeflac-fs = { path = "../crates/fakeflac-fs" }
 fakeflac-store = { path = "../crates/fakeflac-store" }
 fakeflac-export = { path = "../crates/fakeflac-export" }
+tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }
+specta = { version = "=2.0.0-rc.25", features = ["derive"] }
+specta-typescript = "0.0.12"
+tauri-plugin-dialog = "2.7.3"
+
+[dev-dependencies]
+hound = "3.5.1"
+rand = "0.10.3"
+rand_chacha = "0.10.0"
 
 [lints]
 workspace = true

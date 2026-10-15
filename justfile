@@ -20,9 +20,19 @@ test:
     cargo test --workspace --exclude fakeflac
     npm run test --if-present
 
-# Regenerate TS bindings from Rust (tauri-specta). Not wired yet: needs the first approved contract spec.
+# Regenerate TS bindings from Rust (tauri-specta, S3): src/lib/api/bindings.ts.
 gen:
-    @echo "gen: no contract defined yet (specs/contracts/ is empty)"
+    cargo run -q -p fakeflac --example gen_bindings
+
+# Fail if the committed bindings differ from what the Rust contract generates.
+gen-check: gen
+    git diff --exit-code -- src/lib/api/bindings.ts
+
+# Tauri adapter checks (src-tauri). Windows only: on Linux, Tauri needs webkit system packages,
+# so CI runs this in the Windows build job.
+check-app: gen-check
+    cargo clippy -p fakeflac --all-targets -- -D warnings
+    cargo test -p fakeflac
 
 # Traceability matrix: requirements <-> scenarios (S1, S2).
 trace:
@@ -40,8 +50,8 @@ guard-tests:
 fixtures:
     @echo "fixtures: not implemented yet"
 
-# Everything CI runs (except the Windows build job).
-ci: check-fast test trace guard-tests
+# Everything CI runs (check-app runs in the Windows build job; the installer build is not included).
+ci: check-fast test trace guard-tests check-app
 
 # Tauri release build (NSIS + MSI).
 build:
