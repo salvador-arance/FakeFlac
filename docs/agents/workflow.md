@@ -33,7 +33,7 @@ requirement RF-xx
 | Same checks everywhere (RP-03) | CI only runs `just` recipes |
 | Crate and atomic design boundaries (S8) | `just lint-arch` |
 | Requirement ↔ scenario traceability (S1, S2) | `just trace` |
-| Contract generated, never hand-written (S3) | `just gen` + diff check (when the first contract exists) |
+| Contract generated, never hand-written (S3) | `just gen-check` (regenerates and diffs the bindings; part of `check-app`, so it runs in CI) |
 | Audio corpus is read-only (ADR-0022) | `guard-bash` + external `FAKEFLAC_CORPUS` |
 
 ## Local, personal settings

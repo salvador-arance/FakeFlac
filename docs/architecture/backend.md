@@ -1,6 +1,6 @@
 # Backend design (Rust)
 
-> Pipeline: file → technical metadata → N sampled windows → decode → windowed real FFT → band spectra (power mean and per-frame median) → cutoff step and gap step (+ full-band guard from v3, pending ADR-0038) → rules (`DetectionParams`) → `TrackAnalysis`. Formats: WAV, FLAC (H1); MP3, M4A, Opus (H2). All thresholds, the FFT window and the cutoff→bitrate tables are versioned data.
+> Pipeline: file → technical metadata → N sampled windows → decode → windowed real FFT → band spectra (power mean and per-frame median) → cutoff step and gap step (+ full-band guard from v3, ADR-0038) → rules (`DetectionParams`) → `TrackAnalysis`. Formats: WAV, FLAC (H1); MP3, M4A, Opus (H2). All thresholds, the FFT window and the cutoff→bitrate tables are versioned data.
 
 ## 1. Analysis pipeline
 
@@ -12,7 +12,7 @@ path → metadata (fs) → select N windows → decode with seek (f32 mono)
      → apply rules (DetectionParams) → TrackAnalysis
 ```
 
-The full-band guard (detection v3, `specs/detection/rules.md`) is pending: it applies once ADR-0038 is accepted at G1 and implemented.
+The full-band guard (detection v3, `specs/detection/rules.md`, ADR-0038) is specified and accepted; its implementation is pending (`/feature RF-04`). Until then the code runs v2.
 
 - Stages after the FFT are pure functions over arrays; tested with synthetic signals (low-passed noise at 16/19/20 kHz, full band, silence).
 - Mono for analysis (mean of channels). The spectrogram also uses mono by default.
@@ -76,7 +76,7 @@ Fixed design decisions:
 - Real FFT (`realfft`). FFT size by constant resolution: N = nearest power of two to `sample_rate / target_bin_hz` so thresholds hold across sample rates (v1: 5.4 Hz → 8192 at 44.1/48 kHz; v2: 10.8 Hz → 4096 at 44.1/48 kHz and 8192 at 88.2/96 kHz, so that one frame spans few MP3 frames; ADR-0035).
 - The spectrogram uses its own window (Hann, N=2048, 75 % overlap) because its goal is visual/temporal (`spectrogram_window` parameter).
 
-Selection protocol (phase 5, `just bench-windows`): synthetic signals with known truth (ideal low-pass noise at 16/19/20 kHz, slopes 24–120 dB/oct, bass tones at −3 dBFS, 16/24-bit with and without dither) + the real corpus (ADR-0022). Metrics: cutoff error (Hz), false cliffs on real tracks, noise-floor bias, resolvable dynamic range next to a strong tone, final classification, time per track. Rule: the window that minimises cutoff error **without worsening classification** wins; ties go to Hann. The result is recorded in a calibration ADR and in `specs/detection/`.
+Selection protocol (phase 5, planned recipe `just bench-windows`, not written yet): synthetic signals with known truth (ideal low-pass noise at 16/19/20 kHz, slopes 24–120 dB/oct, bass tones at −3 dBFS, 16/24-bit with and without dither) + the real corpus (ADR-0022). Metrics: cutoff error (Hz), false cliffs on real tracks, noise-floor bias, resolvable dynamic range next to a strong tone, final classification, time per track. Rule: the window that minimises cutoff error **without worsening classification** wins; ties go to Hann. The result is recorded in a calibration ADR and in `specs/detection/`.
 
 ## 8. Formats and decoding (ADR-0030)
 

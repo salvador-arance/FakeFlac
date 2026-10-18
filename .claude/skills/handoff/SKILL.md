@@ -11,4 +11,4 @@ Add a new block at the TOP of `docs/agents/progress.md` (newest first), with:
 - **Blockers / questions for the human.**
 - **Next step:** the single next action, so a fresh session can start with it.
 
-Also update `specs/traceability.md` if requirements moved. Record any repeated agent mistake in `docs/agents/lessons.md` (RP-10). Keep it short.
+Also update `specs/traceability.md` if requirements moved (including tests added outside a spec PR). Set every ADR merged at G1 since the last handoff from `proposed` to `accepted`, in the ADR file and in `docs/adr/README.md`. Record any repeated agent mistake in `docs/agents/lessons.md` (RP-10). Keep it short.
