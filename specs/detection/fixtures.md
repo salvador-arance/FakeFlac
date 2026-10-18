@@ -21,6 +21,7 @@ status: proposed
 | `silence` | Digital silence, 30 s | Suspicious, `LowHighFrequencyContent` |
 | `short` | `full_band`, 2 s | Error, `TooShort` |
 | `corrupt` | A FLAC file with its bytes truncated after the header | Error, `CorruptStream` |
+| `lp16k_unknown_length` | `lp16k` saved as FLAC with `total_samples` set to 0 in STREAMINFO (length not declared, as streaming encoders write it); the audio frames are unchanged | Fake, cutoff ≈ 16 kHz (the length is counted by decoding, rules.md section 1.2) |
 
 ## Real-world cases (added with algorithm_version 2)
 

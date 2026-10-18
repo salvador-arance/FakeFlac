@@ -20,11 +20,11 @@ v1 placed the cutoff where the smoothed mean spectrum fell more than `content_dr
 ## 1. Spectra (RF-03)
 
 1. Decode to `f32` and mix channels to mono (mean).
-2. If the duration is shorter than `min_duration_s`, the track is `Error(TooShort)`.
+2. If the duration is shorter than `min_duration_s`, the track is `Error(TooShort)`. If the stream does not declare its length (a FLAC whose STREAMINFO has `total_samples = 0`, which streaming encoders write), decode it once to count its frames, then continue as usual. A missing length is never reported as silence.
 3. Pick `segments` analysis positions spread evenly over the track, skipping the first and last `edge_skip_percent` of the duration. At each position take a block of `frames_per_segment` consecutive FFT frames with hop `N · (1 − overlap)` (block length `N + (frames_per_segment − 1) · hop`).
 4. FFT size `N` = power of two nearest to `sample_rate / target_bin_hz` (4096 at 44.1/48 kHz, 8192 at 88.2/96 kHz).
 5. Apply the window `window` (periodic). Real FFT. Power per FFT bin `|X|² / Σw²`.
-6. Skip frames whose RMS is below `silence_dbfs`. If no frame is left, the track is `Suspicious` with reason `LowHighFrequencyContent`: a silent track proves nothing either way.
+6. Skip frames whose RMS is below `silence_dbfs`. If no frame is left, the track is `Suspicious` with reason `LowHighFrequencyContent` and no cutoff (`cutoff: null`): a silent track proves nothing either way, and there are no measurements to report.
 7. **Bands.** Group the FFT bins of each frame into bands of width `band_hz`: band `b` holds the bins with frequency in `[b · band_hz, (b + 1) · band_hz)`. Bins at or above the lower edge of the last full band (the one that ends at or below Nyquist) go into that last band. Band power = mean power of its bins. The band centre is `c(b) = (b + ½) · band_hz`.
 8. **Mean spectrum** `M(b)` = `10·log10` of the band power averaged over all kept frames.
 9. **Median spectrum** `Q(b)` = median over all kept frames of `10·log10` of the band power of each frame.
@@ -47,7 +47,7 @@ Levels are relative to `L_ref` = median of `M(b)` over the bands whose centre li
 
 `gap_edge_hz` is an absolute frequency, not relative to Nyquist: MP3 encodes at 44.1 and 48 kHz both start sfb21 at about 16 kHz, and a hi-res file made from an MP3 inherits that edge.
 
-**Reported cutoff.** `CutoffEstimate { frequency_hz, steepness_db_per_khz, noise_floor_db: F }` is always reported, whatever the verdict:
+**Reported cutoff.** `CutoffEstimate { frequency_hz, steepness_db_per_khz, noise_floor_db: F }` is reported for every track that has spectra, whatever the verdict (it is `null` only for `Error` and for a silent track, section 1.6):
 - if `D ≥ step_suspicious_db`: `frequency_hz = fs`, `steepness_db_per_khz = D / ((step_window_bands + 1) · band_hz / 1000)` (the distance between the centres of the two windows);
 - otherwise: `frequency_hz = fe`, `steepness_db_per_khz = 0`.
 
