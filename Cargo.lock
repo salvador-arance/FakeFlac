@@ -857,6 +857,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "fakeflac-calibrate"
+version = "0.0.1"
+dependencies = [
+ "fakeflac-audio",
+ "fakeflac-core",
+ "fakeflac-fs",
+ "flacenc",
+ "hound",
+ "rand",
+ "rand_chacha",
+ "serde",
+ "serde_json",
+ "toml 1.1.8+spec-1.1.0",
+]
+
+[[package]]
 name = "fakeflac-core"
 version = "0.0.1"
 dependencies = [
