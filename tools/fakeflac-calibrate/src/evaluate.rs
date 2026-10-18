@@ -286,6 +286,7 @@ pub fn evaluation(
         for (row, eval) in selected(rows, evals, sel).filter(|(r, _)| r.in_evaluation_set()) {
             match row.truth {
                 Truth::Real => bump(&mut m.real_row, eval.verdict),
+                Truth::Fake if row.undetectable => m.fake_row.undetectable += 1,
                 Truth::Fake => bump(&mut m.fake_row, eval.verdict),
             }
         }
@@ -311,7 +312,11 @@ pub fn evaluation(
                 row.setting.as_str()
             };
             if let Some(s) = settings.iter_mut().find(|s| s.setting == id) {
-                bump(&mut s.counts, eval.verdict);
+                if row.undetectable {
+                    s.counts.undetectable += 1;
+                } else {
+                    bump(&mut s.counts, eval.verdict);
+                }
             }
         }
         by_setting_split.insert(sel, settings);

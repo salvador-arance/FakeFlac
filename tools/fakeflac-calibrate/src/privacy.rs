@@ -169,12 +169,14 @@ pub fn check(args: &PrivacyArgs, env: &Env) -> Result<Outcome, ToolError> {
     }
 
     let mut stdout = String::new();
+    let mut stderr = String::new();
     for m in &matches {
         stdout.push_str(m);
         stdout.push('\n');
     }
     for u in &unchecked {
         stdout.push_str(&format!("unchecked: {u}\n"));
+        stderr.push_str(&format!("error: {u}\n"));
     }
     let exit_code = i32::from(!matches.is_empty() || !unchecked.is_empty());
     stdout.push_str(&format!(
@@ -185,6 +187,7 @@ pub fn check(args: &PrivacyArgs, env: &Env) -> Result<Outcome, ToolError> {
     Ok(Outcome {
         exit_code,
         stdout,
+        stderr,
         ..Outcome::default()
     })
 }

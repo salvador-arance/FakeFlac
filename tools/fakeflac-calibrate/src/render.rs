@@ -15,7 +15,7 @@ use crate::extract::GroupResult;
 use crate::fmt;
 use crate::grid::{GridFile, Proposal, SearchResult};
 use crate::model::{album_class_of, LabelRow, Truth, CLASSES};
-use crate::report::{ConfusionMatrix, Counts, Evaluation, SettingRow, SplitSel};
+use crate::report::{ConfusionMatrix, Evaluation, SettingRow, SplitSel};
 use fakeflac_core::Verdict;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -264,27 +264,23 @@ fn scrub(text: &str, roots: &Roots) -> String {
     out
 }
 
-fn counts_cells(c: &Counts) -> Vec<String> {
-    vec![
-        c.real.to_string(),
-        c.suspicious.to_string(),
-        c.fake.to_string(),
-        c.error.to_string(),
-        c.total().to_string(),
-    ]
-}
-
 fn setting_rows_table(md: &mut Md, rows: &[SettingRow]) {
     let table: Vec<Vec<String>> = rows
         .iter()
         .map(|r| {
             let c = &r.counts;
-            let n = c.total() - c.error;
-            let mut cells = vec![r.setting.clone()];
-            cells.extend(counts_cells(c));
-            cells.push(fmt::rate(c.fake, n));
-            cells.push(fmt::rate(c.real, n));
-            cells
+            let n = c.total() - c.error - c.undetectable;
+            vec![
+                r.setting.clone(),
+                c.real.to_string(),
+                c.suspicious.to_string(),
+                c.fake.to_string(),
+                c.undetectable.to_string(),
+                c.error.to_string(),
+                c.total().to_string(),
+                fmt::rate(c.fake, n),
+                fmt::rate(c.real, n),
+            ]
         })
         .collect();
     md.table(
@@ -293,6 +289,7 @@ fn setting_rows_table(md: &mut Md, rows: &[SettingRow]) {
             "Real",
             "Suspicious",
             "Fake",
+            "Undetectable",
             "Error",
             "total",
             "detection rate",
@@ -303,24 +300,40 @@ fn setting_rows_table(md: &mut Md, rows: &[SettingRow]) {
 }
 
 fn matrix_table(md: &mut Md, m: &ConfusionMatrix) {
-    let mut real = vec!["real".to_string()];
-    real.extend(counts_cells(&m.real_row));
-    let mut fake = vec!["fake".to_string()];
-    fake.extend(counts_cells(&m.fake_row));
+    let r = &m.real_row;
+    let real = vec![
+        "real".to_string(),
+        r.real.to_string(),
+        r.suspicious.to_string(),
+        r.fake.to_string(),
+        "—".to_string(),
+        r.error.to_string(),
+        r.total().to_string(),
+    ];
+    let f = &m.fake_row;
+    let fake = vec![
+        "fake".to_string(),
+        f.real.to_string(),
+        f.suspicious.to_string(),
+        f.fake.to_string(),
+        f.undetectable.to_string(),
+        f.error.to_string(),
+        f.total().to_string(),
+    ];
     md.table(
         &[
             "truth \\ verdict",
             "Real",
             "Suspicious",
             "Fake",
+            "Undetectable",
             "Error",
             "total",
         ],
         &[real, fake],
     );
-    let (r, f) = (&m.real_row, &m.fake_row);
     let rn = r.total() - r.error;
-    let fnn = f.total() - f.error;
+    let fnn = f.total() - f.error - f.undetectable;
     md.line(format!(
         "FP rate {} · soft-FP rate {} · FN rate {} · detection rate {} · caught rate {}",
         fmt::rate(r.fake, rn),
@@ -439,7 +452,7 @@ fn side_by_side(md: &mut Md, data: &ReportData<'_>) {
     }
     push("FN rate".to_string(), &|i| {
         let f = data.evaluations[i].matrix[&SplitSel::All].fake_row;
-        fmt::rate(f.real, f.total() - f.error)
+        fmt::rate(f.real, f.total() - f.error - f.undetectable)
     });
     let settings: Vec<String> = data
         .config
@@ -454,7 +467,12 @@ fn side_by_side(md: &mut Md, data: &ReportData<'_>) {
             data.evaluations[i]
                 .by_setting
                 .get(n)
-                .map(|r| fmt::rate(r.counts.fake, r.counts.total() - r.counts.error))
+                .map(|r| {
+                    fmt::rate(
+                        r.counts.fake,
+                        r.counts.total() - r.counts.error - r.counts.undetectable,
+                    )
+                })
                 .unwrap_or_default()
         });
     }
@@ -1024,6 +1042,28 @@ fn full_lists(md: &mut Md, data: &ReportData<'_>, idx: usize) {
     head.push("error");
     let table: Vec<Vec<String>> = list.into_iter().map(|x| x.3).collect();
     md.table(&head, &table);
+
+    let undetectable_tracks: Vec<(&LabelRow, &RowEval)> = rows
+        .iter()
+        .zip(run.evals.iter())
+        .filter(|(r, _)| r.undetectable)
+        .collect();
+    if !undetectable_tracks.is_empty() {
+        md.line("### Undetectable transcodes");
+        md.blank();
+        let table: Vec<Vec<String>> = undetectable_tracks
+            .into_iter()
+            .map(|(r, e)| {
+                vec![
+                    r.path.clone(),
+                    r.setting.clone(),
+                    r.source_path.clone(),
+                    verdict_name(e.verdict).to_string(),
+                ]
+            })
+            .collect();
+        md.table(&["path", "setting", "source_path", "verdict"], &table);
+    }
 
     if idx > 0 {
         let base = &data.runs[0];

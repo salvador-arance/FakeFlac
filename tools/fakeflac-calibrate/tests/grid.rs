@@ -128,7 +128,52 @@ fn row(kind: RowKind, setting: &str, verdict: Verdict) -> PointRow {
         kind,
         setting: setting.to_string(),
         verdict,
+        undetectable: false,
     }
+}
+
+// Scenario: Undetectable transcodes are excluded from must_catch feasibility and cost (@RP-11)
+#[test]
+fn rp11_undetectable_transcodes_are_excluded_from_must_catch_feasibility_and_cost() {
+    let weights = Weights {
+        fp: 10.0,
+        fn_: 1.0,
+        suspicious_negative: 0.5,
+        suspicious_positive: 0.1,
+    };
+    let must_catch = vec!["fx128".to_string()];
+
+    // Given a must_catch setting with an undetectable transcode that receives verdict "real"
+    let rows = vec![
+        row(RowKind::Negative, "", Verdict::Real),
+        PointRow {
+            kind: RowKind::GeneratedPositive,
+            setting: "fx128".to_string(),
+            verdict: Verdict::Real,
+            undetectable: true,
+        },
+    ];
+
+    // Then the undetectable transcode does not cause must_catch feasibility to fail
+    assert!(
+        is_feasible(&rows, &must_catch),
+        "undetectable transcode with verdict Real does not cause must_catch feasibility to fail"
+    );
+
+    // And it does not contribute to the grid cost
+    assert_eq!(
+        cost(&rows, &weights),
+        0.0,
+        "undetectable transcode does not contribute to grid cost"
+    );
+
+    // Control: a detectable transcode with verdict Real DOES cause must_catch to fail and costs 1.0
+    let detectable = vec![
+        row(RowKind::Negative, "", Verdict::Real),
+        row(RowKind::GeneratedPositive, "fx128", Verdict::Real),
+    ];
+    assert!(!is_feasible(&detectable, &must_catch));
+    assert_eq!(cost(&detectable, &weights), 1.0);
 }
 
 // Scenario: Feasibility requires that no confirmed fake is Real (@RP-11)

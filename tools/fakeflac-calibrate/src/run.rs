@@ -776,7 +776,7 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
 fn tune_search_rows<'a>(rows: &'a [LabelRow], evals: &[RowEval]) -> Vec<SearchRow<'a>> {
     let mut out = Vec::new();
     for (row, eval) in rows.iter().zip(evals.iter()) {
-        if eval.verdict == Verdict::Error {
+        if eval.verdict == Verdict::Error || row.undetectable {
             continue;
         }
         // Holdout rows are never read, except confirmed fakes: they constrain every point.
@@ -913,6 +913,7 @@ mod tests {
             split,
             watch_id: String::new(),
             extracted: Arc::new(Extracted::Error(TrackError::TooShort)),
+            undetectable: false,
         };
         let eval = |verdict: Verdict| RowEval {
             verdict,
