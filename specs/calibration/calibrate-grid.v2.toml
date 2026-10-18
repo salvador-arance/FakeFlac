@@ -1,0 +1,21 @@
+# Grid for /calibrate v2 (RP-11, ADR-0036, ADR-0038). Spec: specs/calibration/evaluation.md section 7.
+# Baseline: detection v3. Searches the full-band guard ([full_band]) together with the two Fake thresholds
+# it guards. Only rule parameters may appear in [values]; the search reads tune rows only.
+# Use: just calibrate --grid specs/calibration/calibrate-grid.v2.toml
+grid_version = 2
+baseline = "specs/detection/detection-params.v3.toml"
+must_catch = ["cbr128", "cbr192"]     # hard constraints: no Real among must_catch tune positives, AND no confirmed fake is Real (OQ-11)
+max_points = 100000
+
+[weights]                             # same weights as grid v1 (OQ-11)
+fp = 10.0
+fn = 1.0
+suspicious_negative = 0.5
+suspicious_positive = 0.1
+
+[values]                              # around v3; 3 x 3 x 5 x 3 x 3 = 405 points before invariants
+"full_band.low_hz" = [20600.0, 20700.0, 20800.0]
+"full_band.min_level_db" = [-80.0, -70.0, -60.0]
+"full_band.min_burst_db" = [1.5, 2.0, 3.0, 4.0, 6.0]
+"verdict.gap_fake_db" = [5.0, 6.0, 7.0]
+"verdict.step_fake_db" = [9.0, 10.0, 11.0]

@@ -158,7 +158,7 @@ Feature: Calibration and acceptance against a labelled corpus
   @RP-11
   Scenario: A rule-only change reuses the cache
     Given "accept" has run once on the sample corpus
-    When "accept" runs with the params file candidate.toml (algorithm_version 3, gap_fake_db 4.0)
+    When "accept" runs with the params file candidate.toml (the next free algorithm_version, gap_fake_db 4.0)
     Then 0 files are decoded and 0 entries are transcoded
 
   @RP-11
@@ -204,6 +204,49 @@ Feature: Calibration and acceptance against a labelled corpus
     When "accept" runs with the params file specs/detection/detection-params.v1.toml
     Then the exit code is 2
     And the error output says "detection-params.v1.toml: not a DetectionParams file of the v2 rule family"
+
+  @RP-11 @RF-04
+  Scenario: v2 and v3 side by side in one run
+    Detection v3 adds the full-band guard (specs/detection/rules.md). The fxv0
+    fixture (sfb21_gaps) has gated content up to Nyquist, so it is full band.
+    When "accept" runs on the sample corpus with an empty features folder and the params files detection-params.v2.toml and detection-params.v3.toml
+    Then 33 files are decoded and 24 entries are transcoded
+    And for detection-params.v3.toml the fake row of the global matrix is 0 Real, 12 Suspicious, 13 Fake, 0 Error
+    And the real row is the same for both files
+    And the verdict-change table against v2 has exactly 6 changes, all "fake" to "suspicious" on fxv0 positives
+    And the per-setting change table shows those 6 changes on fxv0 and none on any other setting
+    And the caught rate of every setting is the same for both files
+    And the per-setting table of detection-params.v3.toml shows a full_band count and the median, 95th percentile and maximum of B for every setting
+    And the watch list entry "W1" of the sample corpus shows U, B and full_band "true" for detection-params.v3.toml and empty U, B and full_band for detection-params.v2.toml
+
+  @RP-11 @RF-04
+  Scenario: Full-band columns in tracks.csv
+    When "accept" runs on the sample corpus with the params files detection-params.v2.toml and detection-params.v3.toml
+    Then tracks.csv has the columns U, B, full_band, m_full_band_level_db, m_full_band_burst_db and full_band_margin_db
+    And they are empty on every row of detection-params.v2.toml
+    And on every row of detection-params.v3.toml with spectra, full_band is "true" exactly when full_band_margin_db is at least 0
+    And on those rows nearest_fake_margin_db equals the larger of min(m_gap_fake_db, m_step_fake_db) and full_band_margin_db when full_band is "true", and min(m_gap_fake_db, m_step_fake_db) otherwise
+
+  @RP-11 @RF-04
+  Scenario Outline: A params file that fails DetectionParams::validate is rejected
+    Given a copy of detection-params.v3.toml with <change>
+    When "accept" runs with that params file
+    Then the exit code is 2
+    And the error output names the file and "<inequality>"
+
+    Examples:
+      | change                                 | inequality                            |
+      | full_band.low_hz set to 20000.0        | fake_max_cutoff_hz < full_band.low_hz |
+      | full_band.high_hz set to 20700.0       | full_band.low_hz < full_band.high_hz  |
+      | verdict.gap_suspicious_db set to 6.5   | gap_suspicious_db ≤ gap_fake_db       |
+      | verdict.step_suspicious_db set to 10.5 | step_suspicious_db ≤ step_fake_db     |
+
+  @RP-11 @RF-04
+  Scenario: A [full_band] section with a missing field is a TOML error
+    Given a copy of detection-params.v3.toml without the min_burst_db line of [full_band]
+    When "accept" runs with that params file
+    Then the exit code is 2
+    And the error output gives the parser's message, which names "min_burst_db"
 
   # --- trusted.txt and confirmed.txt -------------------------------------
 
@@ -324,8 +367,8 @@ Feature: Calibration and acceptance against a labelled corpus
     When "calibrate" runs on the sample corpus
     Then the exit code is 0
     And the baseline cost is 1.1 and the cost of "gap_fake_db = 4.0" is 0.5
-    And the report folder holds detection-params.v3.toml
-    And that file parses to detection-params.v2.toml with algorithm_version 3 and gap_fake_db 4.0
+    And the report folder holds detection-params.v4.toml
+    And that file parses to detection-params.v2.toml with algorithm_version 4 and gap_fake_db 4.0
     And its first two lines are the "PROPOSAL" and "Changed: verdict.gap_fake_db 6.0 -> 4.0" comments
     And no file in the repository has changed
 
@@ -344,6 +387,26 @@ Feature: Calibration and acceptance against a labelled corpus
     When "calibrate" runs on the sample corpus
     Then the exit code is 2
     And the error output says "extraction parameter; compare params files with accept instead"
+
+  @RP-11 @RF-04
+  Scenario: A full_band key needs a baseline with a [full_band] section
+    Given a grid with baseline detection-params.v2.toml whose values include "full_band.min_burst_db"
+    When "calibrate" runs on the sample corpus
+    Then the exit code is 2
+    And the error output says "full_band.min_burst_db: the baseline has no [full_band] section"
+
+  @RP-11 @RF-04
+  Scenario: The full-band guard can be searched from a v3 baseline
+    The sample corpus has no full-band negative with a gap, so on it the guard
+    only costs detections and the search proposes to switch it off. On the real
+    corpus the confirmed false positives FP1-FP3 weigh against that (fp = 10 each).
+    Given split.holdout_fraction is 0.0
+    And a grid with baseline detection-params.v3.toml, must_catch ["fx128"] and values "full_band.min_burst_db" = [3.0, 100.0]
+    When "calibrate" runs on the sample corpus
+    Then the exit code is 0
+    And with the point "full_band.min_burst_db = 100.0" the fxv0 entries are "fake" instead of "suspicious", and its cost is lower than the baseline cost
+    And the report folder holds detection-params.v4.toml with algorithm_version 4 and full_band.min_burst_db 100.0
+    And its second line is the comment "# Changed: full_band.min_burst_db 3.0 -> 100.0"
 
   @RP-11
   Scenario: Undetectable transcodes are excluded from must_catch feasibility and cost

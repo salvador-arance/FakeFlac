@@ -76,7 +76,7 @@ type TrackAnalysis = {
   estimatedSourceBitrateKbps: number | null          // RF-15 (H2)
   reasons: SuspicionReason[]
   error: TrackError | null
-  algorithmVersion: number
+  algorithmVersion: number                           // 3 with the default DetectionParams (detection v3, specs/detection/rules.md)
 }
 
 type AnalysisSummary = {
@@ -101,6 +101,8 @@ type AppError = {
 ```
 
 Per-track problems never become an `AppError`: they travel inside `TrackAnalysis` (`verdict: 'error'` + `error`), ADR-0013.
+
+Detection v3 (ADR-0038) does not change these types: a track that the full-band guard keeps from `fake` is `suspicious` with the existing reasons `highBandGaps` or `ambiguousCutoff`. Its new measurements (`U`, `B`, `FullBand`) and its new `DetectionParams` section `[full_band]` are internal to the backend (schema and semantics: `specs/detection/rules.md` sections 2 and 4, values: `specs/detection/detection-params.v3.toml`), so `just gen` produces the same bindings.
 
 ## Supported files in H1 (RF-14)
 

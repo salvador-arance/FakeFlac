@@ -41,3 +41,4 @@ Format: MADR-style. New ADRs are created with `/new-adr` and approved at gate G1
 | [0035](0035-detection-v2-relative-cutoff-step-and-16-khz-gap-step-on-the-m.md) | Detection v2: relative cutoff step on the mean spectrum and 16 kHz gap step on the per-frame median spectrum | proposed |
 | [0036](0036-calibration-tool-dev-only-workspace-crate-reusing-core-and-adapters.md) | Calibration tool: a dev-only workspace crate (`tools/fakeflac-calibrate`) that reuses the core and the adapters, with a JSON Lines spectra cache and ffmpeg as an external process | proposed |
 | [0037](0037-frontend-component-test-stack-jsdom-testing-library-storybook.md) | Frontend component test stack: jsdom, Testing Library and Storybook 10 | proposed |
+| [0038](0038-detection-v3-full-band-guard-on-the-gap-and-step-rules.md) | Detection v3: a full-band guard (level and burstiness above 20.7 kHz) on the gap and step rules; v3 becomes the default | proposed |
