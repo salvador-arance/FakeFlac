@@ -63,7 +63,20 @@ ci: check-fast test trace guard-tests check-app
 build:
     npm run tauri build
 
-# Acceptance against the local corpus (FAKEFLAC_CORPUS). Never runs in CI (ADR-022).
-accept:
-    @echo "accept: not implemented yet"
+# Calibration and acceptance tool (RP-11, ADR-0036, specs/calibration/). Needs FAKEFLAC_CORPUS and
+# FAKEFLAC_CALIBRATION (and ffmpeg for new transcodes). The release build runs from the repository root.
+# None of these recipes is part of `just ci` or `just check` (ADR-022): the CI-runnable acceptance is
+# the `cargo test` of the tool on the synthetic sample corpus.
+
+# Prepare the corpus and evaluate DetectionParams files: accept [--params FILE]... [--config FILE] [--no-generate]
+accept *args:
+    cargo run --release -q -p fakeflac-calibrate -- accept {{args}}
+
+# Accept plus a grid search on the tune split; writes a proposal that is never committed: calibrate [--grid FILE] [--config FILE]
+calibrate *args:
+    cargo run --release -q -p fakeflac-calibrate -- calibrate {{args}}
+
+# Search the branch diff for the corpus paths and names (ADR-022): privacy-check [--base REF]
+privacy-check *args:
+    cargo run --release -q -p fakeflac-calibrate -- privacy-check {{args}}
 
