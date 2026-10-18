@@ -19,12 +19,13 @@ pub struct Counts {
     pub real: u32,
     pub suspicious: u32,
     pub fake: u32,
+    pub undetectable: u32,
     pub error: u32,
 }
 
 impl Counts {
     pub fn total(&self) -> u32 {
-        self.real + self.suspicious + self.fake + self.error
+        self.real + self.suspicious + self.fake + self.undetectable + self.error
     }
 }
 

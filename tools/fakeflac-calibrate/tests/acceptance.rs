@@ -15,6 +15,7 @@ fn counts(real: u32, suspicious: u32, fake: u32, error: u32) -> Counts {
         real,
         suspicious,
         fake,
+        undetectable: 0,
         error,
     }
 }
@@ -252,6 +253,48 @@ fn rp11_margins_against_every_threshold() {
     assert_eq!(with_spectra, 31);
 }
 
+// Scenario: Undetectable transcodes on band-limited sources (@RP-11)
+#[test]
+fn rp11_undetectable_transcodes_on_band_limited_sources() {
+    let sample = Sample::new("undetectable-sources");
+    sample.write_config_with_lowpass(None);
+    let o = sample.accept_v2();
+    assert_ok(&o);
+
+    // Track 5 (low_hf, bandwidth extent <= 16 kHz) transcoded to fx128 (lowpass_hz = 16000)
+    // is classified as undetectable
+    let eval = &o.evaluations[0];
+    let matrix = eval.matrix[&SplitSel::All];
+    assert_eq!(matrix.fake_row.undetectable, 1);
+    assert_eq!(matrix.fake_row.fake, 18);
+    assert_eq!(matrix.fake_row.suspicious, 6);
+    assert_eq!(matrix.fake_row.total(), 25);
+
+    // Counted in the Undetectable column of the confusion matrices
+    let fx128 = eval
+        .by_setting
+        .iter()
+        .find(|s| s.setting == "fx128")
+        .expect("fx128 setting row");
+    assert_eq!(fx128.counts.undetectable, 1);
+    assert_eq!(fx128.counts.fake, 5);
+
+    // Listed in the undetectable section of report.md
+    let report = report_text(&o, "report.md");
+    assert!(
+        report.contains("### Undetectable transcodes"),
+        "report.md contains undetectable section"
+    );
+    assert!(
+        report.contains("fx128"),
+        "report.md undetectable section lists fx128 transcode"
+    );
+    assert!(
+        report.contains(TRACK_5),
+        "report.md lists the source of the undetectable transcode"
+    );
+}
+
 // Scenario: Deterministic split by album (@RP-11)
 #[test]
 fn rp11_deterministic_split_by_album() {
@@ -425,6 +468,39 @@ fn rp11_generated_audio_is_deleted_once_cached() {
     );
 }
 
+// Scenario: --no-generate leaves labels.csv untouched (@RP-11)
+#[test]
+fn rp11_no_generate_leaves_labels_csv_untouched() {
+    let sample = Sample::new("no-gen-labels");
+    let o1 = sample.accept_v2();
+    assert_ok(&o1);
+    let labels_path = sample.calibration.join("labels.csv");
+    let recorded_labels = std::fs::read(&labels_path).unwrap();
+
+    let o2 = sample.accept_opts(&[v2_params()], true);
+    assert_ok(&o2);
+    let current_labels = std::fs::read(&labels_path).unwrap();
+    assert_eq!(
+        recorded_labels, current_labels,
+        "labels.csv is byte-identical after --no-generate"
+    );
+
+    // Missing generated entries are reported as not generated
+    let fresh = sample.fresh_calibration("no-gen-missing");
+    let o3 = fresh.accept_opts(&[v2_params()], true);
+    assert_ok(&o3);
+    assert_eq!(
+        o3.cache.iter().map(|c| c.decoded).sum::<u32>(),
+        0,
+        "no decoding under --no-generate"
+    );
+    let summary = report_text(&o3, "summary.md");
+    assert!(
+        summary.contains("entries not generated") || o3.stdout.contains("entries not generated"),
+        "missing generated entries are reported as not generated"
+    );
+}
+
 // Scenario: v2 and a candidate side by side in one run (@RP-11)
 #[test]
 fn rp11_v2_and_candidate_side_by_side() {
@@ -540,6 +616,69 @@ fn rp11_summary_holds_no_corpus_names_or_paths() {
             }
         }
     }
+}
+
+// Scenario: privacy-check exits 1 when a changed file cannot be read (@RP-11)
+#[test]
+fn rp11_privacy_check_exits_1_when_file_cannot_be_read() {
+    let sample = Sample::new("privacy-unreadable");
+    let repo_dir = sample.scratch.join("repo");
+    std::fs::create_dir_all(&repo_dir).unwrap();
+    let run_git = |args: &[&str]| {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(&repo_dir)
+            .output()
+            .expect("run git");
+        assert!(
+            out.status.success(),
+            "git {:?} failed: {:?}",
+            args,
+            String::from_utf8_lossy(&out.stderr)
+        );
+        out
+    };
+    run_git(&["init", "-b", "main"]);
+    run_git(&["config", "user.name", "Test"]);
+    run_git(&["config", "user.email", "test@example.com"]);
+    run_git(&["commit", "--allow-empty", "-m", "init"]);
+
+    let bad_file = repo_dir.join("corrupted.txt");
+    std::fs::write(&bad_file, "some initial content\n").unwrap();
+    run_git(&["add", "corrupted.txt"]);
+    run_git(&["commit", "-m", "add corrupted.txt"]);
+
+    let out = run_git(&["rev-parse", "HEAD:corrupted.txt"]);
+    let hash = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    let (dir_prefix, file_suffix) = hash.split_at(2);
+    let obj_path = repo_dir
+        .join(".git")
+        .join("objects")
+        .join(dir_prefix)
+        .join(file_suffix);
+    if obj_path.exists() {
+        std::fs::remove_file(&obj_path).unwrap();
+    }
+
+    let mut env = sample.env();
+    env.repo_root = Some(repo_dir);
+    let outcome = fakeflac_calibrate::run(
+        &fakeflac_calibrate::Command::PrivacyCheck(fakeflac_calibrate::PrivacyArgs {
+            base: "HEAD~1".to_string(),
+        }),
+        &env,
+        &FixtureTranscoder,
+    );
+
+    assert_eq!(
+        outcome.exit_code, 1,
+        "privacy-check exits 1 on unreadable file"
+    );
+    assert!(
+        outcome.stderr.contains("corrupted.txt"),
+        "error output reports the unreadable file: {}",
+        outcome.stderr
+    );
 }
 
 // Scenario: The corpus is not modified (@RP-11 @RNF-05)

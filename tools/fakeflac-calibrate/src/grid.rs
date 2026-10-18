@@ -29,6 +29,7 @@ pub struct PointRow {
     /// Setting id for generated positives, empty otherwise.
     pub setting: String,
     pub verdict: Verdict,
+    pub undetectable: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
@@ -94,7 +95,9 @@ pub fn tally<'a>(
 
 fn tally_rows(rows: &[PointRow], must_catch: &[String]) -> Tally {
     tally(
-        rows.iter().map(|r| (r.kind, r.setting.as_str(), r.verdict)),
+        rows.iter()
+            .filter(|r| !r.undetectable)
+            .map(|r| (r.kind, r.setting.as_str(), r.verdict)),
         must_catch,
     )
 }

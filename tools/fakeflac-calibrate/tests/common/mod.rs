@@ -10,7 +10,7 @@
 
 use fakeflac_calibrate::config::Setting;
 use fakeflac_calibrate::error::{ExitKind, ToolError};
-use fakeflac_calibrate::run::{AcceptArgs, CalibrateArgs, Command, Outcome};
+use fakeflac_calibrate::run::{AcceptArgs, CalibrateArgs, Command, Outcome, PrivacyArgs};
 use fakeflac_calibrate::transcode::{
     TranscodeError, TranscodeOutput, TranscodeRequest, Transcoder,
 };
@@ -747,6 +747,16 @@ impl Sample {
     /// Test configuration: `calibration.v1.toml` with the 4 fixture settings and targets T1 and T2
     /// (sample-corpus.md section 2). `holdout_fraction` overrides the file's 0.30.
     pub fn write_config(&self, holdout_fraction: Option<f64>) -> PathBuf {
+        self.write_config_opts(holdout_fraction, false)
+    }
+
+    /// Like `write_config`, but sets `lowpass_hz` on fx128 per sample-corpus.md section 1:
+    /// fx128=16000, so that Track 5 (low_hf) is classified as undetectable.
+    pub fn write_config_with_lowpass(&self, holdout_fraction: Option<f64>) -> PathBuf {
+        self.write_config_opts(holdout_fraction, true)
+    }
+
+    pub fn write_config_opts(&self, holdout_fraction: Option<f64>, with_lowpass: bool) -> PathBuf {
         let spec = read(&spec_config());
         let head = &spec[..spec.find("[[generate.settings]]").unwrap()];
         let report = &spec[spec.find("[report]").unwrap()..spec.find("[[targets]]").unwrap()];
@@ -758,18 +768,26 @@ impl Sample {
             None => head.to_string(),
         };
         let settings = [
-            ("fx128", Some(128), "lp16k_dither"),
-            ("fxv0", None, "sfb21_gaps"),
-            ("fx320", Some(320), "lp20k_floor"),
-            ("fxweak", None, "sfb21_gaps_weak"),
+            (
+                "fx128",
+                Some(128),
+                if with_lowpass { Some(16000) } else { None },
+                "lp16k_dither",
+            ),
+            ("fxv0", None, None, "sfb21_gaps"),
+            ("fx320", Some(320), None, "lp20k_floor"),
+            ("fxweak", None, None, "sfb21_gaps_weak"),
         ];
         let mut text = head;
-        for (id, bitrate, fixture) in settings {
+        for (id, bitrate, lowpass, fixture) in settings {
             text.push_str(&format!(
                 "[[generate.settings]]\nid = \"{id}\"\nencoder = \"fixture\"\next = \"mp3\"\n"
             ));
             if let Some(b) = bitrate {
                 text.push_str(&format!("bitrate_kbps = {b}\n"));
+            }
+            if let Some(lp) = lowpass {
+                text.push_str(&format!("lowpass_hz = {lp}\n"));
             }
             text.push_str(&format!("args = [\"{fixture}\"]\n\n"));
         }
@@ -836,9 +854,33 @@ impl Sample {
         )
     }
 
+    /// `accept` with options.
+    pub fn accept_opts(&self, params: &[PathBuf], no_generate: bool) -> Outcome {
+        run(
+            &Command::Accept(AcceptArgs {
+                params: params.to_vec(),
+                config: self.config_path(),
+                no_generate,
+            }),
+            &self.env(),
+            &FixtureTranscoder,
+        )
+    }
+
     /// `accept` with the default params file v2.
     pub fn accept_v2(&self) -> Outcome {
         self.accept(&[v2_params()])
+    }
+
+    /// `privacy-check` on this sample.
+    pub fn privacy_check(&self, base: &str) -> Outcome {
+        run(
+            &Command::PrivacyCheck(PrivacyArgs {
+                base: base.to_string(),
+            }),
+            &self.env(),
+            &FixtureTranscoder,
+        )
     }
 
     pub fn calibrate(&self, grid: &Path) -> Outcome {
