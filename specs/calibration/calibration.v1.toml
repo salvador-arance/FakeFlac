@@ -1,0 +1,102 @@
+# Calibration tool configuration v1 (RP-11, ADR-0036). Spec: specs/calibration/calibration.md.
+# Data, not code: the tool reads this file (default of --config). Changing a value means a new file version.
+config_version = 1
+
+[split]                               # inputs.md section 4
+seed = "fakeflac-calibration-1"
+holdout_fraction = 0.30
+disc_folder_prefixes = ["cd", "disc", "disk", "disco"]   # CD1, Disc 2, Disco 3 -> merged into the parent album
+
+[generate]                            # generation.md
+fragment_s = 60.0                     # centred fragment; shorter tracks are used whole
+keep_audio = false                    # delete the generated FLAC once its spectra are cached
+decode_args = ["-c:a", "flac", "-sample_fmt", "s16"]   # back to 16-bit FLAC, no dither; Opus stays at 48 kHz
+
+[[generate.settings]]
+id = "cbr128"
+encoder = "lame"
+ext = "mp3"
+bitrate_kbps = 128
+args = ["-c:a", "libmp3lame", "-b:a", "128k"]
+
+[[generate.settings]]
+id = "cbr192"
+encoder = "lame"
+ext = "mp3"
+bitrate_kbps = 192
+args = ["-c:a", "libmp3lame", "-b:a", "192k"]
+
+[[generate.settings]]
+id = "cbr256"
+encoder = "lame"
+ext = "mp3"
+bitrate_kbps = 256
+args = ["-c:a", "libmp3lame", "-b:a", "256k"]
+
+[[generate.settings]]
+id = "cbr320"
+encoder = "lame"
+ext = "mp3"
+bitrate_kbps = 320
+args = ["-c:a", "libmp3lame", "-b:a", "320k"]
+
+[[generate.settings]]
+id = "v0"
+encoder = "lame"
+ext = "mp3"                           # VBR: no bitrate_kbps
+args = ["-c:a", "libmp3lame", "-q:a", "0"]
+
+[[generate.settings]]
+id = "v2"
+encoder = "lame"
+ext = "mp3"
+args = ["-c:a", "libmp3lame", "-q:a", "2"]
+
+[[generate.settings]]
+id = "aac128"
+encoder = "aac"                       # ffmpeg's native AAC encoder
+ext = "m4a"
+bitrate_kbps = 128
+args = ["-c:a", "aac", "-b:a", "128k"]
+
+[[generate.settings]]
+id = "aac256"
+encoder = "aac"
+ext = "m4a"
+bitrate_kbps = 256
+args = ["-c:a", "aac", "-b:a", "256k"]
+
+[[generate.settings]]
+id = "opus128"
+encoder = "opus"                      # libopus, VBR by default; decodes at 48 kHz
+ext = "opus"
+bitrate_kbps = 128
+args = ["-c:a", "libopus", "-b:a", "128k"]
+
+[report]                              # evaluation.md sections 3 and 8
+z = 1.96                              # 95 % Wilson interval
+small_sample_tracks = 100
+small_sample_albums = 10
+near_db = 1.0
+near_hz = 300.0
+
+[[targets]]                           # evaluation.md section 6; reported only, never change the exit code
+id = "T1"
+description = "No purchased or ripped track is Fake (planning 2.7)"
+classes = ["primary"]
+verdict = "fake"
+max_count = 0
+
+[[targets]]
+id = "T2"
+description = "No transcode from 128 or 192 kbps is Real (H1 delivery criterion)"
+settings = ["cbr128", "cbr192"]
+verdict = "real"
+max_count = 0
+
+[[targets]]
+id = "T3"
+description = "No transcode from 320 kbps is Real (planning 2.7)"
+settings = ["cbr320"]
+verdict = "real"
+max_count = 0

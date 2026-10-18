@@ -24,6 +24,7 @@ fakeflac-audio · fakeflac-fs · fakeflac-store · fakeflac-export  (adapters)
 | `fakeflac-export` | CSV serialisation | `core` |
 | `src-tauri` | Commands, channel, wiring | all |
 | `fakeflac-cli` (future) | Second entry adapter reusing `core` | `core` + adapters |
+| `tools/fakeflac-calibrate` (dev only, ADR-0036) | Calibration and acceptance on the local corpus (`just accept`, `/calibrate`); never shipped | `core`, `audio`, `fs` |
 
 Why hexagonal: the detection core is the most valuable and most delicate asset (R1, R3). Isolating it allows testing with synthetic signals, calibrating without the UI, and a future CLI (ADR-0001).
 
