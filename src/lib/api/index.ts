@@ -93,23 +93,35 @@ export async function cancelAnalysis(): Promise<void> {
   await commands.cancelAnalysis()
 }
 
+import { getCurrentWindow } from '@tauri-apps/api/window'
+import { getCurrentWebview } from '@tauri-apps/api/webview'
+
 /** Window controls of the custom title bar (capabilities in `src-tauri/capabilities/default.json`). */
 export async function minimizeWindow(): Promise<void> {
-  throw new Error('not implemented')
+  await getCurrentWindow().minimize()
 }
 
 export async function toggleMaximizeWindow(): Promise<void> {
-  throw new Error('not implemented')
+  await getCurrentWindow().toggleMaximize()
 }
 
 export async function closeWindow(): Promise<void> {
-  throw new Error('not implemented')
+  await getCurrentWindow().close()
 }
 
 /** RF-01: what the page needs from Tauri's drag-drop event (`drop` carries the absolute paths). */
 export type DragDropEvent = { type: 'enter' | 'over' | 'leave' } | { type: 'drop'; paths: string[] }
 
 /** RF-01: subscribes to files/folders dragged over the window; resolves with the unlisten function. */
-export async function onDragDrop(_handler: (event: DragDropEvent) => void): Promise<() => void> {
-  throw new Error('not implemented')
+export async function onDragDrop(handler: (event: DragDropEvent) => void): Promise<() => void> {
+  const unlisten = await getCurrentWebview().onDragDropEvent((event) => {
+    const payload = event.payload as { type: string; paths?: string[] }
+    if (payload.type === 'drop') {
+      handler({ type: 'drop', paths: payload.paths ?? [] })
+    } else if (payload.type === 'enter' || payload.type === 'over' || payload.type === 'leave') {
+      handler({ type: payload.type as 'enter' | 'over' | 'leave' })
+    }
+  })
+  return unlisten
 }
+

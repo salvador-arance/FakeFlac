@@ -1,7 +1,89 @@
 <script lang="ts">
   import type { IconName } from './icons'
-  type Props = { name: IconName; size?: 16 | 24 | 32; label?: string }
-  let { name, size, label }: Props = $props()
+
+  type Props = {
+    name: IconName
+    size?: 16 | 24 | 32
+    label?: string
+  }
+
+  let { name, size = 16, label }: Props = $props()
 </script>
 
-<span data-stub="Icon" data-name={name} data-size={size} data-label={label}></span>
+{#if label}
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 16 16"
+    width={size}
+    height={size}
+    aria-label={label}
+    fill="currentColor"
+    class="icon"
+  >
+    {#if name === 'folder-open'}
+      <path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h3.086a1.5 1.5 0 0 1 1.06.44L7.707 3.5H13.5A1.5 1.5 0 0 1 15 5v1H3.5a1.5 1.5 0 0 0-1.47 1.205L1 12.5V3.5zm2.14 3.5a.5.5 0 0 1 .49-.395h11.74a.5.5 0 0 1 .49.605l-1.6 6.4a.5.5 0 0 1-.49.39H1.87a.5.5 0 0 1-.49-.605L3.14 7z" />
+    {:else if name === 'cancel'}
+      <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm2.854 4.146a.5.5 0 0 1 0 .708L8.707 8l2.147 2.146a.5.5 0 0 1-.708.708L8 8.707l-2.146 2.147a.5.5 0 0 1-.708-.708L7.293 8 5.146 5.854a.5.5 0 1 1 .708-.708L8 7.293l2.146-2.147a.5.5 0 0 1 .708 0z" />
+    {:else if name === 'minimize'}
+      <path d="M2 8.5a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5z" />
+    {:else if name === 'maximize'}
+      <path d="M2.5 2h11A1.5 1.5 0 0 1 15 3.5v9a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9A1.5 1.5 0 0 1 2.5 2zm0 1a.5.5 0 0 0-.5.5v9a.5.5 0 0 0 .5.5h11a.5.5 0 0 0 .5-.5v-9a.5.5 0 0 0-.5-.5h-11z" />
+    {:else if name === 'close'}
+      <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z" />
+    {:else if name === 'verdict-real'}
+      <path d="M13.854 4.146a.5.5 0 0 1 0 .708l-7.5 7.5a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6 11.293l7.146-7.147a.5.5 0 0 1 .708 0z" />
+    {:else if name === 'verdict-suspicious'}
+      <path d="M7.146 1.854a1 1 0 0 1 1.708 0l6.5 11.5A1 1 0 0 1 14.5 15h-13a1 1 0 0 1-.854-1.646l6.5-11.5zM8 5a.75.75 0 0 0-.75.75v3.5a.75.75 0 0 0 1.5 0v-3.5A.75.75 0 0 0 8 5zm0 7a.875.875 0 1 0 0-1.75.875.875 0 0 0 0 1.75z" />
+    {:else if name === 'verdict-fake'}
+      <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm3.854 3.854a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708-.708l7-7a.5.5 0 0 1 .708 0zM4.146 4.854a.5.5 0 0 1 .708 0l7 7a.5.5 0 0 1-.708.708l-7-7a.5.5 0 0 1 0-.708z" />
+    {:else if name === 'verdict-error'}
+      <path d="M5.1 1h5.8L15 5.1v5.8L10.9 15H5.1L1 10.9V5.1L5.1 1zm.414 1L1.999 5.515v4.97L5.514 14h4.97l3.515-3.515V5.515L10.484 2H5.514zM8 4a.75.75 0 0 1 .75.75v4a.75.75 0 0 1-1.5 0v-4A.75.75 0 0 1 8 4zm0 8a1 1 0 1 1 0-2 1 1 0 0 1 0 2z" />
+    {:else if name === 'sort-asc'}
+      <path d="M8 4.5l5 6H3l5-6z" />
+    {:else if name === 'sort-desc'}
+      <path d="M8 11.5l5-6H3l5 6z" />
+    {/if}
+  </svg>
+{:else}
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 16 16"
+    width={size}
+    height={size}
+    aria-hidden="true"
+    fill="currentColor"
+    class="icon"
+  >
+    {#if name === 'folder-open'}
+      <path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h3.086a1.5 1.5 0 0 1 1.06.44L7.707 3.5H13.5A1.5 1.5 0 0 1 15 5v1H3.5a1.5 1.5 0 0 0-1.47 1.205L1 12.5V3.5zm2.14 3.5a.5.5 0 0 1 .49-.395h11.74a.5.5 0 0 1 .49.605l-1.6 6.4a.5.5 0 0 1-.49.39H1.87a.5.5 0 0 1-.49-.605L3.14 7z" />
+    {:else if name === 'cancel'}
+      <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm2.854 4.146a.5.5 0 0 1 0 .708L8.707 8l2.147 2.146a.5.5 0 0 1-.708.708L8 8.707l-2.146 2.147a.5.5 0 0 1-.708-.708L7.293 8 5.146 5.854a.5.5 0 1 1 .708-.708L8 7.293l2.146-2.147a.5.5 0 0 1 .708 0z" />
+    {:else if name === 'minimize'}
+      <path d="M2 8.5a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5z" />
+    {:else if name === 'maximize'}
+      <path d="M2.5 2h11A1.5 1.5 0 0 1 15 3.5v9a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9A1.5 1.5 0 0 1 2.5 2zm0 1a.5.5 0 0 0-.5.5v9a.5.5 0 0 0 .5.5h11a.5.5 0 0 0 .5-.5v-9a.5.5 0 0 0-.5-.5h-11z" />
+    {:else if name === 'close'}
+      <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z" />
+    {:else if name === 'verdict-real'}
+      <path d="M13.854 4.146a.5.5 0 0 1 0 .708l-7.5 7.5a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6 11.293l7.146-7.147a.5.5 0 0 1 .708 0z" />
+    {:else if name === 'verdict-suspicious'}
+      <path d="M7.146 1.854a1 1 0 0 1 1.708 0l6.5 11.5A1 1 0 0 1 14.5 15h-13a1 1 0 0 1-.854-1.646l6.5-11.5zM8 5a.75.75 0 0 0-.75.75v3.5a.75.75 0 0 0 1.5 0v-3.5A.75.75 0 0 0 8 5zm0 7a.875.875 0 1 0 0-1.75.875.875 0 0 0 0 1.75z" />
+    {:else if name === 'verdict-fake'}
+      <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm3.854 3.854a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708-.708l7-7a.5.5 0 0 1 .708 0zM4.146 4.854a.5.5 0 0 1 .708 0l7 7a.5.5 0 0 1-.708.708l-7-7a.5.5 0 0 1 0-.708z" />
+    {:else if name === 'verdict-error'}
+      <path d="M5.1 1h5.8L15 5.1v5.8L10.9 15H5.1L1 10.9V5.1L5.1 1zm.414 1L1.999 5.515v4.97L5.514 14h4.97l3.515-3.515V5.515L10.484 2H5.514zM8 4a.75.75 0 0 1 .75.75v4a.75.75 0 0 1-1.5 0v-4A.75.75 0 0 1 8 4zm0 8a1 1 0 1 1 0-2 1 1 0 0 1 0 2z" />
+    {:else if name === 'sort-asc'}
+      <path d="M8 4.5l5 6H3l5-6z" />
+    {:else if name === 'sort-desc'}
+      <path d="M8 11.5l5-6H3l5 6z" />
+    {/if}
+  </svg>
+{/if}
+
+<style>
+  .icon {
+    display: inline-block;
+    vertical-align: middle;
+    flex-shrink: 0;
+  }
+</style>

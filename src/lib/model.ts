@@ -30,6 +30,7 @@ export type SortColumn =
 export type SortState = { column: SortColumn; direction: 'asc' | 'desc' }
 
 export type StatusPhase = 'ready' | 'scanning' | 'analysing' | 'finished' | 'cancelled' | 'error'
+export type AnalysisPhase = StatusPhase
 
 /** Counters shown by the status bar (a live subset of `AnalysisSummary`). */
 export type StatusSummary = Pick<
