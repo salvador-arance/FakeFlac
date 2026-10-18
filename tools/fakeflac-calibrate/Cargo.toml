@@ -1,0 +1,33 @@
+[package]
+name = "fakeflac-calibrate"
+description = "Dev-only calibration and acceptance tool (RP-11, ADR-0036). Never shipped."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lib]
+name = "fakeflac_calibrate"
+path = "src/lib.rs"
+
+[[bin]]
+name = "fakeflac-calibrate"
+path = "src/main.rs"
+
+[dependencies]
+fakeflac-core = { path = "../../crates/fakeflac-core" }
+fakeflac-audio = { path = "../../crates/fakeflac-audio" }
+fakeflac-fs = { path = "../../crates/fakeflac-fs" }
+serde.workspace = true
+serde_json = { workspace = true, features = ["float_roundtrip"] }
+toml = "1.1.8"
+
+[dev-dependencies]
+flacenc = "0.5.1"
+hound = "3.5.1"
+rand = "0.10.3"
+rand_chacha = "0.10.0"
+
+[lints]
+workspace = true

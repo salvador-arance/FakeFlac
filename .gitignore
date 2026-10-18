@@ -18,6 +18,10 @@ storybook-static/
 .claude/stage
 .claude/worktrees/
 
+# Privacy check exceptions (calibration.md section 6): local words that cause false alarms
+privacy-exceptions.txt
+.privacy-exceptions
+
 # Test corpus lives OUTSIDE the repo (ADR-022); never commit audio
 *.flac
 *.wav

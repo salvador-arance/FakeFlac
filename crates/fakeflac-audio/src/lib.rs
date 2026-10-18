@@ -9,6 +9,10 @@ use fakeflac_core::ports::{AudioProbe, SpectrumAnalyzer};
 use fakeflac_core::{DetectionParams, TrackError};
 use std::path::Path;
 
+/// Version of the extraction: bump it in the same PR as any adapter change that alters the `AudioProbe`
+/// produced for the same file and parameters, and whenever `symphonia` is upgraded (ADR-0036, OQ-3).
+pub const EXTRACTION_VERSION: u32 = 2;
+
 /// `SpectrumAnalyzer` for WAV and FLAC based on symphonia.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct SymphoniaAnalyzer;

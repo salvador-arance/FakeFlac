@@ -63,7 +63,29 @@ ci: check-fast test trace guard-tests check-app
 build:
     npm run tauri build
 
-# Acceptance against the local corpus (FAKEFLAC_CORPUS). Never runs in CI (ADR-022).
-accept:
-    @echo "accept: not implemented yet"
+# Calibration and acceptance tool (RP-11, ADR-0036, specs/calibration/). Needs FAKEFLAC_CORPUS and
+# FAKEFLAC_CALIBRATION (and ffmpeg for new transcodes). The release build runs from the repository root.
+# None of these recipes is part of `just ci` or `just check` (ADR-022): the CI-runnable acceptance is
+# the `cargo test` of the tool on the synthetic sample corpus. The arguments reach the binary
+# untouched (positional arguments through node), so paths with spaces, `$`, `&` or `'` are safe.
 
+# Prepare the corpus and evaluate DetectionParams files: accept [--params FILE]... [--config FILE] [--no-generate]
+[positional-arguments]
+accept *args:
+    #!/usr/bin/env node
+    const r = require('node:child_process').spawnSync('cargo', ['run', '--release', '-q', '-p', 'fakeflac-calibrate', '--', 'accept', ...process.argv.slice(2)], { stdio: 'inherit' })
+    process.exit(r.status ?? 1)
+
+# Accept plus a grid search on the tune split; writes a proposal that is never committed: calibrate [--grid FILE] [--config FILE]
+[positional-arguments]
+calibrate *args:
+    #!/usr/bin/env node
+    const r = require('node:child_process').spawnSync('cargo', ['run', '--release', '-q', '-p', 'fakeflac-calibrate', '--', 'calibrate', ...process.argv.slice(2)], { stdio: 'inherit' })
+    process.exit(r.status ?? 1)
+
+# Search the branch diff for the corpus paths and names (ADR-022): privacy-check [--base REF]
+[positional-arguments]
+privacy-check *args:
+    #!/usr/bin/env node
+    const r = require('node:child_process').spawnSync('cargo', ['run', '--release', '-q', '-p', 'fakeflac-calibrate', '--', 'privacy-check', ...process.argv.slice(2)], { stdio: 'inherit' })
+    process.exit(r.status ?? 1)

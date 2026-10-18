@@ -6,6 +6,7 @@ members = [
     "crates/fakeflac-fs",
     "crates/fakeflac-store",
     "crates/fakeflac-export",
+    "tools/fakeflac-calibrate",
     "src-tauri",
 ]
 
@@ -36,4 +37,8 @@ opt-level = "s"
 
 # Optimise dependencies in dev/test builds: DSP and decoding tests are too slow unoptimised.
 [profile.dev.package."*"]
+opt-level = 3
+
+# The calibration tool tests build ~10 synthetic 30 s signals (2^21-point FFTs) and decode ~35 files per run.
+[profile.dev.package.fakeflac-calibrate]
 opt-level = 3
