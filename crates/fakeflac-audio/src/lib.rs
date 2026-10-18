@@ -23,6 +23,9 @@ impl SpectrumAnalyzer for SymphoniaAnalyzer {
             let total = stream.for_each_chunk(|_, _| {})?;
             stream = decode::MonoStream::open(path)?;
             info.total_frames = Some(total);
+            // The second pass checks against the counted length, so a file cut between passes is
+            // a CorruptStream, not a verdict from partial data.
+            stream.info.total_frames = Some(total);
         }
         let n = fft_size(info.sample_rate, params.fft.target_bin_hz);
         let mut collector = spectrum::BlockCollector::new(info.total_frames, n, params);
