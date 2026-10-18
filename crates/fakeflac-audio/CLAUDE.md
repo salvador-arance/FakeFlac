@@ -5,4 +5,5 @@ Decoding, windowed FFT and spectrum analysis (`docs/architecture/backend.md`, pi
 - The stages after the FFT (band spectra, cutoff step, gap step, rules) are pure functions over arrays and are tested with synthetic signals.
 - Mean spectrum: average in power, convert to dB at the end. Median spectrum: median of per-frame dB. Normalize by the window's noise power.
 - Decoders: `symphonia` for WAV/FLAC/MP3/M4A; Opus is a separate decoder (ADR-030).
+- `pub const EXTRACTION_VERSION`: must be bumped whenever an adapter change alters the AudioProbe produced for the same file and parameters, or whenever `symphonia` is upgraded (codec/decoder changes can alter spectra) (ADR-0036, OQ-3).
 - Read-only access to audio files.

@@ -26,14 +26,17 @@ status: proposed
 | `opus128` | `opus` | `-c:a libopus -b:a 128k` | opus | 128 |
 
   `libmp3lame` with `-b:a` and no `-q:a` is CBR. `aac` is ffmpeg's native AAC encoder. `libopus` is VBR by default.
-- **Fragment (OQ-10):** length `generate.fragment_s` (60 s), centred: `start = max(0, (duration − fragment_s) / 2)`, rounded down to the millisecond. A track no longer than `fragment_s` is used whole (`start = 0`, `fragment_s` = its duration). Negatives are analysed as whole files, as the app does.
+- **Fragment (OQ-10):** duration `generate.fragment_s`.
+  - **Default: full track** (`generate.fragment_s` omitted or `null` in config). The entire track is transcoded (`start = 0`, `fragment_s` = track duration). Using full tracks prevents optimistic bias: many real fake transcodes are skits, intros, or quiet sections that a 60 s center fragment might miss or make unnaturally easy to detect.
+  - **Fragment option:** when `generate.fragment_s` is set to a number (e.g. 60.0), a centered fragment is extracted: `start = max(0, (duration − fragment_s) / 2)`, rounded down to the millisecond. A track no longer than `fragment_s` is used whole (`start = 0`, `fragment_s` = its duration).
+  - Negatives are analysed as whole files, as the app does.
 
 ## 2. ffmpeg
 
-Two calls per entry, with arguments passed as a list (`std::process::Command`, no shell, so spaces and Unicode in names are safe):
+Two calls per entry, with arguments passed as a list (`std::process::Command`, no shell, so spaces and Unicode in names are safe). When using full tracks (`fragment_s` omitted/null), `-ss <start> -t <fragment_s>` is omitted:
 
 ```
-encode: <ffmpeg> -nostdin -hide_banner -loglevel error -ss <start> -t <fragment_s> -i <source>
+encode: <ffmpeg> -nostdin -hide_banner -loglevel error [-ss <start> -t <fragment_s>] -i <source>
                  -map 0:a:0 -map_metadata -1 <setting args> -y <generated>/<id>.<ext>
 decode: <ffmpeg> -nostdin -hide_banner -loglevel error -i <generated>/<id>.<ext>
                  -map 0:a:0 -map_metadata -1 <generate.decode_args> -y <generated>/<id>.flac
@@ -51,7 +54,9 @@ decode: <ffmpeg> -nostdin -hide_banner -loglevel error -i <generated>/<id>.<ext>
 
 - Flat folder, one name per entry: `<id>.flac`, where `<id>` is 16 lower-case hex digits of `fmix64(fnv1a64(recipe JSON))` (hash functions as in inputs.md section 4). Short names keep paths below the Windows limit and keep corpus names out of `generated/`.
 - **Recipe** (JSON object, keys sorted): `source` (`path`, `size`, `mtime` of the source), `setting`, `args`, `decode_args`, `fragment_start_s`, `fragment_s`.
-- The lossy intermediate `<id>.<ext>` is always deleted after the decode call. With `generate.keep_audio = false` (the default), `<id>.flac` is deleted as soon as its spectra are cached.
+- The lossy intermediate `<id>.<ext>` is always deleted after the decode call.
+- With `generate.keep_audio = false` (the default), `<id>.flac` is deleted as soon as its spectra are cached.
+- **Inspect misclassifications (`keep_misclassified`):** When `generate.keep_misclassified = true` (default: false), `<id>.flac` is preserved in `generated/` for any track that resulted in a misclassification (`Fake` on a negative, or `Real` on a positive transcode) so that the user can inspect its spectrogram.
 - Deleting `generated/` at any time is safe: generated entries are looked up in the cache by recipe, not by file.
 - When a generated entry misses the cache (for example under a new fingerprint), an existing `<id>.flac` is analysed without transcoding. If the audio was deleted, the entry is transcoded again.
 
@@ -67,6 +72,7 @@ fingerprint id   = 16 hex digits of fmix64(fnv1a64(fingerprint JSON))
 ```
 
 - `EXTRACTION_VERSION` is a public integer of `fakeflac-audio` (2 today). It must be bumped in the same PR as any adapter change that alters the `AudioProbe` produced for the same file and parameters (ADR-0036).
+- **Decoder version bump:** `EXTRACTION_VERSION` **must also be bumped whenever the `symphonia` crate version is updated**, because decoder changes or bugfixes in symphonia can alter decoded audio samples and resulting spectra.
 - `algorithm_version` and every rule parameter (`[bands]`, `[extent]`, `[step]`, `[gaps]`, `[verdict]`) and `[spectrogram]` are **not** part of the fingerprint. Params files that differ only in those values share one cache, whatever their `algorithm_version`.
 - Files: `features/<fingerprint id>.meta.json` (the fingerprint JSON) and `features/<fingerprint id>.jsonl` (entries). A params file with a different fingerprint gets its own extraction pass and its own files. The report says which params file used which fingerprint.
 

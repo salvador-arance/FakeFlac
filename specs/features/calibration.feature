@@ -30,10 +30,11 @@ Feature: Calibration and acceptance against a labelled corpus
     And nothing is written anywhere
 
     Examples:
-      | where                                  |
-      | a relative path                        |
-      | a folder inside the repository         |
-      | a folder inside FAKEFLAC_CORPUS        |
+      | where                                   |
+      | a relative path                         |
+      | a folder inside the repository          |
+      | a folder inside FAKEFLAC_CORPUS         |
+      | a folder that contains FAKEFLAC_CORPUS  |
 
   # --- Acceptance on the sample corpus -----------------------------------
 
@@ -98,10 +99,17 @@ Feature: Calibration and acceptance against a labelled corpus
 
   @RP-11
   Scenario: Split ratio and stability
-    Given the album ids "album-00000" to "album-09999" and the seed of calibration.v1.toml
+    Given the album ids "album-00000" to "album-09999" in one class and the seed of calibration.v1.toml
     When the split is computed
-    Then between 2800 and 3200 albums are in holdout
-    And adding the album id "album-10000" does not change the split of any other album
+    Then exactly 3000 albums are in holdout
+    And adding the album id "album-10000" only inserts it into the hash order without changing the split of other albums
+ 
+  @RP-11
+  Scenario: Stratified split guarantees holdout in small classes
+    Given 5 albums in class "primary" and 10 albums in class "reviewed"
+    When the stratified split is computed
+    Then exactly 2 albums of class "primary" are assigned to holdout
+    And exactly 3 albums of class "reviewed" are assigned to holdout
 
   # --- Features cache ----------------------------------------------------
 
@@ -298,6 +306,12 @@ Feature: Calibration and acceptance against a labelled corpus
     Then the exit code is 2
     And the error output says "extraction parameter; compare params files with accept instead"
 
+  @RP-11
+  Scenario: Feasibility requires that no confirmed fake is Real
+    Given a candidate parameter set under which a confirmed fake track receives verdict "real"
+    When feasibility is evaluated during grid search
+    Then the candidate point is marked infeasible
+
   # --- ffmpeg (no ffmpeg needed) ------------------------------------------
 
   @RP-11
@@ -306,6 +320,12 @@ Feature: Calibration and acceptance against a labelled corpus
     When the ffmpeg calls are built
     Then the encode call is ffmpeg with the arguments "-nostdin -hide_banner -loglevel error -ss 90.500 -t 60.000 -i <source> -map 0:a:0 -map_metadata -1 -c:a libmp3lame -b:a 128k -y <generated>/<id>.mp3", each one a separate argument and <source> passed unchanged
     And the decode call is ffmpeg with the arguments "-nostdin -hide_banner -loglevel error -i <generated>/<id>.mp3 -map 0:a:0 -map_metadata -1 -c:a flac -sample_fmt s16 -y <generated>/<id>.flac"
+
+  @RP-11
+  Scenario: ffmpeg encode command with full track default
+    Given the setting "cbr128" of calibration.v1.toml and the source "Compras/Ñandú – Ácido, Vol. 1 (2024)/01 – Intro ’A’.flac" with full track default (fragment_s omitted)
+    When the ffmpeg calls are built
+    Then the encode call arguments omit "-ss" and "-t"
 
   @RP-11
   Scenario: ffmpeg missing when a transcode is needed

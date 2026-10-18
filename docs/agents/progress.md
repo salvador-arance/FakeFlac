@@ -2,6 +2,37 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-18 - Calibration tool spec (RP-11) updated from G1 review answers
+
+**Done**
+- Incorporated the owner's answers to the 17 open questions for Gate G1:
+  - OQ-1/OQ-2: v1 is cited from ADR-0035; tool evaluates v2 family only; reproduces v2 on known-truth album.
+  - OQ-3: `EXTRACTION_VERSION` in `fakeflac-audio` must also be bumped when `symphonia` version is updated.
+  - OQ-4: CI uses synthetic fixture transcoder; no ffmpeg in CI.
+  - OQ-5: `confirmed.txt` for confirmed fakes and false positives (`W1`...); `labels.csv` is 100% derived. Documented known-truth tracks to be added by owner once spec is approved.
+  - OQ-6: Multi-disc folders (`CD1`, `Disc 2`) merged into parent album.
+  - OQ-7: Stratified split per class (stable hash order within class, bottom 30% to holdout with guaranteed minimum of 2 albums per class when $N \ge 2$).
+  - OQ-8: Opus FLAC transcodes stay at 48 kHz.
+  - OQ-9: `keep_audio = false` by default; added `keep_misclassified = false` option to retain generated FLACs for misclassified tracks for spectrogram inspection.
+  - OQ-10: Configurable `fragment_s` with **full track as default** (`null` / omitted) to avoid optimistic detection bias on skits/intros.
+  - OQ-11: Approved weighted cost (`fp: 10`, `fn: 1`, `suspicious_neg: 0.5`, `suspicious_pos: 0.1`). Hard constraint in feasibility: no confirmed fake may be `Real`. Rule families evaluation support. Documented candidate rule for detection v3 ("16 kHz step with full band -> Suspicious, not Fake").
+  - OQ-12/OQ-13: Acceptance targets report-only (exit 0); primary false positive metric counts `Fake` only.
+  - OQ-14: Dev-only tools under `tools/`, checked by `scripts/lint-arch.mjs` in this PR (tools depend only on `core`, `audio`, `fs`; product crates never depend on tools).
+  - OQ-15: Binary strictly refuses to start if `FAKEFLAC_CALIBRATION` is inside corpus or repo (or vice versa); opens `FAKEFLAC_CORPUS` strictly read-only.
+  - OQ-16: `just privacy-check` supports unversioned `privacy-exceptions.txt` for common words.
+  - OQ-17: Best-effort encoder version parsing with fallbacks.
+- Updated `specs/calibration/calibration.md`, `inputs.md`, `generation.md`, `evaluation.md`, `calibration.v1.toml`, `calibrate-grid.v1.toml`, `specs/features/calibration.feature`, `crates/fakeflac-audio/CLAUDE.md`, and `scripts/lint-arch.mjs`.
+- All checks pass (`just check-fast`, `just trace`).
+
+**Pending**
+- Gate G1 approval on spec PR.
+- After G1: implementation of RP-11 (`tools/fakeflac-calibrate`, `just accept`, `just calibrate`, `just privacy-check`, `.claude/skills/calibrate`).
+
+**Blockers / questions for the human**
+- None.
+
+**Next step:** Open PR for `spec/calibration-g1-answers` for G1 sign-off.
+
 ## 2026-10-18 - Main-screen UI implemented (RF-01, RF-05, RF-06)
 
 **Done**
