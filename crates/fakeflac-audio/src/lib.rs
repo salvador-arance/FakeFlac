@@ -16,7 +16,14 @@ pub struct SymphoniaAnalyzer;
 impl SpectrumAnalyzer for SymphoniaAnalyzer {
     fn analyze(&self, path: &Path, params: &DetectionParams) -> Result<AudioProbe, TrackError> {
         let mut stream = decode::MonoStream::open(path)?;
-        let info = stream.info;
+        let mut info = stream.info;
+        // rules.md 1.2: a stream that does not declare its length (FLAC STREAMINFO with
+        // total_samples = 0) is decoded once to count its frames, then sampled as usual.
+        if matches!(info.total_frames, None | Some(0)) {
+            let total = stream.for_each_chunk(|_, _| {})?;
+            stream = decode::MonoStream::open(path)?;
+            info.total_frames = Some(total);
+        }
         let n = fft_size(info.sample_rate, params.fft.target_bin_hz);
         let mut collector = spectrum::BlockCollector::new(info.total_frames, n, params);
         let frames = stream.for_each_chunk(|offset, samples| collector.push(offset, samples))?;
