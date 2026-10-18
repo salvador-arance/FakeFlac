@@ -13,6 +13,7 @@ use crate::report::CacheStats;
 use crate::split::Split;
 use crate::transcode::{Fragment, TranscodeError, TranscodeRequest, Transcoder};
 use fakeflac_audio::SymphoniaAnalyzer;
+use fakeflac_core::detect::measure;
 use fakeflac_core::ports::SpectrumAnalyzer;
 use fakeflac_core::{DetectionParams, TrackError};
 use serde_json::{json, Value};
@@ -479,6 +480,7 @@ pub fn extract_group(
             split: item.split,
             watch_id: item.watch_id.clone(),
             extracted: extracted.clone(),
+            undetectable: false,
         });
     }
     let mut kept_rows: Vec<(String, PathBuf)> = Vec::new();
@@ -487,6 +489,13 @@ pub fn extract_group(
             continue;
         };
         let source = &items[gen.source];
+        let undetectable = is_undetectable(
+            &corpus_results[gen.source],
+            &extracted,
+            gen.setting,
+            config,
+            params,
+        );
         let row = LabelRow {
             root: RowRoot::Generated,
             path: format!("{}.flac", gen.id),
@@ -507,6 +516,7 @@ pub fn extract_group(
             split: source.split,
             watch_id: String::new(),
             extracted,
+            undetectable,
         };
         if let Some((_, path)) = kept.iter().find(|(kg, _)| *kg == g) {
             kept_rows.push((row.identity(), path.clone()));
@@ -524,4 +534,65 @@ pub fn extract_group(
         ffmpeg_missing,
         kept: kept_rows,
     })
+}
+
+/// A transcode is undetectable when its source has no content above lowpass_hz or
+/// the maximum drop in HF bands is below min_removed_hf_db (evaluation.md section 2).
+fn is_undetectable(
+    source_extracted: &Option<Arc<Extracted>>,
+    transcode_extracted: &Extracted,
+    setting: &Setting,
+    config: &Config,
+    params: &DetectionParams,
+) -> bool {
+    let Some(lowpass_hz) = setting.lowpass_hz else {
+        return false;
+    };
+    let Some(src_ext) = source_extracted.as_ref() else {
+        return false;
+    };
+    let Extracted::Probe(src_probe) = src_ext.as_ref() else {
+        return false;
+    };
+    let Some(src_spec) = &src_probe.spectrum else {
+        return false;
+    };
+
+    let nyquist = src_spec.nyquist_hz();
+    if lowpass_hz as f64 >= nyquist {
+        return false;
+    }
+
+    // Criterion 1: source.fe <= setting.lowpass_hz
+    let m = measure(src_spec, params);
+    if m.extent_hz < nyquist && m.extent_hz <= lowpass_hz as f64 {
+        return true;
+    }
+
+    // Criterion 2: maximum drop in high-frequency bands (b >= lowpass_hz/100)
+    // between source and transcode is below generate.min_removed_hf_db
+    if let Some(min_drop) = config.generate.min_removed_hf_db {
+        if m.extent_hz < nyquist {
+            if let Extracted::Probe(t_probe) = transcode_extracted {
+                if let Some(t_spec) = &t_probe.spectrum {
+                    let start_b = if src_spec.band_hz > 0.0 {
+                        (lowpass_hz as f64 / src_spec.band_hz).floor() as usize
+                    } else {
+                        (lowpass_hz / 100) as usize
+                    };
+                    let n = src_spec.mean_db.len().min(t_spec.mean_db.len());
+                    if start_b < n {
+                        let max_drop = (start_b..n)
+                            .map(|b| src_spec.mean_db[b] - t_spec.mean_db[b])
+                            .fold(f64::NEG_INFINITY, f64::max);
+                        if max_drop.is_finite() && max_drop < min_drop {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    false
 }

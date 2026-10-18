@@ -63,6 +63,7 @@ pub struct LabelRow {
     pub split: Split,
     pub watch_id: String,
     pub extracted: Arc<Extracted>,
+    pub undetectable: bool,
 }
 
 impl LabelRow {
