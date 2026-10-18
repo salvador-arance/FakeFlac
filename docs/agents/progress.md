@@ -2,6 +2,24 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-18 - Main-screen UI implemented (RF-01, RF-05, RF-06)
+
+**Done**
+- Branch `feat/RF-01-05-06-main-screen`:
+  - `chore`: component test stack (jsdom, Testing Library, Storybook 10, ADR-0037) and component stubs.
+  - `test`: 179 component and page unit tests across 17 test files, plus Storybook CSF stories (`*.stories.ts`) for atoms, molecules, organisms, and templates.
+  - `feat`: Svelte 5 implementation of all main-screen UI components (Icon SVG set, IconButton, ProgressBar, VerdictCell, ColumnHeader, CutoffValue, WindowControls, TitleBar, Toolbar, FolderDropZone, StatusBar, ResultsTable with virtualisation and keyboard navigation, MainLayout template, `analysis` store with event batching, and `AnalysisPage` wiring the Tauri API client).
+  - All 179 vitest tests and backend tests pass; `just ci` and `npm run build-storybook` green.
+
+**Pending**
+- Gate G2: review and open PR for `feat/RF-01-05-06-main-screen` (human merges).
+- Gate G1: calibration tool spec (RP-11) open questions from previous block.
+
+**Blockers / questions for the human**
+- Ready to open PR for `feat/RF-01-05-06-main-screen`?
+
+**Next step:** Open PR for `feat/RF-01-05-06-main-screen` (G2); next feature is RF-07 (spectrogram viewer in the detail area).
+
 ## 2026-10-18 - Calibration tool spec (RP-11)
 
 **Done**
