@@ -11,7 +11,7 @@ check-fast:
     cargo clippy --workspace --exclude fakeflac -- -D warnings
     npm run check
     node scripts/lint-arch.mjs
-    node --test ".claude/hooks/*.test.mjs"
+    node --test ".claude/hooks/*.test.mjs" "scripts/*.test.mjs"
 
 # Full check: fast checks plus all tests.
 check: check-fast test
@@ -45,6 +45,12 @@ lint-arch:
 # Protected tests must not change after the `test(...)` commit (S7).
 guard-tests:
     node scripts/guard-tests.mjs
+
+# Delete local and remote branches whose work is already on main (merged PR at the same commit,
+# or contained in main) and their clean agent worktrees. Never main, the current branch or
+# unmerged commits. `just prune-branches --dry-run` only lists them.
+prune-branches *args:
+    node scripts/prune-branches.mjs {{args}}
 
 # Synthetic audio fixtures (ADR-022). Implemented in the first DSP task.
 fixtures:

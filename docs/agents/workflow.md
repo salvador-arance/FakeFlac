@@ -13,6 +13,7 @@ requirement RF-xx
       stage review     : code-reviewer (read-only); blocking findings go back to implement
       just ci → PR (feat/RF-xx)                                         → G2: human reviews and merges
   → /handoff          (update docs/agents/progress.md)
+  → after G2: just prune-branches (merged local/remote branches, clean agent worktrees)
 ```
 
 - Two PRs per feature: `spec/RF-xx` (specs, contract, ADR) and `feat/RF-xx` (tests and implementation). Specs of one milestone may be grouped in a single spec PR.
