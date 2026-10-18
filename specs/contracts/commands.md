@@ -52,7 +52,7 @@ type ProgressEvent =
 ```ts
 type Verdict = 'real' | 'suspicious' | 'fake' | 'error'
 type AudioFormat = 'wav' | 'flac' | 'mp3' | 'm4a' | 'opus'
-type SuspicionReason = 'lowHighFrequencyContent' | 'gradualRolloff' | 'ambiguousCutoff'
+type SuspicionReason = 'lowHighFrequencyContent' | 'gradualRolloff' | 'ambiguousCutoff' | 'highBandGaps'   // highBandGaps: algorithm_version 2
 
 type TrackInfo = {
   path: string; folder: string; format: AudioFormat

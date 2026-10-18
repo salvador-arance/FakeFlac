@@ -38,3 +38,4 @@ Format: MADR-style. New ADRs are created with `/new-adr` and approved at gate G1
 | [0032](0032-the-installer-is-not-code-signed-in-v1.md) | The installer is not code-signed in v1 | accepted |
 | [0033](0033-h1-dependency-set.md) | H1 dependency set | proposed |
 | [0034](0034-analysis-runs-on-std-scoped-threads-in-the-core.md) | The analysis runs on std scoped threads in the core (partially supersedes 0006) | proposed |
+| [0035](0035-detection-v2-relative-cutoff-step-and-16-khz-gap-step-on-the-m.md) | Detection v2: relative cutoff step on the mean spectrum and 16 kHz gap step on the per-frame median spectrum | proposed |

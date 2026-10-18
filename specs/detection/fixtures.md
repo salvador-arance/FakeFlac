@@ -22,6 +22,20 @@ status: proposed
 | `short` | `full_band`, 2 s | Error, `TooShort` |
 | `corrupt` | A FLAC file with its bytes truncated after the header | Error, `CorruptStream` |
 
-**Levels.** Every signal is set to −12 dBFS RMS and then scaled down, if needed, so that its peak does not exceed −1 dBFS: clipping would create content above the low-pass and invalidate the fixture. Relative levels inside a fixture (noise vs. tone) are preserved. **Length.** Signal lengths are rounded down to a whole number of 4096-frame FLAC blocks, so encoders write equal minimum and maximum block sizes.
+## Real-world cases (added with algorithm_version 2)
 
-Tolerance for cutoff assertions: ± `2 · smoothing_hz` (± 200 Hz with v1 parameters).
+These fixtures reproduce what a FLAC made from a decoded MP3 really looks like: noise above the low-pass instead of digital silence, and intermittent gaps above 16 kHz. **v1 returns `Real` for `lp16k_dither`, `lp20k_floor` and `sfb21_gaps`**, so they capture its failure. *Pink noise* means noise with amplitude `1/√f` (as in `low_hf`). All are 44.1 kHz, 16-bit, 30 s.
+
+| Id | Signal | Truth |
+|---|---|---|
+| `lp16k_dither` | Pink noise through a brick-wall low-pass at 16 kHz, set to **−40 dBFS RMS** (not −12) and quantised to 16 bits **with TPDF dither** (sum of two independent uniform values in `[−½, ½)` LSB added before rounding). At this level the dither floor above 16 kHz is only ~50 dB below the signal | Fake, cutoff ≈ 16 kHz |
+| `lp20k_floor` | Pink noise with gain `1/√f` below 20 kHz and a constant (white) gain from 20 kHz up to Nyquist, 15 dB below the pink gain at 20 kHz. Models the codec-noise floor above the low-pass of a ~320 kbps MP3 | Fake, cutoff ≈ 20 kHz |
+| `sfb21_gaps` | Pink noise, full band. It is split exactly in the frequency domain at 16 kHz. The part from 16 kHz to Nyquist is multiplied by a gate: gain 1 during the last 0.5 s of every 2 s and −20 dB the rest of the time (75 % of the time), with 5 ms raised-cosine ramps. Models LAME's empty sfb21 band. The mean spectrum drops only ~6 dB above 16 kHz, so there is no cliff. The median spectrum drops ~19 dB | Fake (from `G`); cutoff = Nyquist |
+| `sfb21_gaps_weak` | `sfb21_gaps` with −6 dB instead of −20 dB in the gate (`G` ≈ 5 dB) | Suspicious, `HighBandGaps` |
+| `hf_bursts` | Pink noise, full band, with the same gate (−20 dB, 75 %) applied from **8 kHz** to Nyquist instead of from 16 kHz: treble that comes and goes without an edge at 16 kHz, like hi-hats. Negative control for `G` | Real |
+
+The gate is the same in all three gated fixtures, so it is the edge frequency (16 vs 8 kHz) that separates a transcode from intermittent treble.
+
+**Levels.** Every signal is set to −12 dBFS RMS (unless its row says otherwise) and then scaled down, if needed, so that its peak does not exceed −1 dBFS: clipping would create content above the low-pass and invalidate the fixture. Relative levels inside a fixture (noise vs. tone, signal vs. floor) are preserved. **Quantisation** is plain rounding unless the row asks for dither. **Length.** Signal lengths are rounded down to a whole number of 4096-frame FLAC blocks, so encoders write equal minimum and maximum block sizes.
+
+Tolerance for cutoff assertions: ± `2 · band_hz` (± 200 Hz with v2 parameters).
