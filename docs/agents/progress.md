@@ -2,6 +2,34 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-18 - RF-04 Detection v3 spec approved (G1)
+
+**Done**
+- PR #35 (RP-11 undetectable transcodes) merged at G2; merged branches pruned.
+- PR #36 `spec(RF-04)`: Detection v3 spec merged at G1 (2fd4114).
+  - Full-band guard: `U`/`B` over bands in [20.7, 21.0) kHz; V3 and V4 apply only when not `FullBand`, so FP1–FP4 (W1–W4 of the acceptance run) become Suspicious.
+  - `specs/detection/detection-params.v3.toml` (optional `[full_band]`; v2 files reproduce v2); `DetectionParams::validate()` in core; ADR-0038 (proposed): v3 becomes the default.
+  - Acceptance A1–A8 (`rules.md` §7). Owner decisions: Q1 approve without pre-measuring (A1/A5/A8 decide); Q2 A5 gates the caught rate (Fake + Suspicious) vs the v2 column of the same run.
+  - V0 and AAC 256 false negatives documented as known limitations (`rules.md` §6).
+  - Protected tests that v3 changes are listed in ADR-0038 "Consequences" (incl. `tools/fakeflac-calibrate/tests/sample_corpus.rs:35–56`).
+
+**Pending**
+- `/feature RF-04` (Detection v3): test stage updates the listed protected tests and derives tests from `detection-full-band.feature`; then implement, review, PR (G2).
+- After implementation: real-corpus `just accept --params …v2.toml --params …v3.toml` to check A1–A8. If A1 or A5 fails, back to G1 (no retuning in implement).
+- RF-15 (lossy-source detection) spec input, from a parallel session (owner labels in `$FAKEFLAC_CALIBRATION/confirmed.txt` lines 18–39; no names or paths in the repo, ADR-022):
+  - ~170 owner-ripped YouTube MP3 320 tracks (yt-dlp, `Lavf`). Sample rate tells the stream: 48 kHz ← Opus, 44.1 kHz ← AAC 128. The label is an upper bound (source ≤ stream; chains may have 3+ lossy stages). One bootleg tape compilation is a weak label.
+  - 14 `.m4a` are YouTube AAC 128 remuxed without re-encode: honest lossy negatives; the label scheme needs a kind for them (one is mislabelled `fake`).
+  - One album has the full chain from one master (trusted FLAC → YouTube AAC 128 → MP3 320); its FLAC holds FP4. The spec should pair tracks across versions.
+  - `confirmed.txt`/`trusted.txt` grammar must accept MP3/M4A/Opus; new cascade setting kind (incl. Opus 48 kHz → MP3); consider grouping the split by main artist (several albums share artists).
+- Pending UI of H1: RF-06 (results table), RF-07 (spectrogram).
+
+**Blockers / questions for the human**
+- Open questions in `rules.md` ("Open questions for G1"), defaults apply unless changed: Q3 (new reason for guarded tracks; default no), Q4 (changes to approved specs; default yes), Q5 (V0 has no low-pass; may be checked from the LAME tag low-pass byte), Q6 (v2 caught rates for v0/aac256 from `summary.md`), Q7 (FP4 stays Fake if its upper content is steady; default accept).
+- The 20 RF-15 `fake` lines in `confirmed.txt` must stay commented out, or `just accept`/`just calibrate` fail.
+- `git push` over HTTPS has no credential helper on this machine; `gh auth setup-git` would fix it (owner's choice).
+
+**Next step:** `/feature RF-04` (Detection v3).
+
 ## 2026-10-18 - RP-11 undetectable transcodes and follow-ups implemented (feat/RP-11-undetectable)
 
 **Done**
