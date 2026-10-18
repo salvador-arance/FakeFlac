@@ -192,17 +192,143 @@ fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     haystack.windows(needle.len()).position(|w| w == needle)
 }
 
+fn is_valid_lame_version(s: &str) -> bool {
+    let Some(rest) = s.strip_prefix("LAME") else {
+        return false;
+    };
+    let mut chars = rest.chars().peekable();
+    let mut major_digits = 0;
+    while let Some(&c) = chars.peek() {
+        if c.is_ascii_digit() {
+            major_digits += 1;
+            chars.next();
+        } else {
+            break;
+        }
+    }
+    if major_digits == 0 {
+        return false;
+    }
+    if chars.next() != Some('.') {
+        return false;
+    }
+    let mut minor_digits = 0;
+    while let Some(&c) = chars.peek() {
+        if c.is_ascii_digit() {
+            minor_digits += 1;
+            chars.next();
+        } else {
+            break;
+        }
+    }
+    if minor_digits == 0 {
+        return false;
+    }
+    if let Some(&c) = chars.peek() {
+        if c.is_ascii_alphabetic() {
+            chars.next();
+        } else if c == '.' {
+            chars.next();
+            let mut patch_digits = 0;
+            while let Some(&c2) = chars.peek() {
+                if c2.is_ascii_digit() {
+                    patch_digits += 1;
+                    chars.next();
+                } else {
+                    break;
+                }
+            }
+            if patch_digits == 0 {
+                return false;
+            }
+            if let Some(&c2) = chars.peek() {
+                if c2.is_ascii_alphabetic() {
+                    chars.next();
+                }
+            }
+        }
+    }
+    chars.peek().is_none()
+}
+
 /// The encoder string of the LAME tag in the first frame of an MP3 (`LAME3.100`).
 fn lame_tag(path: &Path) -> Option<String> {
     let head = read_head(path, 16 * 1024);
-    let at = find(&head, b"LAME")?;
-    let tag: String = head[at..]
-        .iter()
-        .take(9)
-        .take_while(|b| b.is_ascii_alphanumeric() || **b == b'.')
-        .map(|b| char::from(*b))
-        .collect();
-    (tag.len() > 4).then_some(tag)
+    // 1. Skip ID3v2 if present
+    let mut offset = 0;
+    if head.starts_with(b"ID3") && head.len() >= 10 {
+        let flags = head[5];
+        let synchsafe = ((head[6] as usize & 0x7F) << 21)
+            | ((head[7] as usize & 0x7F) << 14)
+            | ((head[8] as usize & 0x7F) << 7)
+            | (head[9] as usize & 0x7F);
+        let footer = if (flags & 0x10) != 0 { 10 } else { 0 };
+        offset = 10 + synchsafe + footer;
+    }
+    if offset >= head.len() {
+        return None;
+    }
+
+    // 2. Locate the first MPEG audio frame header
+    let rest = &head[offset..];
+    let frame_idx = rest.windows(4).position(|w| {
+        let is_sync = w[0] == 0xff && (w[1] & 0xe0) == 0xe0;
+        let mpeg_ver = (w[1] >> 3) & 0x03;
+        let layer = (w[1] >> 1) & 0x03;
+        let bitrate_idx = (w[2] >> 4) & 0x0f;
+        let sample_rate_idx = (w[2] >> 2) & 0x03;
+        let emphasis = w[3] & 0x03;
+        is_sync
+            && mpeg_ver != 1
+            && layer == 1 // Layer III
+            && bitrate_idx != 0x0f
+            && sample_rate_idx != 0x03
+            && emphasis != 0x02
+    })?;
+
+    let frame = &rest[frame_idx..];
+    if frame.len() < 4 {
+        return None;
+    }
+    let mpeg_ver = (frame[1] >> 3) & 0x03;
+    let crc_present = (frame[1] & 0x01) == 0;
+    let channel_mode = (frame[3] >> 6) & 0x03;
+
+    let header_len = if crc_present { 6 } else { 4 };
+    let side_info_len = match mpeg_ver {
+        3 => {
+            if channel_mode == 3 {
+                17
+            } else {
+                32
+            }
+        }
+        _ => {
+            if channel_mode == 3 {
+                9
+            } else {
+                17
+            }
+        }
+    };
+
+    let xing_offset = header_len + side_info_len;
+    let xing_found_offset = if frame.get(xing_offset..xing_offset + 4) == Some(b"Xing")
+        || frame.get(xing_offset..xing_offset + 4) == Some(b"Info")
+    {
+        Some(xing_offset)
+    } else {
+        let search_len = frame.len().min(128);
+        find(&frame[..search_len], b"Xing").or_else(|| find(&frame[..search_len], b"Info"))
+    }?;
+
+    let tag_bytes = frame.get(xing_found_offset + 120..xing_found_offset + 120 + 9)?;
+    let tag_str = String::from_utf8_lossy(tag_bytes).trim().to_string();
+    if is_valid_lame_version(&tag_str) {
+        Some(tag_str)
+    } else {
+        None
+    }
 }
 
 /// The vendor string of the `OpusTags` header, when it names libopus.
@@ -211,21 +337,67 @@ fn opus_vendor(path: &Path) -> Option<String> {
     let at = find(&head, b"OpusTags")? + 8;
     let len_bytes: [u8; 4] = head.get(at..at + 4)?.try_into().ok()?;
     let len = u32::from_le_bytes(len_bytes) as usize;
+    if len > 256 {
+        return None;
+    }
     let vendor = String::from_utf8_lossy(head.get(at + 4..at + 4 + len)?).into_owned();
-    vendor.contains("libopus").then_some(vendor)
+    if vendor.contains("libopus") && vendor.chars().all(|c| c.is_ascii_graphic() || c == ' ') {
+        Some(vendor)
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn make_mp3_with_info(id3: bool, mono: bool, tag: &[u8], padding_after: &[u8]) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        if id3 {
+            bytes.extend_from_slice(b"ID3\x04\x00\x00\x00\x00\x00\x0a");
+            bytes.extend_from_slice(&[0u8; 10]);
+        }
+        let mode_byte = if mono { 0xc0 } else { 0x00 };
+        bytes.extend_from_slice(&[0xff, 0xfb, 0x90, mode_byte]);
+        let side_info_len = if mono { 17 } else { 32 };
+        bytes.extend(std::iter::repeat_n(0u8, side_info_len));
+        bytes.extend_from_slice(b"Info");
+        bytes.extend(std::iter::repeat_n(0u8, 116));
+        bytes.extend_from_slice(tag);
+        bytes.extend_from_slice(padding_after);
+        bytes
+    }
+
     #[test]
-    fn lame_tag_is_read_from_the_head() {
-        let dir = std::env::temp_dir().join(format!("fakeflac-ffmpeg-unit-{}", std::process::id()));
+    fn lame_tag_lavc_with_lame_padding_gives_fallback() {
+        let dir =
+            std::env::temp_dir().join(format!("fakeflac-ffmpeg-unit-lavc-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("dir");
-        let mp3 = dir.join("a.mp3");
-        std::fs::write(&mp3, b"\xff\xfb\x90\x00....Info....LAME3.100\x55\x55").expect("write");
+        let mp3 = dir.join("lavc.mp3");
+        let bytes = make_mp3_with_info(false, true, b"Lavc62.28", b"\x55\x55LAMEUUUU\x55\x55");
+        std::fs::write(&mp3, bytes).expect("write");
+        assert_eq!(lame_tag(&mp3), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn lame_tag_real_lame_in_info_frame_gives_version() {
+        let dir =
+            std::env::temp_dir().join(format!("fakeflac-ffmpeg-unit-lame-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("dir");
+        let mp3 = dir.join("lame.mp3");
+        let bytes = make_mp3_with_info(true, false, b"LAME3.100", b"\x55\x55");
+        std::fs::write(&mp3, bytes).expect("write");
         assert_eq!(lame_tag(&mp3).as_deref(), Some("LAME3.100"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn opus_vendor_is_read_from_the_head() {
+        let dir =
+            std::env::temp_dir().join(format!("fakeflac-ffmpeg-unit-opus-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("dir");
         let opus = dir.join("a.opus");
         let mut bytes = b"OggS....OpusTags".to_vec();
         bytes.extend_from_slice(&13u32.to_le_bytes());
