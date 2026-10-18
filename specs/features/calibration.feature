@@ -102,14 +102,31 @@ Feature: Calibration and acceptance against a labelled corpus
     Given the album ids "album-00000" to "album-09999" in one class and the seed of calibration.v1.toml
     When the split is computed
     Then exactly 3000 albums are in holdout
-    And adding the album id "album-10000" only inserts it into the hash order without changing the split of other albums
- 
+    When the album id "album-10000" is added and the split is computed again
+    Then exactly 3000 albums are still in holdout
+    And "album-10000" is in holdout and "album-09581" has moved to tune
+    And no other album has changed split
+
   @RP-11
   Scenario: Stratified split guarantees holdout in small classes
     Given 5 albums in class "primary" and 10 albums in class "reviewed"
     When the stratified split is computed
     Then exactly 2 albums of class "primary" are assigned to holdout
     And exactly 3 albums of class "reviewed" are assigned to holdout
+
+  @RP-11
+  Scenario Outline: Extreme holdout fractions ignore the class size
+    Given <albums> albums in class "primary" and split.holdout_fraction is <fraction>
+    When the stratified split is computed
+    Then exactly <holdout> albums of class "primary" are assigned to holdout
+
+    Examples:
+      | albums | fraction | holdout |
+      | 1      | 0.0      | 0       |
+      | 5      | 0.0      | 0       |
+      | 1      | 0.3      | 0       |
+      | 1      | 1.0      | 1       |
+      | 5      | 1.0      | 5       |
 
   # --- Features cache ----------------------------------------------------
 

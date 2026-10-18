@@ -140,13 +140,13 @@ u = fmix64(h)
 Within each class:
 1. Distinct albums in that class are sorted ascending by the 64-bit unsigned hash `u` (breaking ties by `album_id` lexicographically).
 2. Let $N$ be the number of distinct albums in the class.
-3. The number of albums assigned to `holdout` is:
-   - If $N \ge 2$: $k = \min(N, \max(\text{min\_holdout\_albums}, \mathrm{round}(N \cdot \text{holdout\_fraction})))$
-   - If $N < 2$: $k = 0$ (all in `tune`, and the report warns of fewer than 2 holdout albums).
+3. The number of albums assigned to `holdout` is (`round` rounds half away from zero):
+   - If $\text{holdout\_fraction} = 0$ or $N < 2$: $k = \mathrm{round}(N \cdot \text{holdout\_fraction})$. So `0.0` puts every album in `tune`, and a class with one album goes to `holdout` only when `holdout_fraction` $\ge 0.5$ (with the default 0.30 it stays in `tune`). The report warns of fewer than 2 holdout albums.
+   - Otherwise: $k = \min(N, \max(\text{min\_holdout\_albums}, \mathrm{round}(N \cdot \text{holdout\_fraction})))$. So `1.0` puts every album in `holdout`.
 4. The first $k$ albums in the sorted order are assigned to `holdout`; the remaining $N - k$ albums are assigned to `tune`.
 5. Every track of an album, generated tracks included, has the same split as its album.
 
 Properties:
-- **Stability:** Ordering by hash within each class means adding a new album to a class only places that album into the sorted sequence; it does not change the hash of any existing album. Split assignments change only when albums are added to that class, which is precisely when holdout calibration should adjust.
+- **Stability:** Ordering by hash within each class means adding a new album to a class only places that album into the sorted sequence; it does not change the hash of any existing album. Since $k$ grows by at most 1 per added album, existing albums change split only at the holdout boundary: **at most one existing album moves** per added album (from `holdout` to `tune` when the new album lands in `holdout` and $k$ does not grow; from `tune` to `holdout` when it lands in `tune` and $k$ grows). Albums of other classes never move.
 - **Guarantee on small classes:** A pure independent hash threshold could leave the 5 purchased discs of class `primary` with 0 or 1 holdout album. The stratified split guarantees at least 2 holdout albums whenever a class has $\ge 2$ albums, ensuring the primary holdout metric has adequate data.
 - **`holdout` rows are never used for tuning** (evaluation.md section 7).
