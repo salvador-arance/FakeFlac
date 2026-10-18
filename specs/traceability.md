@@ -14,6 +14,7 @@
 | RF-10 album summary | H0 smoke test (H2 feature) | `detection/album-summary.md`, `features/album-summary.feature` | `crates/fakeflac-core/tests/album_summary.rs` (11) | `fakeflac-core::summary` |
 | RF-14 formats (WAV, FLAC in H1) | H1 / H2 | `contracts/commands.md`, `features/detection-lossless.feature` | `crates/fakeflac-audio/tests/detection_lossless.rs`, `crates/fakeflac-fs/tests/scan.rs` | `fakeflac-fs`, `fakeflac-audio` |
 | other RF | see `specs/requirements/` | pending (`/new-spec`) | — | — |
-| RNF-04, RNF-05, RNF-09 | H1 | scenarios in `features/analyze-folder.feature`, `features/detection-lossless.feature` | `crates/fakeflac-core/tests/analyze_folder.rs` (RNF-04), `crates/fakeflac-fs/tests/scan.rs` (RNF-05 scan, RNF-09); app-level pending | all |
+| RP-11 calibration + acceptance (labelled local corpus) | H1 | `calibration/{calibration,inputs,generation,evaluation,sample-corpus}.md`, `calibration/calibration.v1.toml`, `calibration/calibrate-grid.v1.toml`, `features/calibration.feature`, ADR-0036 | pending | `tools/fakeflac-calibrate`, `fakeflac-audio::EXTRACTION_VERSION`, `justfile` (`accept`, `calibrate`, `privacy-check`), `.claude/skills/calibrate` |
+| RNF-04, RNF-05, RNF-09 | H1 | scenarios in `features/analyze-folder.feature`, `features/detection-lossless.feature`, `features/calibration.feature` | `crates/fakeflac-core/tests/analyze_folder.rs` (RNF-04), `crates/fakeflac-fs/tests/scan.rs` (RNF-05 scan, RNF-09); app-level pending | all |
 
 Requirements are in `specs/requirements/`. Every `@RF-xx` / `@RNF-xx` tag in `specs/features/*.feature` must exist there.

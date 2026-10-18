@@ -1,0 +1,89 @@
+---
+id: SPEC-CALIBRATION-GENERATION
+requirements: [RP-11, RNF-04, RNF-05]
+status: proposed
+---
+
+# Transcode generation and the features cache
+
+> Positives are made from trusted tracks: a fragment from the centre of the track is encoded with a lossy encoder through ffmpeg and decoded back to 16-bit FLAC. Spectra of every labelled track are cached, so recalibrating re-applies the rules without decoding. Main spec: [calibration.md](calibration.md). ffmpeg and LAME are development tools and never part of the product (planning section 1.5, ADR-0036).
+
+## 1. What is generated
+
+- **Sources:** every trusted track (all classes, `reference` included, inputs.md 1.5) whose own analysis is not `Error` and not silent (rules.md section 1.6). Confirmed fakes are not sources. A skipped source is listed in the report with its reason.
+- **Settings:** the `[[generate.settings]]` of the config. Version 1 has the 9 settings of the issue:
+
+| id | encoder | ffmpeg encoder arguments | ext | `bitrate_kbps` |
+|---|---|---|---|---|
+| `cbr128` | `lame` | `-c:a libmp3lame -b:a 128k` | mp3 | 128 |
+| `cbr192` | `lame` | `-c:a libmp3lame -b:a 192k` | mp3 | 192 |
+| `cbr256` | `lame` | `-c:a libmp3lame -b:a 256k` | mp3 | 256 |
+| `cbr320` | `lame` | `-c:a libmp3lame -b:a 320k` | mp3 | 320 |
+| `v0` | `lame` | `-c:a libmp3lame -q:a 0` | mp3 | (empty) |
+| `v2` | `lame` | `-c:a libmp3lame -q:a 2` | mp3 | (empty) |
+| `aac128` | `aac` | `-c:a aac -b:a 128k` | m4a | 128 |
+| `aac256` | `aac` | `-c:a aac -b:a 256k` | m4a | 256 |
+| `opus128` | `opus` | `-c:a libopus -b:a 128k` | opus | 128 |
+
+  `libmp3lame` with `-b:a` and no `-q:a` is CBR. `aac` is ffmpeg's native AAC encoder. `libopus` is VBR by default.
+- **Fragment (OQ-10):** length `generate.fragment_s` (60 s), centred: `start = max(0, (duration − fragment_s) / 2)`, rounded down to the millisecond. A track no longer than `fragment_s` is used whole (`start = 0`, `fragment_s` = its duration). Negatives are analysed as whole files, as the app does.
+
+## 2. ffmpeg
+
+Two calls per entry, with arguments passed as a list (`std::process::Command`, no shell, so spaces and Unicode in names are safe):
+
+```
+encode: <ffmpeg> -nostdin -hide_banner -loglevel error -ss <start> -t <fragment_s> -i <source>
+                 -map 0:a:0 -map_metadata -1 <setting args> -y <generated>/<id>.<ext>
+decode: <ffmpeg> -nostdin -hide_banner -loglevel error -i <generated>/<id>.<ext>
+                 -map 0:a:0 -map_metadata -1 <generate.decode_args> -y <generated>/<id>.flac
+```
+
+- `generate.decode_args` (version 1): `-c:a flac -sample_fmt s16`. The output is **16-bit FLAC** with no dither (ffmpeg's default requantisation), with the channels and the sample rate that the decoder delivers. **Opus stays at 48 kHz (OQ-8).** For a hi-res source, the rate is whatever the encoder accepted. The rate is recorded in `labels.csv` (`sample_rate_hz`).
+- `<ffmpeg>` is `FAKEFLAC_FFMPEG` or `ffmpeg` on `PATH`. `ffmpeg_version` is the first line of `ffmpeg -version`, cut before ` Copyright`.
+- **Exact versions (OQ-17)** in `encoder_version`, read before the intermediate file is deleted:
+  - `lame`: `<ffmpeg_version>; ` plus the encoder string of the LAME tag in the first frame of the MP3 (for example `LAME3.100`). Fallback: `libmp3lame (version not readable)`.
+  - `aac`: `<ffmpeg_version>; aac (native)` (the encoder is part of that ffmpeg build).
+  - `opus`: `<ffmpeg_version>; ` plus the vendor string of the `OpusTags` header if it names libopus (for example `libopus 1.5.2`). Fallback: `libopus (version not readable)`.
+- **Failures.** If ffmpeg cannot be started, or `ffmpeg -version` fails, and at least one transcode is needed: exit 3 (`error: ffmpeg not found; set FAKEFLAC_FFMPEG or add it to PATH`). If ffmpeg is missing but every entry is cached, the run continues and the report says so. If one call exits non-zero, that entry is a generation failure: it gets no label row, is not cached (it is retried on the next run), and is listed in `report.md` with the setting and the first line of ffmpeg's error output. The run continues.
+
+## 3. Files in `generated/` (OQ-9)
+
+- Flat folder, one name per entry: `<id>.flac`, where `<id>` is 16 lower-case hex digits of `fmix64(fnv1a64(recipe JSON))` (hash functions as in inputs.md section 4). Short names keep paths below the Windows limit and keep corpus names out of `generated/`.
+- **Recipe** (JSON object, keys sorted): `source` (`path`, `size`, `mtime` of the source), `setting`, `args`, `decode_args`, `fragment_start_s`, `fragment_s`.
+- The lossy intermediate `<id>.<ext>` is always deleted after the decode call. With `generate.keep_audio = false` (the default), `<id>.flac` is deleted as soon as its spectra are cached.
+- Deleting `generated/` at any time is safe: generated entries are looked up in the cache by recipe, not by file.
+- When a generated entry misses the cache (for example under a new fingerprint), an existing `<id>.flac` is analysed without transcoding. If the audio was deleted, the entry is transcoded again.
+
+## 4. Features cache (OQ-3)
+
+### 4.1 Extraction fingerprint
+
+```
+fingerprint JSON = { "extraction_version": fakeflac_audio::EXTRACTION_VERSION,
+                     "input": <[input] section of the params file>,
+                     "fft":   <[fft] section of the params file> }      (keys sorted)
+fingerprint id   = 16 hex digits of fmix64(fnv1a64(fingerprint JSON))
+```
+
+- `EXTRACTION_VERSION` is a public integer of `fakeflac-audio` (2 today). It must be bumped in the same PR as any adapter change that alters the `AudioProbe` produced for the same file and parameters (ADR-0036).
+- `algorithm_version` and every rule parameter (`[bands]`, `[extent]`, `[step]`, `[gaps]`, `[verdict]`) and `[spectrogram]` are **not** part of the fingerprint. Params files that differ only in those values share one cache, whatever their `algorithm_version`.
+- Files: `features/<fingerprint id>.meta.json` (the fingerprint JSON) and `features/<fingerprint id>.jsonl` (entries). A params file with a different fingerprint gets its own extraction pass and its own files. The report says which params file used which fingerprint.
+
+### 4.2 Entries
+
+One JSON object per line:
+
+| Field | Content |
+|---|---|
+| `key` | corpus track: `{ "kind": "corpus", "path", "size", "mtime" }` (path relative to `FAKEFLAC_CORPUS`, `/` separators; size in bytes; mtime in Unix seconds, as `FileEntry`). Generated entry: `{ "kind": "generated", "recipe": {…} }` (section 3) |
+| `probe` | `{ "sample_rate", "bit_depth", "channels", "duration_ms", "spectrum" }`, where `spectrum` is `null` (silent track) or `{ "band_hz", "mean_db": [...], "median_db": [...] }` (`BandSpectra`) |
+| `error` | instead of `probe`: the `TrackError` code (`corruptStream`, `unsupportedFormat`, `tooShort`). `unreadable` is not cached, because it may be temporary |
+| `ffmpeg_version`, `encoder_version` | generated entries only |
+
+- **Lookup:** by key (canonical JSON). When a key appears on several lines, the last one wins. A line that does not parse (for example cut short by a crash) is skipped and counted, and its track is extracted again.
+- **Hit:** no decoding and no transcoding. **Miss:** decode (and, for a generated entry, transcode first), then append one line.
+- A generated entry whose `ffmpeg_version` differs from the ffmpeg found now is stale and is generated again. If no ffmpeg is found, cached generated entries are used as they are.
+- **Exact floats.** Values are written by `serde_json` (shortest representation that round-trips) and read with its `float_roundtrip` feature. A report computed from the cache is identical to one computed from a fresh extraction.
+- **Invalidation:** a change in a corpus file's size or mtime changes its key (re-extracted) and the recipes of its transcodes (generated again). A new fingerprint means new files. The tool never deletes files in `features/`; the user may.
+- **Statistics** per fingerprint, in the report: cache hits, decoded, transcoded, generation failures, skipped lines.

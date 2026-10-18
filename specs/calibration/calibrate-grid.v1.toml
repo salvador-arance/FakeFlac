@@ -1,0 +1,20 @@
+# Grid for /calibrate v1 (RP-11, ADR-0036). Spec: specs/calibration/evaluation.md section 7.
+# Only rule parameters ([bands], [extent], [step], [gaps], [verdict]) may appear in [values]:
+# they are re-applied to cached spectra without decoding. The search reads tune rows only.
+grid_version = 1
+baseline = "specs/detection/detection-params.v2.toml"
+must_catch = ["cbr128", "cbr192"]     # hard constraint: no Real among these tune positives (H1 criterion)
+max_points = 100000
+
+[weights]                             # OQ-11: the owner confirms these values at G1
+fp = 10.0                             # Fake on a tune negative
+fn = 1.0                              # Real on a tune positive
+suspicious_negative = 0.5
+suspicious_positive = 0.1
+
+[values]                              # around v2; 6 x 4 x 5 x 3 x 3 = 1,080 points before invariants
+"verdict.gap_fake_db" = [5.0, 5.5, 6.0, 6.5, 7.0, 8.0]
+"verdict.gap_suspicious_db" = [3.5, 4.0, 4.5, 5.0]
+"verdict.step_fake_db" = [8.0, 9.0, 10.0, 11.0, 12.0]
+"verdict.step_suspicious_db" = [6.0, 7.0, 8.0]
+"verdict.fake_max_cutoff_hz" = [20000.0, 20300.0, 20500.0]

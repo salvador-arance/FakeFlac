@@ -6,7 +6,7 @@
 
 1. `fakeflac-core` has **no** dependency on other workspace crates and performs no I/O.
 2. Adapter crates (`audio`, `fs`, `store`, `export`) depend **only** on `fakeflac-core`; adapters never depend on each other.
-3. `src-tauri` is the only crate that may depend on all of them (composition root).
+3. `src-tauri` is the composition root of the app. Dev-only tools under `tools/` (ADR-0036) are composition roots too: they may depend on `fakeflac-core` and on the adapters they need. No crate under `crates/`, and not `src-tauri`, may depend on a tool. Tools never ship in the installer.
 4. A new port in `core` requires an ADR (D3: no over-engineering).
 
 ## Frontend (atomic design, ADR-0014)

@@ -2,6 +2,21 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-18 - Calibration tool spec (RP-11)
+
+**Done**
+- Branch `spec/calibration`, PR for G1: new process requirement RP-11, `specs/calibration/` (inputs, generation, evaluation, sample corpus, config and grid files), `specs/features/calibration.feature` (CI-runnable on a synthetic sample corpus), ADR-0036 (dev-only crate `tools/fakeflac-calibrate`, JSON Lines features cache keyed by an extraction fingerprint, ffmpeg as an external process, no new crate in `Cargo.lock`). `dependencies.md` rule 3 and the overview table amended. Source: the owner's issue in `FAKEFLAC_CALIBRATION` (not in the repo).
+
+**Pending**
+- G1: owner answers the 17 open questions at the top of `specs/calibration/calibration.md` (v1 is not re-run: OQ-1/OQ-2; `confirmed.txt` for confirmed fakes and false positives: OQ-5; `/calibrate` cost weights: OQ-11) and approves the dependency uses in ADR-0036.
+- #24 (`just prune-branches`) and #25 (RF-03 undeclared length) merged; `just prune-branches` run after them.
+- After G1: `/feature RP-11` (lint-arch checks for `tools/`, `EXTRACTION_VERSION` in `fakeflac-audio`, the tool, `just accept`/`calibrate`/`privacy-check`, the `/calibrate` skill).
+
+**Blockers / questions for the human**
+- The 17 open questions above.
+
+**Next step:** G1 on the calibration spec; meanwhile the main-screen UI `/feature`.
+
 ## 2026-10-18 - Undeclared stream length (RF-03) and branch clean-up
 
 **Done**
