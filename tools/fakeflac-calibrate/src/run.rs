@@ -632,6 +632,21 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
         "accept"
     };
     let commit = tool_commit(env);
+    // Confirmed fakes checked by constraint (2): all of them, tune and holdout.
+    let confirmed = {
+        let base = &runs[0];
+        let checked = groups[base.group]
+            .rows
+            .iter()
+            .zip(base.evals.iter())
+            .filter(|(r, e)| r.origin == "confirmed_fake" && e.verdict != Verdict::Error);
+        let (mut all, mut holdout) = (0_u32, 0_u32);
+        for (r, _) in checked {
+            all += 1;
+            holdout += u32::from(r.split == Split::Holdout);
+        }
+        (all, holdout)
+    };
     let data = ReportData {
         run_id: &run_id,
         date: &date,
@@ -647,6 +662,8 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
                 file,
                 result,
                 proposal: proposal.as_ref(),
+                confirmed_checked: confirmed.0,
+                confirmed_holdout: confirmed.1,
             }),
             _ => None,
         },
@@ -726,6 +743,12 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
             ));
         }
     }
+    if grid_file.is_some() {
+        stdout.push_str(&format!(
+            "confirmed fakes checked by the feasibility constraint: {} ({} in holdout)\n",
+            confirmed.0, confirmed.1
+        ));
+    }
     stdout.push_str(&format!(
         "report: {}\n",
         crate::fsutil::plain_path(&report_dir).display()
@@ -742,12 +765,18 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
     })
 }
 
-/// The tune rows the grid search reads: negatives of the classes primary, reviewed and clean,
-/// generated positives and confirmed fakes, without `Error` rows (evaluation.md section 7).
+/// The rows the grid search reads: tune negatives of the classes primary, reviewed and clean,
+/// generated positives and confirmed fakes, without `Error` rows, plus the holdout confirmed fakes as
+/// constraint-only rows (evaluation.md section 7).
 fn tune_search_rows<'a>(rows: &'a [LabelRow], evals: &[RowEval]) -> Vec<SearchRow<'a>> {
     let mut out = Vec::new();
     for (row, eval) in rows.iter().zip(evals.iter()) {
-        if row.split != Split::Tune || eval.verdict == Verdict::Error {
+        if eval.verdict == Verdict::Error {
+            continue;
+        }
+        // Holdout rows are never read, except confirmed fakes: they constrain every point.
+        let constraint_only = row.split != Split::Tune;
+        if constraint_only && row.origin != "confirmed_fake" {
             continue;
         }
         let kind = if row.origin == "confirmed_fake" {
@@ -774,6 +803,7 @@ fn tune_search_rows<'a>(rows: &'a [LabelRow], evals: &[RowEval]) -> Vec<SearchRo
             },
             spectra,
             silent_verdict: eval.verdict,
+            constraint_only,
         });
     }
     out
@@ -909,9 +939,12 @@ mod tests {
             vec![
                 RowKind::ConfirmedFake,
                 RowKind::Negative,
-                RowKind::GeneratedPositive
+                RowKind::GeneratedPositive,
+                RowKind::ConfirmedFake
             ]
         );
+        let only: Vec<bool> = search.iter().map(|r| r.constraint_only).collect();
+        assert_eq!(only, vec![false, false, false, true]);
         assert_eq!(search[2].setting, "fx128");
         // A confirmed fake classified Real makes the point infeasible.
         let t = grid::tally(

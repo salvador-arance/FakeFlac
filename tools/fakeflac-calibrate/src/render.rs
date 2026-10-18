@@ -185,6 +185,9 @@ pub struct GridReport<'a> {
     pub file: &'a GridFile,
     pub result: &'a SearchResult,
     pub proposal: Option<&'a Proposal>,
+    /// Confirmed fakes checked by feasibility constraint (2), and how many of them are in holdout.
+    pub confirmed_checked: u32,
+    pub confirmed_holdout: u32,
 }
 
 /// Everything the Markdown reports are made of.
@@ -587,7 +590,7 @@ fn header(md: &mut Md, data: &ReportData<'_>, full: bool) {
         ));
         md.blank();
     }
-    md.line(format!("- run id: {}", data.run_id.replace('T', "-")));
+    md.line(format!("- run id: {}", data.run_id));
     md.line(format!("- date (UTC): {}", data.date));
     md.line(format!("- tool commit: {}", data.commit));
     md.line(format!("- mode: {}", data.mode));
@@ -1102,6 +1105,10 @@ fn grid_section(md: &mut Md, data: &ReportData<'_>, grid: &GridReport<'_>) {
     md.line(format!(
         "- feasible: no Real among the tune positives of the settings [{}], and no confirmed fake classified Real",
         grid.file.must_catch.join(", ")
+    ));
+    md.line(format!(
+        "- confirmed fakes checked by that constraint: {} ({} in holdout; they never enter the cost or the ranking)",
+        grid.confirmed_checked, grid.confirmed_holdout
     ));
     md.line(format!(
         "- points evaluated: {}, skipped (broken invariants): {}",

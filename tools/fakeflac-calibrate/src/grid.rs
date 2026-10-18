@@ -420,6 +420,9 @@ pub struct SearchRow<'a> {
     /// `None`: silent track (verdict `silent_verdict`, no measurements).
     pub spectra: Option<&'a BandSpectra>,
     pub silent_verdict: Verdict,
+    /// Holdout confirmed fake: counts for feasibility constraint (2) only, never for the cost,
+    /// the ranking, the margin tie-break or constraint (1).
+    pub constraint_only: bool,
 }
 
 /// One scored point (or the baseline).
@@ -482,7 +485,8 @@ fn score(
         .map(|(row, m)| match m {
             Some(m) => {
                 let (verdict, _) = decide(m, params);
-                if row.kind == RowKind::Negative && verdict != Verdict::Fake {
+                if row.kind == RowKind::Negative && !row.constraint_only && verdict != Verdict::Fake
+                {
                     min_margin = min_margin.min(nearest_margin(m, &params.verdict));
                 }
                 verdict
@@ -490,12 +494,18 @@ fn score(
             None => row.silent_verdict,
         })
         .collect();
-    let t = tally(
+    let mut t = tally(
         rows.iter()
             .zip(verdicts.iter())
+            .filter(|(r, _)| !r.constraint_only)
             .map(|(r, v)| (r.kind, r.setting, *v)),
         &grid.must_catch,
     );
+    t.confirmed_real += rows
+        .iter()
+        .zip(verdicts.iter())
+        .filter(|(r, v)| r.constraint_only && **v == Verdict::Real)
+        .count() as u32;
     Scored {
         index,
         values,
