@@ -209,6 +209,31 @@ fn corrupt_is_error() {
     );
 }
 
+// ---- Scenario: Stream without a declared length (@RF-03 @RNF-04) ------------------------------
+#[test]
+fn unknown_length_stream_is_analysed() {
+    let path = fixture("lp16k_unknown_length", Flac);
+    // Sanity: the fixture really exercises the undeclared-length path, and the original does not.
+    assert_eq!(common::declared_total_samples(&path), 0);
+    assert!(common::declared_total_samples(&fixture("lp16k", Flac)) > 0);
+    let a = analyze("lp16k_unknown_length", Flac);
+    assert_eq!(a.verdict, Verdict::Fake, "{a:#?}");
+    let cutoff = a.cutoff.as_ref().expect("cutoff reported").frequency_hz;
+    assert!(
+        (cutoff - 16_000.0).abs() <= 200.0,
+        "cutoff {cutoff} Hz, expected 16000 ± 200 Hz"
+    );
+}
+
+// ---- Scenario: A silent track reports no cutoff (@RF-03) ---------------------------------------
+#[test]
+fn silent_track_reports_no_cutoff() {
+    let a = analyze("silence", Flac);
+    assert_eq!(a.verdict, Verdict::Suspicious, "{a:#?}");
+    assert_eq!(a.reasons, &[LowHighFrequencyContent]);
+    assert_eq!(a.cutoff, None, "{a:#?}");
+}
+
 // ---- Scenario: Deterministic result (@RF-04) ---------------------------------------------------
 #[test]
 fn deterministic() {

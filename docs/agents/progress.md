@@ -9,13 +9,29 @@
 
 **Pending**
 - G1: owner answers the 17 open questions at the top of `specs/calibration/calibration.md` (v1 is not re-run: OQ-1/OQ-2; `confirmed.txt` for confirmed fakes and false positives: OQ-5; `/calibrate` cost weights: OQ-11) and approves the dependency uses in ADR-0036.
-- Open PRs from earlier today: #24 (`just prune-branches`), #25 (RF-03 undeclared length).
+- #24 (`just prune-branches`) and #25 (RF-03 undeclared length) merged; `just prune-branches` run after them.
 - After G1: `/feature RP-11` (lint-arch checks for `tools/`, `EXTRACTION_VERSION` in `fakeflac-audio`, the tool, `just accept`/`calibrate`/`privacy-check`, the `/calibrate` skill).
 
 **Blockers / questions for the human**
 - The 17 open questions above.
 
 **Next step:** G1 on the calibration spec; meanwhile the main-screen UI `/feature`.
+
+## 2026-10-18 - Undeclared stream length (RF-03) and branch clean-up
+
+**Done**
+- #22 (detection v2) and #23 (spec follow-ups) merged.
+- PR #24 `chore/prune-branches`: `just prune-branches` deletes merged local/remote branches and clean agent worktrees (squash-merge aware, keeps and reports commits pushed after a merge). Already run: 11 stale local branches and the old worktree removed (its empty folder stays: another process holds it open).
+- Branch `feat/RF-03-unknown-length`: a FLAC with `total_samples = 0` (symphonia gives `num_frames = None`) is decoded once to count frames, then analysed; test for the silent-track `cutoff: null`. Review: no blocking findings; the second pass now checks the counted length.
+
+**Pending**
+- G2: PR #24 and the RF-03 undeclared-length PR.
+- Review improvements not done: count frames from packet durations instead of a full decode (RNF-01, only for undeclared-length files); a truncated undeclared-length FLAC is analysed as a shorter track (spec could say so, G1); no tests for corrupt/short undeclared-length files.
+
+**Blockers / questions for the human**
+- None.
+
+**Next step:** the human's next task: `C:\Workspaces\FakeFlac-calibration\issue.md`; then the main-screen UI `/feature`.
 
 ## 2026-10-18 - Detection v2 implemented (RF-03, RF-04)
 

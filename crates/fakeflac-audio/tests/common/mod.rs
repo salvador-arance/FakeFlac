@@ -122,6 +122,14 @@ fn build(name: &str, container: Container, path: &Path) {
         std::fs::write(path, &bytes[..16 * 1024]).unwrap();
         return;
     }
+    if name == "lp16k_unknown_length" {
+        // lp16k as FLAC with total_samples = 0 in STREAMINFO; audio frames unchanged.
+        let full = fixture("lp16k", Container::Flac);
+        let mut bytes = std::fs::read(full).unwrap();
+        set_total_samples(&mut bytes, 0);
+        std::fs::write(path, &bytes).unwrap();
+        return;
+    }
     let spec = signal(name);
     let ints = quantize(&spec.samples, spec.bits, spec.dither_seed);
     match container {
@@ -360,6 +368,33 @@ fn write_wav(path: &Path, samples: &[i32], sr: u32, bits: u16) {
         w.write_sample(*s).unwrap();
     }
     w.finalize().unwrap();
+}
+
+/// Byte offset of STREAMINFO data: `fLaC` (4) + metadata block header (4).
+const STREAMINFO_DATA: usize = 8;
+
+/// Overwrites the 36-bit total-samples field of the STREAMINFO block of a FLAC file.
+/// Layout (bits): 16+16 block sizes, 24+24 frame sizes, 20 rate, 3 channels, 5 depth, 36 total.
+/// The total starts at bit 108 = byte 13, low nibble of that byte, through byte 17.
+fn set_total_samples(bytes: &mut [u8], total: u64) {
+    assert_eq!(&bytes[..4], b"fLaC");
+    let at = STREAMINFO_DATA + 13;
+    bytes[at] = (bytes[at] & 0xF0) | ((total >> 32) & 0x0F) as u8;
+    for i in 0..4 {
+        bytes[at + 1 + i] = (total >> (24 - 8 * i)) as u8;
+    }
+}
+
+/// Total samples declared by the STREAMINFO block of a FLAC file.
+pub fn declared_total_samples(path: &Path) -> u64 {
+    let bytes = std::fs::read(path).unwrap();
+    assert_eq!(&bytes[..4], b"fLaC");
+    let at = STREAMINFO_DATA + 13;
+    let mut total = u64::from(bytes[at] & 0x0F);
+    for i in 0..4 {
+        total = (total << 8) | u64::from(bytes[at + 1 + i]);
+    }
+    total
 }
 
 fn write_flac(path: &Path, samples: &[i32], sr: u32, bits: u16) {
