@@ -2,6 +2,22 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-18 - Undeclared stream length (RF-03) and branch clean-up
+
+**Done**
+- #22 (detection v2) and #23 (spec follow-ups) merged.
+- PR #24 `chore/prune-branches`: `just prune-branches` deletes merged local/remote branches and clean agent worktrees (squash-merge aware, keeps and reports commits pushed after a merge). Already run: 11 stale local branches and the old worktree removed (its empty folder stays: another process holds it open).
+- Branch `feat/RF-03-unknown-length`: a FLAC with `total_samples = 0` (symphonia gives `num_frames = None`) is decoded once to count frames, then analysed; test for the silent-track `cutoff: null`. Review: no blocking findings; the second pass now checks the counted length.
+
+**Pending**
+- G2: PR #24 and the RF-03 undeclared-length PR.
+- Review improvements not done: count frames from packet durations instead of a full decode (RNF-01, only for undeclared-length files); a truncated undeclared-length FLAC is analysed as a shorter track (spec could say so, G1); no tests for corrupt/short undeclared-length files.
+
+**Blockers / questions for the human**
+- None.
+
+**Next step:** the human's next task: `C:\Workspaces\FakeFlac-calibration\issue.md`; then the main-screen UI `/feature`.
+
 ## 2026-10-18 - Detection v2 implemented (RF-03, RF-04)
 
 **Done**
