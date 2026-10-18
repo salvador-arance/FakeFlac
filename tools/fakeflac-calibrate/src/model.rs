@@ -91,3 +91,15 @@ impl LabelRow {
 
 /// Order of the classes in every table.
 pub const CLASSES: [&str; 5] = ["primary", "reviewed", "clean", "reference", "positive"];
+
+/// Precedence of the classes for an album that holds tracks of several (the stronger class decides).
+const ALBUM_CLASS_ORDER: [&str; 4] = ["primary", "reviewed", "clean", "reference"];
+
+/// The class of an album for the stratified split, from the classes of its tracks: the strongest
+/// of primary, reviewed, clean, reference; `positive` when it holds only confirmed fakes.
+pub fn album_class_of<'a>(classes: impl Iterator<Item = &'a str>) -> &'static str {
+    let best = classes
+        .filter_map(|c| ALBUM_CLASS_ORDER.iter().position(|x| *x == c))
+        .min();
+    best.map_or("positive", |i| ALBUM_CLASS_ORDER[i])
+}

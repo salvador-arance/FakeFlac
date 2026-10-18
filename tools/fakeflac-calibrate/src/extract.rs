@@ -16,6 +16,7 @@ use fakeflac_audio::SymphoniaAnalyzer;
 use fakeflac_core::ports::SpectrumAnalyzer;
 use fakeflac_core::{DetectionParams, TrackError};
 use serde_json::{json, Value};
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc;
@@ -42,6 +43,8 @@ pub struct Context<'a> {
     pub transcoder: &'a dyn Transcoder,
     pub no_generate: bool,
     pub threads: usize,
+    /// Keep every generated file until the whole run is done (several fingerprints share them).
+    pub defer_cleanup: bool,
 }
 
 /// A generation that failed (generation.md section 2): no row, not cached, retried next run.
@@ -112,8 +115,33 @@ where
     });
 }
 
+/// A panic inside the decoder is a per-track error, not the end of the run (ADR-0013, RNF-04).
 fn analyze(path: &std::path::Path, params: &DetectionParams) -> Extracted {
-    Extracted::from_analysis(SymphoniaAnalyzer.analyze(path, params))
+    let result = catch_unwind(AssertUnwindSafe(|| SymphoniaAnalyzer.analyze(path, params)))
+        .unwrap_or_else(|_| {
+            Err(TrackError::CorruptStream(
+                "the decoder failed unexpectedly".into(),
+            ))
+        });
+    Extracted::from_analysis(result)
+}
+
+/// Sidecar of a kept `<id>.flac`: the versions it was made with (so reuse keeps labels.csv exact).
+fn sidecar_path(dir: &std::path::Path, id: &str) -> PathBuf {
+    dir.join(format!("{id}.json"))
+}
+
+/// The (ffmpeg_version, encoder_version) of a reusable kept file: the audio exists, its sidecar
+/// is readable and, when ffmpeg is known, was made by the same ffmpeg (generation.md section 4.2).
+fn reusable(dir: &std::path::Path, id: &str, current: Option<&str>) -> Option<(String, String)> {
+    if !dir.join(format!("{id}.flac")).is_file() {
+        return None;
+    }
+    let text = std::fs::read_to_string(sidecar_path(dir, id)).ok()?;
+    let v: Value = serde_json::from_str(&text).ok()?;
+    let ffmpeg = v.get("ffmpeg_version")?.as_str()?.to_string();
+    let encoder = v.get("encoder_version")?.as_str()?.to_string();
+    (current.is_none() || current == Some(ffmpeg.as_str())).then_some((ffmpeg, encoder))
 }
 
 /// One (source, setting) pair to generate.
@@ -179,6 +207,12 @@ pub fn extract_group(
             None => misses.push(i),
         }
     }
+    // --no-generate evaluates only what is already cached: uncached tracks are not decoded.
+    let mut not_generated = 0;
+    if ctx.no_generate {
+        not_generated += misses.len() as u32;
+        misses.clear();
+    }
     let mut io_error: Option<std::io::Error> = None;
     parallel(
         &misses,
@@ -198,7 +232,7 @@ pub fn extract_group(
     if let Some(e) = io_error {
         return Err(to_io(e));
     }
-    let corpus_results: Vec<Arc<Extracted>> = results.into_iter().flatten().collect();
+    let corpus_results: Vec<Option<Arc<Extracted>>> = results;
 
     // 2. Sources and recipes.
     let min_ms = params.input.min_duration_s * 1000.0;
@@ -208,7 +242,10 @@ pub fn extract_group(
         if item.truth != Truth::Real {
             continue;
         }
-        let duration_ms = match corpus_results[i].as_ref() {
+        let Some(extracted) = corpus_results[i].as_ref() else {
+            continue;
+        };
+        let duration_ms = match extracted.as_ref() {
             Extracted::Error(e) => {
                 skipped_sources.push((item.track.rel.clone(), error_code(e).to_string()));
                 continue;
@@ -274,7 +311,6 @@ pub fn extract_group(
     let generated_dir = ctx.roots.calibration.join("generated");
     let mut gen_results: Vec<Option<(Arc<Extracted>, String, String)>> = vec![None; gens.len()];
     let mut tasks: Vec<usize> = Vec::new();
-    let mut not_generated = 0;
     for (g, gen) in gens.iter().enumerate() {
         let hit = cache.get(&gen.key_string).filter(|e| {
             current_version.is_none() || e.ffmpeg_version.as_deref() == current_version.as_deref()
@@ -292,11 +328,9 @@ pub fn extract_group(
             None => tasks.push(g),
         }
     }
-    let needs_transcode = tasks.iter().any(|g| {
-        !generated_dir
-            .join(format!("{}.flac", gens[*g].id))
-            .is_file()
-    });
+    let needs_transcode = tasks
+        .iter()
+        .any(|g| reusable(&generated_dir, &gens[*g].id, current_version.as_deref()).is_none());
     if needs_transcode {
         if let Some(e) = version_error {
             return Err(e);
@@ -314,34 +348,41 @@ pub fn extract_group(
         if abort.load(Ordering::SeqCst) {
             return GenResult::Skipped;
         }
-        let existing = generated_dir.join(format!("{}.flac", gen.id));
-        let (flac, encoder_version, transcoded) = if existing.is_file() {
-            (
-                existing,
-                "unknown (audio kept by an earlier run)".to_string(),
-                false,
-            )
-        } else {
-            let request = TranscodeRequest {
-                source: &items[gen.source].track.abs,
-                setting: gen.setting,
-                fragment: gen.fragment,
-                decode_args: &config.generate.decode_args,
-                generated_dir: &generated_dir,
-                id: &gen.id,
-            };
-            match ctx.transcoder.transcode(&request) {
-                Ok(out) => (out.flac, out.encoder_version, true),
-                Err(TranscodeError::NotFound) => {
-                    abort.store(true, Ordering::SeqCst);
-                    return GenResult::NotFound;
+        let (flac, ffmpeg_version, encoder_version, transcoded) =
+            if let Some((f, e)) = reusable(&generated_dir, &gen.id, current_version.as_deref()) {
+                (generated_dir.join(format!("{}.flac", gen.id)), f, e, false)
+            } else {
+                let request = TranscodeRequest {
+                    source: &items[gen.source].track.abs,
+                    setting: gen.setting,
+                    fragment: gen.fragment,
+                    decode_args: &config.generate.decode_args,
+                    generated_dir: &generated_dir,
+                    id: &gen.id,
+                };
+                match ctx.transcoder.transcode(&request) {
+                    Ok(out) => (
+                        out.flac,
+                        ffmpeg_for_entries.clone(),
+                        out.encoder_version,
+                        true,
+                    ),
+                    Err(TranscodeError::NotFound) => {
+                        abort.store(true, Ordering::SeqCst);
+                        return GenResult::NotFound;
+                    }
+                    Err(TranscodeError::Failed(message)) => return GenResult::Failed(message),
                 }
-                Err(TranscodeError::Failed(message)) => return GenResult::Failed(message),
-            }
-        };
+            };
         let extracted = analyze(&flac, params);
-        let keep = keep_audio || keep_misclassified;
-        if !keep {
+        let keep = keep_audio || keep_misclassified || ctx.defer_cleanup;
+        if keep {
+            if transcoded {
+                let side =
+                    json!({"ffmpeg_version": ffmpeg_version, "encoder_version": encoder_version});
+                let _ = std::fs::write(sidecar_path(&generated_dir, &gen.id), side.to_string());
+            }
+        } else {
             let _ = std::fs::remove_file(&flac);
         }
         if let Extracted::Error(TrackError::Unreadable(m)) = &extracted {
@@ -349,7 +390,7 @@ pub fn extract_group(
         }
         GenResult::Done {
             extracted,
-            ffmpeg_version: ffmpeg_for_entries.clone(),
+            ffmpeg_version,
             encoder_version,
             transcoded,
             flac: keep.then_some(flac),
@@ -414,6 +455,9 @@ pub fn extract_group(
     // 5. The rows.
     let mut rows: Vec<LabelRow> = Vec::new();
     for (item, extracted) in items.iter().zip(corpus_results.iter()) {
+        let Some(extracted) = extracted else {
+            continue;
+        };
         rows.push(LabelRow {
             root: RowRoot::Corpus,
             path: item.track.rel.clone(),

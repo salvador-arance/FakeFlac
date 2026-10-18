@@ -14,7 +14,7 @@ use crate::evaluate::{
 use crate::extract::GroupResult;
 use crate::fmt;
 use crate::grid::{GridFile, Proposal, SearchResult};
-use crate::model::{LabelRow, Truth, CLASSES};
+use crate::model::{album_class_of, LabelRow, Truth, CLASSES};
 use crate::report::{ConfusionMatrix, Counts, Evaluation, SettingRow, SplitSel};
 use fakeflac_core::Verdict;
 use std::collections::{BTreeMap, BTreeSet};
@@ -479,10 +479,27 @@ fn side_by_side(md: &mut Md, data: &ReportData<'_>) {
     md.table(&header, &rows);
 }
 
-fn albums_by_class(rows: &[LabelRow]) -> BTreeMap<&str, (u32, BTreeSet<&str>, BTreeSet<&str>)> {
-    let mut map: BTreeMap<&str, (u32, BTreeSet<&str>, BTreeSet<&str>)> = BTreeMap::new();
+/// Per album class (the class used for the split): tracks, albums in tune, albums in holdout.
+fn albums_by_class(
+    rows: &[LabelRow],
+) -> BTreeMap<&'static str, (u32, BTreeSet<&str>, BTreeSet<&str>)> {
+    let mut album_classes: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
     for r in rows.iter().filter(|r| r.origin != "generated") {
-        let entry = map.entry(r.class.as_str()).or_default();
+        album_classes
+            .entry(r.album_id.as_str())
+            .or_default()
+            .push(r.class.as_str());
+    }
+    let class_of: BTreeMap<&str, &'static str> = album_classes
+        .into_iter()
+        .map(|(album, classes)| (album, album_class_of(classes.into_iter())))
+        .collect();
+    let mut map: BTreeMap<&'static str, (u32, BTreeSet<&str>, BTreeSet<&str>)> = BTreeMap::new();
+    for r in rows.iter().filter(|r| r.origin != "generated") {
+        let Some(class) = class_of.get(r.album_id.as_str()) else {
+            continue;
+        };
+        let entry = map.entry(class).or_default();
         entry.0 += 1;
         match r.split {
             crate::split::Split::Tune => entry.1.insert(r.album_id.as_str()),
@@ -558,6 +575,18 @@ fn header(md: &mut Md, data: &ReportData<'_>, full: bool) {
         "# Calibration summary"
     });
     md.blank();
+    // The primary figure comes first (evaluation.md section 3).
+    for (run, eval) in data.runs.iter().zip(data.evaluations.iter()) {
+        let rows = &data.groups[run.group].rows;
+        let all = class_totals(rows, &run.evals, "primary", SplitSel::All);
+        md.line(format!(
+            "**Primary figure, {} (all): {}** · Suspicious: {}",
+            run.name,
+            eval.primary_figure,
+            fmt::rate(all.suspicious, all.tracks)
+        ));
+        md.blank();
+    }
     md.line(format!("- run id: {}", data.run_id.replace('T', "-")));
     md.line(format!("- date (UTC): {}", data.date));
     md.line(format!("- tool commit: {}", data.commit));
@@ -682,6 +711,7 @@ fn watch_section(md: &mut Md, eval: &Evaluation, full: bool) {
     }
     head.extend([
         "verdict",
+        "reasons",
         "G",
         "D",
         "fs",
@@ -699,6 +729,11 @@ fn watch_section(md: &mut Md, eval: &Evaluation, full: bool) {
             }
             cells.extend([
                 verdict_name(w.verdict).to_string(),
+                w.reasons
+                    .iter()
+                    .map(|x| reason_name(*x))
+                    .collect::<Vec<_>>()
+                    .join(";"),
                 fmt::opt_db(w.gap_db),
                 fmt::opt_db(w.step_db),
                 fmt::opt_hz(w.step_hz),
@@ -1089,7 +1124,7 @@ fn grid_section(md: &mut Md, data: &ReportData<'_>, grid: &GridReport<'_>) {
                 .collect::<Vec<_>>()
                 .join(", ")
         )),
-        (None, _) if !grid.result.points.iter().any(|p| p.feasible) => md.line(
+        (None, _) if !grid.result.baseline.feasible => md.line(
             "- result: no feasible point; nothing is proposed (the best infeasible points are listed below)",
         ),
         (None, _) => md.line("- result: no change proposed (the baseline is at least as good)"),

@@ -127,7 +127,7 @@ struct LineJson {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     probe: Option<ProbeJson>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    error: Option<TrackError>,
+    error: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     ffmpeg_version: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -150,16 +150,14 @@ pub struct FeatureCache {
     pub skipped_lines: u32,
     needs_newline: bool,
     file: Option<std::fs::File>,
+    meta: (PathBuf, String),
 }
 
 impl FeatureCache {
     /// Loads `dir/<id>.jsonl` if it exists and writes `dir/<id>.meta.json` if it does not.
     pub fn open(dir: &Path, fingerprint: &Fingerprint) -> std::io::Result<FeatureCache> {
-        std::fs::create_dir_all(dir)?;
+        // Nothing is created until the first line is appended (exit 3 must leave no trace).
         let meta = dir.join(format!("{}.meta.json", fingerprint.id));
-        if !meta.exists() {
-            crate::fsutil::write_atomic(&meta, fingerprint.json.as_bytes())?;
-        }
         let path = dir.join(format!("{}.jsonl", fingerprint.id));
         let mut cache = FeatureCache {
             path,
@@ -167,6 +165,7 @@ impl FeatureCache {
             skipped_lines: 0,
             needs_newline: false,
             file: None,
+            meta: (meta, fingerprint.json.clone()),
         };
         if let Ok(bytes) = std::fs::read(&cache.path) {
             cache.needs_newline = bytes.last().is_some_and(|b| *b != b'\n');
@@ -213,7 +212,7 @@ impl FeatureCache {
                 Extracted::Error(_) => None,
             },
             error: match extracted {
-                Extracted::Error(e) => Some(e.clone()),
+                Extracted::Error(e) => Some(error_code(e).to_string()),
                 Extracted::Probe(_) => None,
             },
             ffmpeg_version: ffmpeg_version.map(str::to_string),
@@ -222,6 +221,12 @@ impl FeatureCache {
         let mut text = serde_json::to_string(&line).map_err(std::io::Error::other)?;
         text.push('\n');
         if self.file.is_none() {
+            if let Some(dir) = self.path.parent() {
+                std::fs::create_dir_all(dir)?;
+            }
+            if !self.meta.0.exists() {
+                crate::fsutil::write_atomic(&self.meta.0, self.meta.1.as_bytes())?;
+            }
             self.file = Some(
                 std::fs::OpenOptions::new()
                     .create(true)
@@ -263,7 +268,12 @@ fn parse_line(line: &str) -> Option<(String, CachedEntry)> {
                 median_db: s.median_db,
             }),
         }),
-        (None, Some(e)) => Extracted::Error(e),
+        (None, Some(code)) => Extracted::Error(match code.as_str() {
+            "corruptStream" => TrackError::CorruptStream(String::new()),
+            "unsupportedFormat" => TrackError::UnsupportedFormat(String::new()),
+            "tooShort" => TrackError::TooShort,
+            _ => return None,
+        }),
         _ => return None,
     };
     Some((

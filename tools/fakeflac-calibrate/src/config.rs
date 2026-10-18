@@ -98,6 +98,9 @@ impl Config {
                 errors.push("generate.fragment_s must be greater than 0".to_string());
             }
         }
+        if self.report.z.partial_cmp(&0.0) != Some(std::cmp::Ordering::Greater) {
+            errors.push("report.z must be greater than 0".to_string());
+        }
         let mut ids = std::collections::BTreeSet::new();
         for s in &self.generate.settings {
             if s.id.is_empty() || s.id == "none" || s.id == "confirmed_fake" {
@@ -114,7 +117,10 @@ impl Config {
                     ENCODERS.join(", ")
                 ));
             }
-            if s.ext.is_empty() || s.ext.contains(['/', '\\', '.']) {
+            if s.ext.is_empty()
+                || s.ext.eq_ignore_ascii_case("flac")
+                || s.ext.contains(['/', '\\', '.'])
+            {
                 errors.push(format!(
                     "generate.settings '{}': invalid ext '{}'",
                     s.id, s.ext
@@ -130,6 +136,17 @@ impl Config {
             }
             if t.classes.is_none() && t.settings.is_none() {
                 errors.push(format!("targets '{}': needs classes or settings", t.id));
+            }
+            for s in t.settings.iter().flatten() {
+                if !ids.contains(s.as_str()) {
+                    errors.push(format!("targets '{}': unknown setting '{s}'", t.id));
+                }
+            }
+            for c in t.classes.iter().flatten() {
+                if !["primary", "reviewed", "clean", "reference", "positive"].contains(&c.as_str())
+                {
+                    errors.push(format!("targets '{}': unknown class '{c}'", t.id));
+                }
             }
         }
         if errors.is_empty() {

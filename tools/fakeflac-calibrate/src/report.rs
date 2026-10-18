@@ -65,6 +65,7 @@ pub struct WatchEntry {
     /// Relative to `FAKEFLAC_CORPUS`, `/` separators.
     pub path: String,
     pub verdict: Verdict,
+    pub reasons: Vec<fakeflac_core::SuspicionReason>,
     pub gap_db: Option<f64>,
     pub step_db: Option<f64>,
     pub step_hz: Option<f64>,

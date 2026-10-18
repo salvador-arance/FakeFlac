@@ -549,10 +549,16 @@ fn resolve_path(text: &str, corpus: &Path) -> Result<(PathBuf, bool), String> {
     };
     let exists = std::fs::metadata(&path).is_ok();
     if absolute && !exists {
-        let lower = |p: &Path| p.to_string_lossy().replace('\\', "/").to_lowercase();
-        let root = lower(corpus);
-        let root = root.strip_prefix("//?/").unwrap_or(&root).to_string();
-        if !lower(&path).starts_with(&root) {
+        // Compared per component, not by string prefix.
+        let parts = |p: &Path| -> Vec<String> {
+            let text = p.to_string_lossy().replace('\\', "/").to_lowercase();
+            let text = text.strip_prefix("//?/").unwrap_or(&text).to_string();
+            text.split('/')
+                .filter(|c| !c.is_empty())
+                .map(str::to_string)
+                .collect()
+        };
+        if !parts(&path).starts_with(&parts(corpus)) {
             return Err("path is outside library_root".to_string());
         }
     }

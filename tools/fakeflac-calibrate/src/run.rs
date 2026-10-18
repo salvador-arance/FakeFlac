@@ -3,13 +3,13 @@
 use crate::config::Config;
 use crate::env::{Env, Roots};
 use crate::error::ToolError;
-use crate::evaluate::{evaluate_row, evaluation, ParamsRun};
+use crate::evaluate::{class_totals, evaluate_row, evaluation, figure, ParamsRun, RowEval};
 use crate::extract::{extract_group, worker_threads, Context, CorpusItem, GroupResult};
 use crate::fsutil::write_atomic;
 use crate::grid::{self, GridFile, RowKind, SearchRow};
 use crate::hash::id16;
 use crate::lists::{self, Lists};
-use crate::model::Truth;
+use crate::model::{album_class_of, LabelRow, Truth};
 use crate::render::{self, GridReport, ReportData};
 use crate::report::{CacheStats, Evaluation, GridOutcome, PointScore};
 use crate::split::{album_id, assign_class, Split};
@@ -254,59 +254,39 @@ fn load_config(path: &Path) -> Result<Config, ToolError> {
 
 /// Loads one params file of the v2 rule family (evaluation.md section 9).
 fn load_params_text(name: &str, text: &str) -> Result<DetectionParams, ToolError> {
+    // Any file that declares an algorithm_version below 2 is another rule family.
+    if let Ok(table) = toml::from_str::<toml::Table>(text) {
+        if table
+            .get("algorithm_version")
+            .and_then(toml::Value::as_integer)
+            .is_some_and(|v| v < 2)
+        {
+            return Err(ToolError::input(format!(
+                "{name}: not a DetectionParams file of the v2 rule family (v1 is not supported, ADR-0036)"
+            )));
+        }
+    }
     match toml::from_str::<DetectionParams>(text) {
         Ok(p) => {
-            let mut problems: Vec<String> = grid::invariant_violations(&p)
-                .into_iter()
-                .map(str::to_string)
-                .collect();
-            if p.algorithm_version < 2 {
-                problems.push("algorithm_version must be 2 or more".to_string());
-            }
+            // Values that would make the extraction divide by zero or loop forever.
             if p.fft.band_hz <= 0.0 || p.fft.target_bin_hz <= 0.0 || p.gaps.band_hz <= 0.0 {
-                problems.push(
-                    "fft.band_hz, fft.target_bin_hz and gaps.band_hz must be positive".to_string(),
-                );
+                return Err(ToolError::input(format!(
+                    "{name}: fft.band_hz, fft.target_bin_hz and gaps.band_hz must be positive"
+                )));
             }
             if !(0.0..1.0).contains(&p.fft.overlap) {
-                problems.push("fft.overlap must be in [0, 1)".to_string());
+                return Err(ToolError::input(format!(
+                    "{name}: fft.overlap must be in [0, 1)"
+                )));
             }
-            if p.input.segments == 0 || p.input.frames_per_segment == 0 {
-                problems.push(
-                    "input.segments and input.frames_per_segment must be positive".to_string(),
-                );
-            }
-            if problems.is_empty() {
-                Ok(p)
-            } else {
-                Err(ToolError::input_lines(
-                    problems
-                        .into_iter()
-                        .map(|m| format!("{name}: {m}"))
-                        .collect(),
-                ))
-            }
+            Ok(p)
         }
-        Err(e) => {
-            let family = toml::from_str::<toml::Table>(text).ok().is_some_and(|t| {
-                t.get("algorithm_version")
-                    .and_then(toml::Value::as_integer)
-                    .is_some_and(|v| v < 2)
-                    || t.contains_key("cutoff")
-            });
-            if family {
-                Err(ToolError::input(format!(
-                    "{name}: not a DetectionParams file of the v2 rule family (v1 is not supported, ADR-0036)"
-                )))
-            } else {
-                Err(ToolError::input_lines(
-                    e.to_string()
-                        .lines()
-                        .map(|l| format!("{name}: {l}"))
-                        .collect(),
-                ))
-            }
-        }
+        Err(e) => Err(ToolError::input_lines(
+            e.to_string()
+                .lines()
+                .map(|l| format!("{name}: {l}"))
+                .collect(),
+        )),
     }
 }
 
@@ -346,27 +326,26 @@ fn load_params(paths: &[PathBuf]) -> Result<Vec<Loaded>, ToolError> {
     }
 }
 
-/// Precedence of the classes for an album that holds tracks of several (the stronger class decides).
-const ALBUM_CLASS_ORDER: [&str; 4] = ["primary", "reviewed", "clean", "reference"];
-
 /// The labelled corpus tracks with album and split (inputs.md section 4).
 fn build_items(lists: &Lists, config: &Config) -> Vec<CorpusItem> {
     let prefixes = &config.split.disc_folder_prefixes;
-    let mut album_class: BTreeMap<String, &'static str> = BTreeMap::new();
+    let mut classes: BTreeMap<String, Vec<&str>> = BTreeMap::new();
     for t in &lists.trusted {
-        let album = album_id(&t.track.rel, prefixes);
-        let rank = |c: &str| ALBUM_CLASS_ORDER.iter().position(|x| *x == c).unwrap_or(0);
-        let class = ALBUM_CLASS_ORDER[rank(&t.class)];
-        let entry = album_class.entry(album).or_insert(class);
-        if rank(class) < rank(entry) {
-            *entry = class;
-        }
+        classes
+            .entry(album_id(&t.track.rel, prefixes))
+            .or_default()
+            .push(t.class.as_str());
     }
     for f in &lists.fakes {
-        album_class
+        classes
             .entry(album_id(&f.track.rel, prefixes))
-            .or_insert("positive");
+            .or_default()
+            .push("positive");
     }
+    let album_class: BTreeMap<String, &'static str> = classes
+        .into_iter()
+        .map(|(album, c)| (album, album_class_of(c.into_iter())))
+        .collect();
     let mut by_class: BTreeMap<&str, Vec<String>> = BTreeMap::new();
     for (album, class) in &album_class {
         by_class.entry(class).or_default().push(album.clone());
@@ -450,10 +429,9 @@ fn run_stamp(secs: i64) -> (String, String) {
     )
 }
 
-/// Creates `reports/<run>` (with `-2`, `-3`… appended if it exists).
-fn create_report_dir(calibration: &Path, run_id: &str) -> std::io::Result<(String, PathBuf)> {
+/// The run id: the UTC start time, with `-2`, `-3`... appended if that folder already exists.
+fn next_run_id(calibration: &Path, run_id: &str) -> String {
     let reports = calibration.join("reports");
-    std::fs::create_dir_all(&reports)?;
     let mut n = 1;
     loop {
         let id = if n == 1 {
@@ -461,13 +439,19 @@ fn create_report_dir(calibration: &Path, run_id: &str) -> std::io::Result<(Strin
         } else {
             format!("{run_id}-{n}")
         };
-        let dir = reports.join(&id);
-        match std::fs::create_dir(&dir) {
-            Ok(()) => return Ok((id, dir)),
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => n += 1,
-            Err(e) => return Err(e),
+        if !reports.join(&id).exists() {
+            return id;
         }
+        n += 1;
     }
+}
+
+fn create_report_dir(calibration: &Path, run_id: &str) -> std::io::Result<PathBuf> {
+    let reports = calibration.join("reports");
+    std::fs::create_dir_all(&reports)?;
+    let dir = reports.join(run_id);
+    std::fs::create_dir(&dir)?;
+    Ok(dir)
 }
 
 fn tool_commit(env: &Env) -> String {
@@ -551,6 +535,7 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
         transcoder,
         no_generate: job.no_generate,
         threads: worker_threads(),
+        defer_cleanup: fingerprints.len() > 1,
     };
     let mut groups: Vec<GroupResult> = Vec::new();
     for (fp, first) in &fingerprints {
@@ -566,15 +551,7 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
         groups.push(group);
     }
 
-    // 3. labels.csv (rewritten by every run) and the report folder.
-    write_atomic(
-        &roots.calibration.join("labels.csv"),
-        render::labels_csv(&groups[group_of[0]].rows).as_bytes(),
-    )?;
-    let (run_stamp_id, date) = run_stamp(now_secs());
-    let (run_id, report_dir) = create_report_dir(&roots.calibration, &run_stamp_id)?;
-
-    // 4. Verdicts of every params file.
+    // 3. Verdicts of every params file.
     let make_run = |l: &Loaded, group: usize, groups: &[GroupResult]| ParamsRun {
         name: l.name.clone(),
         params: l.params.clone(),
@@ -593,45 +570,17 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
         .map(|(l, g)| make_run(l, *g, &groups))
         .collect();
 
-    // 5. Grid search (calibrate).
+    // 4. Grid search (calibrate). The proposal is built and checked before anything is written
+    // (exit 1 leaves nothing new but cache lines).
+    let (run_stamp_id, date) = run_stamp(now_secs());
+    let run_id = next_run_id(&roots.calibration, &run_stamp_id);
     let mut stdout = String::new();
     let mut grid_outcome: Option<GridOutcome> = None;
     let mut search_result: Option<grid::SearchResult> = None;
     let mut proposal: Option<grid::Proposal> = None;
     if let Some(file) = &grid_file {
         let base = &runs[0];
-        let rows = &groups[base.group].rows;
-        let mut search_rows: Vec<SearchRow<'_>> = Vec::new();
-        for (row, eval) in rows.iter().zip(base.evals.iter()) {
-            if row.split != Split::Tune || eval.verdict == Verdict::Error {
-                continue;
-            }
-            let kind = if row.origin == "confirmed_fake" {
-                RowKind::ConfirmedFake
-            } else if row.origin == "generated" {
-                RowKind::GeneratedPositive
-            } else if row.truth == Truth::Real
-                && matches!(row.class.as_str(), "primary" | "reviewed" | "clean")
-            {
-                RowKind::Negative
-            } else {
-                continue;
-            };
-            let spectra = match row.extracted.as_ref() {
-                crate::cache::Extracted::Probe(p) => p.spectrum.as_ref(),
-                crate::cache::Extracted::Error(_) => None,
-            };
-            search_rows.push(SearchRow {
-                kind,
-                setting: if kind == RowKind::GeneratedPositive {
-                    row.setting.as_str()
-                } else {
-                    ""
-                },
-                spectra,
-                silent_verdict: eval.verdict,
-            });
-        }
+        let search_rows = tune_search_rows(&groups[base.group].rows, &base.evals);
         let result = grid::search(&base.params, &search_rows, file);
         if let Some(i) = result.proposal {
             let values = &result.points[i].values;
@@ -658,38 +607,21 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
         runs.push(run);
     }
 
-    // 6. Tables.
+    // 5. Tables.
     let mut evaluations: Vec<Evaluation> = Vec::new();
     for (i, run) in runs.iter().enumerate() {
         let baseline = (i > 0).then(|| (&runs[0], groups[runs[0].group].rows.as_slice()));
         evaluations.push(evaluation(run, &groups[run.group].rows, &config, baseline));
     }
 
-    // 7. Generated audio kept only for misclassified tracks (OQ-9).
-    if !config.generate.keep_audio {
-        for (g, group) in groups.iter().enumerate() {
-            for (identity, path) in &group.kept {
-                let misclassified = group
-                    .rows
-                    .iter()
-                    .position(|r| &r.identity() == identity)
-                    .is_some_and(|ri| {
-                        runs.iter().filter(|r| r.group == g).any(|r| {
-                            let row = &group.rows[ri];
-                            matches!(
-                                (row.truth, r.evals[ri].verdict),
-                                (Truth::Fake, Verdict::Real) | (Truth::Real, Verdict::Fake)
-                            )
-                        })
-                    });
-                if !misclassified {
-                    let _ = std::fs::remove_file(path);
-                }
-            }
-        }
-    }
+    // 6. Files: labels.csv (rewritten by every run) and the report folder.
+    write_atomic(
+        &roots.calibration.join("labels.csv"),
+        render::labels_csv(&groups[group_of[0]].rows).as_bytes(),
+    )?;
+    let report_dir = create_report_dir(&roots.calibration, &run_id)?;
+    cleanup_generated(&config, &groups, &runs);
 
-    // 8. Files.
     let proposal_path = proposal.as_ref().map(|p| report_dir.join(&p.file_name));
     if let (Some(p), Some(path)) = (&proposal, &proposal_path) {
         write_atomic(path, p.text.as_bytes())?;
@@ -752,9 +684,11 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
         match &proposal {
             Some(p) => stdout.push_str(&format!(
                 "proposal written: {}\n",
-                proposal_path.as_ref().map_or(p.file_name.clone(), |x| x.display().to_string())
+                proposal_path.as_ref().map_or(p.file_name.clone(), |x| {
+                    crate::fsutil::plain_path(x).display().to_string()
+                })
             )),
-            None if result.points.iter().any(|p| p.feasible) || result.baseline.feasible => {
+            None if result.baseline.feasible => {
                 stdout.push_str("no change proposed (the baseline is at least as good)\n");
             }
             None => stdout.push_str(
@@ -762,11 +696,23 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
             ),
         }
     }
-    for e in &evaluations {
+    for (e, run) in evaluations.iter().zip(runs.iter()) {
         stdout.push_str(&format!(
             "{}: primary figure {}\n",
             e.params_name, e.primary_figure
         ));
+        if mode == "calibrate" {
+            let hold = class_totals(
+                &groups[run.group].rows,
+                &run.evals,
+                "primary",
+                crate::report::SplitSel::Holdout,
+            );
+            stdout.push_str(&format!(
+                "  holdout primary figure (headline): {}\n",
+                figure(&hold, config.report.z)
+            ));
+        }
         for t in e
             .targets
             .iter()
@@ -794,6 +740,79 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
         evaluations,
         grid: grid_outcome,
     })
+}
+
+/// The tune rows the grid search reads: negatives of the classes primary, reviewed and clean,
+/// generated positives and confirmed fakes, without `Error` rows (evaluation.md section 7).
+fn tune_search_rows<'a>(rows: &'a [LabelRow], evals: &[RowEval]) -> Vec<SearchRow<'a>> {
+    let mut out = Vec::new();
+    for (row, eval) in rows.iter().zip(evals.iter()) {
+        if row.split != Split::Tune || eval.verdict == Verdict::Error {
+            continue;
+        }
+        let kind = if row.origin == "confirmed_fake" {
+            RowKind::ConfirmedFake
+        } else if row.origin == "generated" {
+            RowKind::GeneratedPositive
+        } else if row.truth == Truth::Real
+            && matches!(row.class.as_str(), "primary" | "reviewed" | "clean")
+        {
+            RowKind::Negative
+        } else {
+            continue;
+        };
+        let spectra = match row.extracted.as_ref() {
+            crate::cache::Extracted::Probe(p) => p.spectrum.as_ref(),
+            crate::cache::Extracted::Error(_) => None,
+        };
+        out.push(SearchRow {
+            kind,
+            setting: if kind == RowKind::GeneratedPositive {
+                row.setting.as_str()
+            } else {
+                ""
+            },
+            spectra,
+            silent_verdict: eval.verdict,
+        });
+    }
+    out
+}
+
+/// Generated audio is kept with `keep_audio`, or only for misclassified tracks with
+/// `keep_misclassified` (OQ-9); everything else the run left on disk is deleted.
+fn cleanup_generated(config: &Config, groups: &[GroupResult], runs: &[ParamsRun]) {
+    if config.generate.keep_audio {
+        return;
+    }
+    let mut retained: std::collections::BTreeSet<&Path> = std::collections::BTreeSet::new();
+    if config.generate.keep_misclassified {
+        for (g, group) in groups.iter().enumerate() {
+            for (identity, path) in &group.kept {
+                let Some(ri) = group.rows.iter().position(|r| &r.identity() == identity) else {
+                    continue;
+                };
+                let truth = group.rows[ri].truth;
+                let bad = runs.iter().filter(|r| r.group == g).any(|r| {
+                    matches!(
+                        (truth, r.evals[ri].verdict),
+                        (Truth::Fake, Verdict::Real) | (Truth::Real, Verdict::Fake)
+                    )
+                });
+                if bad {
+                    retained.insert(path.as_path());
+                }
+            }
+        }
+    }
+    for group in groups {
+        for (_, path) in &group.kept {
+            if !retained.contains(path.as_path()) {
+                let _ = std::fs::remove_file(path);
+                let _ = std::fs::remove_file(path.with_extension("json"));
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -828,5 +847,83 @@ mod tests {
             panic!("privacy");
         };
         assert_eq!(p.base, "main");
+    }
+
+    #[test]
+    fn confirmed_fakes_reach_the_grid_search() {
+        use crate::cache::Extracted;
+        use crate::model::{RowRoot, Truth};
+        use fakeflac_core::TrackError;
+        use std::sync::Arc;
+
+        let row = |origin: &'static str, truth: Truth, class: &str, split: Split| LabelRow {
+            root: RowRoot::Corpus,
+            path: format!("{origin}-{class}.flac"),
+            truth,
+            origin,
+            trust_origin: String::new(),
+            class: class.to_string(),
+            encoder: "none".to_string(),
+            setting: if origin == "generated" {
+                "fx128"
+            } else {
+                "none"
+            }
+            .to_string(),
+            bitrate_kbps: None,
+            encoder_version: String::new(),
+            fragment: None,
+            source_path: String::new(),
+            album_id: "a".to_string(),
+            split,
+            watch_id: String::new(),
+            extracted: Arc::new(Extracted::Error(TrackError::TooShort)),
+        };
+        let eval = |verdict: Verdict| RowEval {
+            verdict,
+            reasons: Vec::new(),
+            error: None,
+            m: None,
+            margins: None,
+        };
+        let rows = vec![
+            row("confirmed_fake", Truth::Fake, "positive", Split::Tune),
+            row("trusted", Truth::Real, "primary", Split::Tune),
+            row("generated", Truth::Fake, "positive", Split::Tune),
+            row("trusted", Truth::Real, "reference", Split::Tune),
+            row("confirmed_fake", Truth::Fake, "positive", Split::Holdout),
+            row("trusted", Truth::Real, "clean", Split::Tune),
+        ];
+        let mut evals: Vec<RowEval> = vec![
+            eval(Verdict::Real),
+            eval(Verdict::Real),
+            eval(Verdict::Fake),
+            eval(Verdict::Real),
+            eval(Verdict::Real),
+            eval(Verdict::Error),
+        ];
+        let search = tune_search_rows(&rows, &evals);
+        let kinds: Vec<RowKind> = search.iter().map(|r| r.kind).collect();
+        assert_eq!(
+            kinds,
+            vec![
+                RowKind::ConfirmedFake,
+                RowKind::Negative,
+                RowKind::GeneratedPositive
+            ]
+        );
+        assert_eq!(search[2].setting, "fx128");
+        // A confirmed fake classified Real makes the point infeasible.
+        let t = grid::tally(
+            search.iter().map(|r| (r.kind, r.setting, evals[0].verdict)),
+            &[],
+        );
+        assert!(!t.feasible());
+        evals[0] = eval(Verdict::Fake);
+        let t = grid::tally(
+            search.iter().map(|r| (r.kind, r.setting, evals[0].verdict)),
+            &[],
+        );
+        assert!(t.feasible());
     }
 }

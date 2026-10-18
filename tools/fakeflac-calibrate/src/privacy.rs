@@ -81,6 +81,11 @@ pub fn check(args: &PrivacyArgs, env: &Env) -> Result<Outcome, ToolError> {
             "error: privacy-check needs a git checkout (git rev-parse --show-toplevel failed)",
         ));
     };
+    if args.base.is_empty() || args.base.starts_with('-') {
+        return Err(ToolError::input(
+            "error: --base must be a git revision, not an option",
+        ));
+    }
     let range = format!("{}...HEAD", args.base);
     let output = std::process::Command::new("git")
         .args([
@@ -127,17 +132,25 @@ pub fn check(args: &PrivacyArgs, env: &Env) -> Result<Outcome, ToolError> {
     let roots_found = root_patterns(env);
 
     let mut matches: Vec<String> = Vec::new();
+    let mut unchecked: Vec<String> = Vec::new();
     for file in &changed {
-        let path = repo.join(file);
-        let Ok(meta) = std::fs::metadata(&path) else {
-            continue;
+        // The committed content of HEAD, not the working tree (what a PR would publish).
+        let shown = std::process::Command::new("git")
+            .args(["show", &format!("HEAD:{file}")])
+            .current_dir(repo)
+            .stdin(std::process::Stdio::null())
+            .output();
+        let bytes = match shown {
+            Ok(o) if o.status.success() => o.stdout,
+            _ => {
+                unchecked.push(format!("{file}: not readable from HEAD"));
+                continue;
+            }
         };
-        if !meta.is_file() || meta.len() > MAX_FILE_BYTES {
+        if bytes.len() as u64 > MAX_FILE_BYTES {
+            unchecked.push(format!("{file}: larger than 20 MiB, not checked"));
             continue;
         }
-        let Ok(bytes) = std::fs::read(&path) else {
-            continue;
-        };
         let text = String::from_utf8_lossy(&bytes);
         for (i, line) in text.lines().enumerate() {
             let lower = line.to_lowercase();
@@ -158,6 +171,9 @@ pub fn check(args: &PrivacyArgs, env: &Env) -> Result<Outcome, ToolError> {
     for m in &matches {
         stdout.push_str(m);
         stdout.push('\n');
+    }
+    for u in &unchecked {
+        stdout.push_str(&format!("unchecked: {u}\n"));
     }
     let exit_code = i32::from(!matches.is_empty());
     stdout.push_str(&format!(

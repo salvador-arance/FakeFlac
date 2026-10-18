@@ -80,13 +80,15 @@ impl FfmpegTranscoder {
             Some(p) => Command::new(p),
             None => Command::new("ffmpeg"),
         };
-        cmd.stdin(Stdio::null());
+        // ffmpeg must never write a report file (FFREPORT) outside the generated folder.
+        cmd.stdin(Stdio::null()).env_remove("FFREPORT");
         cmd
     }
 
-    fn run(&self, args: &[String]) -> Result<(), TranscodeError> {
+    fn run(&self, args: &[String], dir: &Path) -> Result<(), TranscodeError> {
         let output = self
             .command()
+            .current_dir(dir)
             .args(args)
             .output()
             .map_err(|_| TranscodeError::NotFound)?;
@@ -145,10 +147,10 @@ impl Transcoder for FfmpegTranscoder {
         let flac = request.generated_dir.join(format!("{}.flac", request.id));
 
         let encode = encode_args(request.source, request.fragment, request.setting, &lossy);
-        let result = self.run(&encode).and_then(|()| {
+        let result = self.run(&encode, request.generated_dir).and_then(|()| {
             let encoder = encoder_version(&ffmpeg_version, &request.setting.encoder, &lossy);
             let decode = decode_args(&lossy, request.decode_args, &flac);
-            self.run(&decode).map(|()| encoder)
+            self.run(&decode, request.generated_dir).map(|()| encoder)
         });
         // The lossy intermediate is always deleted.
         let _ = std::fs::remove_file(&lossy);

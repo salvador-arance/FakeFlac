@@ -350,6 +350,7 @@ pub fn evaluation(
             watch_id: r.watch_id.clone(),
             path: r.path.clone(),
             verdict: e.verdict,
+            reasons: e.reasons.clone(),
             gap_db: e.m.as_ref().map(|m| m.gap_db),
             step_db: e.m.as_ref().map(|m| m.step_db),
             step_hz: e.m.as_ref().and_then(|m| m.step_hz),

@@ -285,6 +285,22 @@ fn values_key_order(text: &str) -> Vec<String> {
     keys
 }
 
+fn flatten(prefix: &str, table: &toml::Table, out: &mut BTreeMap<String, toml::Value>) {
+    for (k, v) in table {
+        let key = if prefix.is_empty() {
+            k.clone()
+        } else {
+            format!("{prefix}.{k}")
+        };
+        match v {
+            toml::Value::Table(t) => flatten(&key, t, out),
+            other => {
+                out.insert(key, other.clone());
+            }
+        }
+    }
+}
+
 /// Parses and validates a grid file (exit 2 on any problem). `settings` are the setting ids of the config.
 pub fn parse_grid(text: &str, settings: &[String]) -> Result<GridFile, ToolError> {
     let raw: RawGrid = toml::from_str(text)
@@ -303,14 +319,17 @@ pub fn parse_grid(text: &str, settings: &[String]) -> Result<GridFile, ToolError
     }
     let order = values_key_order(text);
     let mut keys: Vec<GridKey> = Vec::new();
+    // `fft.window = [...]` (unquoted) parses as a nested table: flatten to dotted keys.
+    let mut flat: BTreeMap<String, toml::Value> = BTreeMap::new();
+    flatten("", &raw.values, &mut flat);
     let mut names: Vec<&String> = order.iter().collect();
-    for k in raw.values.keys() {
+    for k in flat.keys() {
         if !names.contains(&k) {
             names.push(k);
         }
     }
     for name in names {
-        let Some(value) = raw.values.get(name) else {
+        let Some(value) = flat.get(name) else {
             continue;
         };
         let extraction = name == "algorithm_version"
@@ -599,7 +618,7 @@ pub fn search(baseline: &DetectionParams, rows: &[SearchRow<'_>], grid: &GridFil
     let proposal = order
         .first()
         .copied()
-        .filter(|i| rank_cmp(&points[*i], &base) == Ordering::Less);
+        .filter(|i| points[*i].feasible && rank_cmp(&points[*i], &base) == Ordering::Less);
     order.truncate(10);
     SearchResult {
         baseline: base,
