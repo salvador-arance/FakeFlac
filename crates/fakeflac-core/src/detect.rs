@@ -107,6 +107,8 @@ pub fn measure(spectra: &BandSpectra, params: &DetectionParams) -> Measurements 
     let mut best: Option<(f64, usize)> = None;
     if let (Some(top), true) = (top, w > 0) {
         let search_top = nyquist - params.step.search_top_margin_hz;
+        // Bands whose windows would run off the spectrum are not candidates. With v2 parameters this
+        // never drops one: search_top_margin_hz >= window_bands * band_hz + nyquist_guard_hz.
         for i in 2 * w..count.saturating_sub(w) {
             let c = centre(i);
             if c < params.step.search_low_hz - EPS || c > search_top + EPS {
@@ -153,7 +155,8 @@ pub fn measure(spectra: &BandSpectra, params: &DetectionParams) -> Measurements 
 }
 
 /// Section 2, "Reported cutoff": `fs` and its steepness when `D >= step_suspicious_db`,
-/// otherwise `fe` and 0. `noise_floor_db` is `F`.
+/// otherwise `fe` and 0. `noise_floor_db` is `F`. `params.fft.band_hz` must equal the `band_hz` of the spectra
+/// that produced `m` (the audio adapter builds them from it).
 pub fn cutoff_estimate(m: &Measurements, params: &DetectionParams) -> CutoffEstimate {
     let (frequency_hz, steepness_db_per_khz) = match m.step_hz {
         Some(fs) if m.step_db >= params.verdict.step_suspicious_db => {
@@ -225,7 +228,8 @@ fn median(values: &[f64]) -> f64 {
     percentile(values, 50.0)
 }
 
-/// Nearest-rank percentile; 0 for an empty slice.
+/// Nearest-index percentile (`round(p · (n − 1))`; the upper middle value for an even-count
+/// median); 0 for an empty slice.
 fn percentile(values: &[f64], pct: f64) -> f64 {
     if values.is_empty() {
         return 0.0;

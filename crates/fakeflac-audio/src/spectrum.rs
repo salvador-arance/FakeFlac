@@ -150,7 +150,7 @@ fn to_db(power: f64) -> f64 {
     10.0 * power.max(1e-30).log10()
 }
 
-/// Nearest-rank median.
+/// Nearest-index median (the upper middle value for an even count), as in `fakeflac-core`.
 fn median(mut values: Vec<f64>) -> f64 {
     values.sort_by(f64::total_cmp);
     let rank = ((values.len() - 1) as f64 / 2.0).round() as usize;

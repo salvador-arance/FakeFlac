@@ -48,7 +48,7 @@ See `crates/fakeflac-core/src/domain.rs`: `Verdict { Real, Suspicious, Fake, Err
 
 ## 7. FFT window (ADR-0025, ADR-0026)
 
-**Goal:** detect a drop of tens of dB in a high band where real content is 80–130 dB below the bass. The window must not let leakage from loud low frequencies fill the region above the cutoff. Frequency resolution needed is low (the cliff is hundreds of Hz to kHz wide; one bin at 44.1 kHz with N=8192 is 5.4 Hz).
+**Goal:** detect a drop of tens of dB in a high band where real content is 80–130 dB below the bass. The window must not let leakage from loud low frequencies fill the region above the cutoff. Frequency resolution needed is low (the cliff is hundreds of Hz to kHz wide; one bin at 44.1 kHz with N=4096 is 10.8 Hz, and v2 groups bins in 100 Hz bands).
 
 Selection criteria, in order: (1) sidelobe suppression and decay, (2) cutoff-estimate accuracy (Hz) and steepness, (3) unbiased noise-floor estimate (known ENBW, normalised), (4) cost/simplicity (identical cost: the window is computed once).
 

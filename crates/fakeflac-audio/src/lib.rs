@@ -1,4 +1,4 @@
-//! Audio adapter: decoding (symphonia), windowed real FFT and average spectrum (RF-03).
+//! Audio adapter: decoding (symphonia), windowed real FFT and band spectra (mean and median, RF-03).
 //! See `docs/architecture/backend.md` (pipeline, FFT window, formats) and `specs/detection/rules.md`.
 
 mod decode;

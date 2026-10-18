@@ -11,7 +11,10 @@
 | Declared bitrate | Bitrate stored in a lossy file |
 | Estimated source bitrate (`estimated_source_bitrate_kbps`, bitrate real) | Bitrate of the original the content actually corresponds to, estimated from the cutoff and other signals (RF-15) |
 | Upsample | Raising bit depth or sample rate without adding information (RF-12, H3) |
-| Average spectrum | Power-averaged FFT over sampled windows of a track |
+| Mean spectrum (`mean_db`, `M`) | Power of each 100 Hz band averaged over the sampled FFT frames of a track, in dB (v1: "average spectrum", per FFT bin) |
+| Median spectrum (`median_db`, `Q`) | Median over the sampled frames of the per-frame band level in dB; shows bands that are empty in most frames (ADR-0035) |
+| Cutoff step (`step_db`, `D`) | Largest relative drop of the mean spectrum from the bands below a transition band to the bands above it (rules.md section 2) |
+| Gap step (`gap_db`, `G`) | Level step of the median spectrum at 16 kHz, where LAME leaves scale-factor band 21 empty (rules.md section 2) |
 | Leakage (fuga espectral) | Energy of strong components spreading into other bins because of the window |
 | Window function | Weighting applied to a segment before the FFT (ADR-0025) |
 | `DetectionParams` | Versioned data holding thresholds, window, overlap and cutoff→bitrate tables |

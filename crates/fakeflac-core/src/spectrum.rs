@@ -6,7 +6,8 @@
 /// Band `b` covers `[b * band_hz, (b + 1) * band_hz)`; its centre is `(b + 0.5) * band_hz`.
 /// The last band is the last full band that ends at or below Nyquist, so both vectors hold
 /// `floor(nyquist / band_hz)` values. Levels are in dB with an arbitrary reference (the rules
-/// work on levels relative to `L_ref`).
+/// work on levels relative to `L_ref`). Levels must be finite: a producer floors the power before
+/// taking the log, because `measure` does not guard against `-inf` or NaN.
 #[derive(Debug, Clone, PartialEq)]
 pub struct BandSpectra {
     pub sample_rate: u32,
