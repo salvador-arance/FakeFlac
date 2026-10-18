@@ -2,6 +2,27 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-18 - RP-11 undetectable transcodes and follow-ups implemented (feat/RP-11-undetectable)
+
+**Done**
+- Follow-ups from PR #34 implemented:
+  - Undetectable transcodes on band-limited sources (`source.fe <= setting.lowpass_hz` where `lowpass_hz < nyquist` or HF drop below `min_removed_hf_db`).
+  - Added `undetectable` field to `LabelRow` and `PointRow`.
+  - Excluded undetectable transcodes from `must_catch` feasibility and grid cost in `grid.rs` and `run.rs`.
+  - Updated confusion matrices and per-setting tables with `Undetectable` column; rate denominators exclude undetectable transcodes; added `### Undetectable transcodes` section to `report.md`.
+  - Privacy check writes unreadable files to stderr with exit code 1.
+  - `--no-generate` verified leaving `labels.csv` byte-identical.
+- All tests pass: 24/24 acceptance tests, 7/7 grid tests, all workspace unit and integration tests.
+- `just check` and `just ci` pass with 0 errors, 0 warnings, guard-tests ok.
+
+**Pending**
+- Gate G2 review and merge of `feat/RP-11-undetectable` by owner.
+
+**Blockers / questions for the human**
+- None.
+
+**Next step:** Owner review and merge of PR for `feat/RP-11-undetectable`.
+
 ## 2026-10-18 - RP-11 real-corpus acceptance run and follow-up plan
 
 **Done**
