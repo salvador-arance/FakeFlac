@@ -28,6 +28,7 @@ just trace        # validate the traceability matrix
 just lint-arch    # crate dependency rules + atomic design import rules
 just fixtures     # generate synthetic audio fixtures
 just ci           # what CI runs
+just prune-branches  # delete merged branches and clean agent worktrees (after G2); --dry-run lists
 ```
 
 ## Where things are
