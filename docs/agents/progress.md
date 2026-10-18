@@ -2,6 +2,53 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-18 - RP-11 real-corpus acceptance run and follow-up plan
+
+**Done**
+- First real-corpus acceptance run executed by owner on 2026-10-18 (checklist L1–L7, `specs/calibration/calibration.md` §7):
+  - Spectra cache warm (~3 s per accept/calibrate run; cold run 82 min for 1425 corpus tracks + 12825 transcodes).
+  - Owner provided `confirmed.txt` (15 confirmed fakes, 4 confirmed false positives W1–W4) and updated `trusted.txt` (`revisado` for known-truth lossless tracks).
+- Checklist L1–L7 results:
+
+| Check | Result |
+|---|---|
+| L1 `just accept` | ⚠ Report OK, 9 settings × 1425 rows, 0 generation failures. `encoder_version` is garbage (Task 3). |
+| L2 second run | ✅ 14250 hits, 0 decoded, 0 transcoded, `labels.csv` byte-identical |
+| L3 known-truth album | ✅ 15/15 confirmed fakes are Fake (detection rate `confirmed_fake` 100 %); 9/9 `revisado` tracks are Real |
+| L4 watch list | ✅ W1–W4 listed one by one, all Fake under v2 |
+| L5 `just calibrate` | ⚠ Repo stays clean, but no proposal: no grid point is feasible (Task 2) |
+| L6 `privacy-check` | ❌ `just privacy-check --base c6f039e` gives 1 match: `docs/agents/progress.md:104` holds the calibration folder's absolute path (Task 1). |
+| L7 corpus untouched | ✅ All 6613 files have the same size and mtime, and no new file appeared |
+
+- Detection v2 aggregate metrics (split `all`):
+  - Primary (purchased, 67 tracks / 5 albums): 4 Fake (6.0 %, 95 % CI 2.3–14.4 %), one in each of 4 albums (exactly W1–W4).
+  - Clean: 0/546 Fake, 2.2 % Suspicious. Reference: 3/812 Fake.
+  - Detection rate per setting: cbr128 99.5 %, cbr192 99.9 %, cbr256 98.0 %, cbr320 91.6 %, v0 18.2 %, v2 99.6 %, aac128 99.0 %, aac256 0.6 %, opus128 96.8 % (FN rate 19.3 %, driven by v0 and aac256).
+- Watch list (confirmed false positives W1–W4 under v2):
+
+| id | G (dB) | D (dB) | fs (Hz) | fe (Hz) | Rule that fires |
+|---|---|---|---|---|---|
+| W1 | 18.39 | 8.93 | 20450 | 20900 | V3 (16 kHz gap) |
+| W2 | 13.18 | 14.79 | 21450 | 21400 | V3 |
+| W3 | 10.26 | 14.70 | 21250 | 21100 | V3 |
+| W4 | -0.25 | 14.22 | 19450 | 22050 | V4 (cutoff step) |
+
+  Empty reasons for Fake is correct per `specs/detection/rules.md` (V3 and V4 carry no reasons).
+- Detection v3 findings recorded (for later spec):
+  - W1–W3 are Fake by rule V3 (16 kHz gap G 10–18 dB, content up to ~21 kHz). The v3 candidate rule in `evaluation.md` §7 ("16 kHz gap with full band → Suspicious, not Fake") would clear them.
+  - W4 is Fake by rule V4 (D 14.2 dB, fs 19450 Hz) although it has content up to 22050 Hz. It requires an analogous full-band guard for V4.
+  - Blind spots: LAME V0 (18.2 % detected) and AAC 256 (0.6 %). No v2 threshold reaches them; they need new measurements or rules, not tuning.
+
+**Pending**
+- Task 1: docs PR `docs/rp11-acceptance-results` (scrub absolute path from `progress.md:104`, record L1–L7 run).
+- Task 2: spec PR `spec/RP-11-undetectable-transcodes` (undetectable transcodes from band-limited sources, spec alignment for kept audio, `--no-generate`, and `privacy-check`), followed by implementation and recalibration.
+- Task 3: fix PR `fix/RP-11-lame-tag` (parse first MPEG audio frame Xing/Info header for LAME tag, fallback to spec-conformant string).
+
+**Blockers / questions for the human**
+- None.
+
+**Next step:** Merge `docs/rp11-acceptance-results` (Task 1); implement `fix/RP-11-lame-tag` (Task 3) and `spec/RP-11-undetectable-transcodes` (Task 2).
+
 ## 2026-10-18 - RP-11 calibration tool implemented (feat/RP-11)
 
 **Done**
@@ -101,7 +148,7 @@
 **Blockers / questions for the human**
 - None.
 
-**Next step:** the human's next task: `C:\Workspaces\FakeFlac-calibration\issue.md`; then the main-screen UI `/feature`.
+**Next step:** the human's next task: `FAKEFLAC_CALIBRATION/issue.md`; then the main-screen UI `/feature`.
 
 ## 2026-10-18 - Detection v2 implemented (RF-03, RF-04)
 
