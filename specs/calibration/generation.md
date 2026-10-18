@@ -57,6 +57,7 @@ decode: <ffmpeg> -nostdin -hide_banner -loglevel error -i <generated>/<id>.<ext>
 - The lossy intermediate `<id>.<ext>` is always deleted after the decode call.
 - With `generate.keep_audio = false` (the default), `<id>.flac` is deleted as soon as its spectra are cached.
 - **Inspect misclassifications (`keep_misclassified`):** When `generate.keep_misclassified = true` (default: false), `<id>.flac` is preserved in `generated/` for any track that resulted in a misclassification (`Fake` on a negative, or `Real` on a positive transcode) so that the user can inspect its spectrogram.
+- **Sidecar `generated/<id>.json`:** Whenever `<id>.flac` is retained (under `keep_audio = true` or `keep_misclassified = true`), a JSON sidecar `generated/<id>.json` is written alongside it recording the versions and metadata it was produced with (such as `encoder_version`), so that subsequent runs reusing existing audio keep `labels.csv` exactly identical without re-transcoding.
 - Deleting `generated/` at any time is safe: generated entries are looked up in the cache by recipe, not by file.
 - When a generated entry misses the cache (for example under a new fingerprint), an existing `<id>.flac` is analysed without transcoding. If the audio was deleted, the entry is transcoded again.
 

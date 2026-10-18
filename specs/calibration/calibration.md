@@ -56,7 +56,7 @@ Every command goes through `just` (ADR-0019). The recipes run the release build 
 
 - `--params` may be repeated. The default is `specs/detection/detection-params.v2.toml`. The first file is the **baseline** that the others are compared against. A params file may live outside the repository (for example a proposal in `FAKEFLAC_CALIBRATION/reports/…`).
 - `--config` defaults to `specs/calibration/calibration.v1.toml` and `--grid` to `specs/calibration/calibrate-grid.v1.toml`.
-- `--no-generate` evaluates the labelled tracks that already have cached spectra and skips missing generated entries. The report counts them as "not generated".
+- `--no-generate` evaluates the labelled tracks that already have cached spectra and skips missing generated entries. It leaves `labels.csv` untouched. The report counts them as "not generated".
 - None of these recipes is part of `just ci`. The CI-runnable acceptance is a `cargo test` of the tool on the sample corpus ([sample-corpus.md](sample-corpus.md)).
 
 ### Exit codes
@@ -113,7 +113,7 @@ A Claude Code skill (`.claude/skills/calibrate/`, written in the implementation 
 
 - Outputs with corpus names or paths (`labels.csv`, `report.md`, `tracks.csv`) stay in `FAKEFLAC_CALIBRATION`. Paths in them are relative to `FAKEFLAC_CORPUS` or to `generated/`. **No output contains an absolute path** of either root.
 - `summary.md` is the only output written for PRs. It contains counts, rates, intervals, setting ids, origin names, params file **names** (no folder) with content hashes, encoder versions, and watch ids (`W1`…) with their measurements. It never contains an album id, a folder name, a file name or a note from `trusted.txt`/`confirmed.txt`.
-- `just privacy-check` lists every file changed between `--base` and `HEAD` (`git diff --name-only REF...HEAD`) and searches their contents, ignoring case, for: both root paths (with `\` and `/`); and every folder name and file stem of the labelled corpus tracks with 8 or more characters, excluding any pattern listed in an unversioned exceptions file `privacy-exceptions.txt` (or `.privacy-exceptions` in the repository root or in `FAKEFLAC_CALIBRATION`). This allows excluding common words (e.g. 'Standard', 'Live') that might cause false alarms. It prints `file:line` for each match and exits 1 if there is any match, 0 otherwise. It needs the two variables, like `accept`.
+- `just privacy-check` lists every file changed between `--base` and `HEAD` (`git diff --name-only REF...HEAD`) and searches their contents, ignoring case, for: both root paths (with `\` and `/`); and every folder name and file stem of the labelled corpus tracks with 8 or more characters, excluding any pattern listed in an unversioned exceptions file `privacy-exceptions.txt` (or `.privacy-exceptions` in the repository root or in `FAKEFLAC_CALIBRATION`). This allows excluding common words (e.g. 'Standard', 'Live') that might cause false alarms. It prints `file:line` for each match and exits 1 if there is any match or if a file could not be checked, 0 otherwise. It needs the two variables, like `accept`.
 
 ## 7. Local acceptance checklist (not in CI)
 
@@ -123,10 +123,10 @@ Run by the implementer on the real corpus. Only the aggregate figures (from `sum
 |---|---|---|
 | L1 | `just accept` with the real `trusted.txt` and the 9 settings of `calibration.v1.toml` | Report written; every setting has rows; `encoder_version` filled in for every setting (or the fallback note, OQ-17) |
 | L2 | Second `just accept` with no change | Cache statistics: 0 decoded, 0 transcoded |
-| L3 | Known-truth album (7 confirmed fakes + 9 `revisado` tracks), v2 parameters | 7 `Fake` + 9 `Real`, or the differences are listed track by track with `G`, `D`, `fs` (OQ-2) |
+| L3 | Known-truth albums (15 confirmed fakes + 9 `revisado` tracks), v2 parameters | 15 `Fake` + 9 `Real`, or the differences are listed track by track with `G`, `D`, `fs` (OQ-2) |
 | L4 | The 4 confirmed false positives (purchased discs A–D) appear in the watch list with v2 | Listed one by one with verdict and measurements (expected values in [evaluation.md](evaluation.md) section 5) |
 | L5 | `just calibrate` | Proposal written to the report folder, nothing changed in the repository (`git status` clean) |
-| L6 | `just privacy-check` on the implementation branch | Exit 0 |
+| L6 | `just privacy-check` with `--base` set to the commit before the feature's first commit | Exit 0 |
 | L7 | Corpus untouched | Size and mtime of every corpus file are unchanged after L1–L5, and no new file appears under `FAKEFLAC_CORPUS` |
 
 ## 8. Performance (measured, reported in the implementation PR)
