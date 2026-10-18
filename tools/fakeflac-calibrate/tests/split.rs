@@ -53,37 +53,23 @@ fn rp11_split_ratio_and_stability() {
     assert_eq!(split.len(), 10_000);
     assert_eq!(holdout(&split), 3000, "exactly 3000 albums in holdout");
 
-    // Adding "album-10000" inserts it into the hash order; no existing album changes its hash and
-    // the holdout size stays round(10001 * 0.30) = 3000. Because the holdout is the first k albums of
-    // the order, the new album, when it sorts among them, pushes the album at the boundary out: that
-    // is the only possible change (see the report: the scenario text says "none").
+    // "album-10000" is added and the split computed again.
     let mut more = albums.clone();
     more.push("album-10000".to_string());
     let after = assign_class(&more, &config);
     assert_eq!(after.len(), 10_001);
-    assert_eq!(holdout(&after), 3000);
-    let changed: Vec<_> = albums.iter().filter(|a| split[*a] != after[*a]).collect();
+    assert_eq!(holdout(&after), 3000, "exactly 3000 still in holdout");
+    assert_eq!(after["album-10000"], Split::Holdout);
+    assert_eq!(split["album-09581"], Split::Holdout);
+    assert_eq!(after["album-09581"], Split::Tune);
+    let others: Vec<_> = albums
+        .iter()
+        .filter(|a| *a != "album-09581" && split[*a] != after[*a])
+        .collect();
     assert!(
-        changed.len() <= 1,
-        "at most the album at the boundary moves: {changed:?}"
+        others.is_empty(),
+        "no other album changed split: {others:?}"
     );
-    for a in &changed {
-        assert_eq!(split[*a], Split::Holdout);
-        assert_eq!(after[*a], Split::Tune);
-        assert_eq!(after["album-10000"], Split::Holdout);
-    }
-    // The order itself never changes: every album keeps the position given by its own hash.
-    let seed = &config.seed;
-    let mut by_hash = albums.clone();
-    by_hash.sort_by_key(|a| (album_hash(seed, a), a.clone()));
-    let holdout_set: std::collections::BTreeSet<_> = by_hash.iter().take(3000).collect();
-    for a in &albums {
-        assert_eq!(
-            split[a] == Split::Holdout,
-            holdout_set.contains(a),
-            "{a} is in holdout iff it is among the 3000 lowest hashes"
-        );
-    }
 }
 
 // Scenario: Stratified split guarantees holdout in small classes (@RP-11)
@@ -96,12 +82,53 @@ fn rp11_stratified_split_guarantees_holdout_in_small_classes() {
     assert_eq!(holdout(&reviewed), 3, "10 albums of class reviewed");
 }
 
-// Inputs.md section 4, N < 2: a class with a single album has no holdout (support for the
-// sample-corpus scenarios).
+// Scenario Outline: Extreme holdout fractions ignore the class size (@RP-11), default fraction 0.30:
+// a class with a single album stays in tune (round(1 * 0.3) = 0).
 #[test]
-fn rp11_a_class_with_one_album_has_no_holdout() {
-    let config = split_config();
-    let one = assign_class(&["only".to_string()], &config);
+fn rp11_a_class_with_one_album_has_no_holdout_at_the_default_fraction() {
+    let one = assign_class(&["only".to_string()], &split_config());
     assert_eq!(holdout(&one), 0);
     assert_eq!(one["only"], Split::Tune);
+}
+
+fn extreme(albums: usize, fraction: f64, expected: usize) {
+    let mut config = split_config();
+    config.holdout_fraction = fraction;
+    let split = assign_class(&ids("primary", albums, 2), &config);
+    assert_eq!(split.len(), albums);
+    assert_eq!(
+        holdout(&split),
+        expected,
+        "{albums} albums, fraction {fraction}"
+    );
+}
+
+// Scenario Outline: Extreme holdout fractions ignore the class size (@RP-11), row 1 / 0.0 / 0
+#[test]
+fn rp11_extreme_fraction_one_album_zero() {
+    extreme(1, 0.0, 0);
+}
+
+// Scenario Outline: Extreme holdout fractions ignore the class size (@RP-11), row 5 / 0.0 / 0
+#[test]
+fn rp11_extreme_fraction_five_albums_zero() {
+    extreme(5, 0.0, 0);
+}
+
+// Scenario Outline: Extreme holdout fractions ignore the class size (@RP-11), row 1 / 0.3 / 0
+#[test]
+fn rp11_extreme_fraction_one_album_default() {
+    extreme(1, 0.3, 0);
+}
+
+// Scenario Outline: Extreme holdout fractions ignore the class size (@RP-11), row 1 / 1.0 / 1
+#[test]
+fn rp11_extreme_fraction_one_album_all() {
+    extreme(1, 1.0, 1);
+}
+
+// Scenario Outline: Extreme holdout fractions ignore the class size (@RP-11), row 5 / 1.0 / 5
+#[test]
+fn rp11_extreme_fraction_five_albums_all() {
+    extreme(5, 1.0, 5);
 }

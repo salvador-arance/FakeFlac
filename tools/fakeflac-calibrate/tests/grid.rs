@@ -84,13 +84,7 @@ fn rp11_grid_search_proposes_new_parameters_from_tune_data() {
 }
 
 // Scenario: Holdout data never chooses the parameters (@RP-11)
-//
-// BLOCKED: this test cannot pass as the spec is written. With `holdout_fraction = 1.0` every class of
-// the sample corpus has a single album, and inputs.md section 4 says that a class with fewer than 2
-// albums has k = 0 (all `tune`). So the sample corpus has tune data and the grid proposes a change.
-// Needs a G1 decision (see the test report); un-ignore it when the spec is fixed.
 #[test]
-#[ignore = "BLOCKED: spec contradiction, holdout_fraction 1.0 cannot make a one-album class holdout (inputs.md section 4)"]
 fn rp11_holdout_data_never_chooses_the_parameters() {
     let sample = Sample::new("grid-holdout");
     sample.write_config(Some(1.0));
