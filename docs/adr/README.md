@@ -40,3 +40,4 @@ Format: MADR-style. New ADRs are created with `/new-adr` and approved at gate G1
 | [0034](0034-analysis-runs-on-std-scoped-threads-in-the-core.md) | The analysis runs on std scoped threads in the core (partially supersedes 0006) | proposed |
 | [0035](0035-detection-v2-relative-cutoff-step-and-16-khz-gap-step-on-the-m.md) | Detection v2: relative cutoff step on the mean spectrum and 16 kHz gap step on the per-frame median spectrum | proposed |
 | [0036](0036-calibration-tool-dev-only-workspace-crate-reusing-core-and-adapters.md) | Calibration tool: a dev-only workspace crate (`tools/fakeflac-calibrate`) that reuses the core and the adapters, with a JSON Lines spectra cache and ffmpeg as an external process | proposed |
+| [0037](0037-frontend-component-test-stack-jsdom-testing-library-storybook.md) | Frontend component test stack: jsdom, Testing Library and Storybook 10 | proposed |
