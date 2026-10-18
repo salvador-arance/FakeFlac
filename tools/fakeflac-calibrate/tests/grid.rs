@@ -185,3 +185,75 @@ fn rp11_cost_is_the_weighted_sum() {
     ];
     assert!((cost(&worse, &weights) - 12.0).abs() < 1e-9);
 }
+
+// Scenario: A confirmed fake in holdout still constrains the search (@RP-11)
+//
+// End to end through `calibrate`: the known-truth fake (track 11, `Sueltas/Mixto`, class reference) is
+// put in holdout by giving the class two more albums, while the other classes stay in tune. The grid
+// has one point that turns everything but the quiet track into Real: with `fn = 0` it costs less than
+// the baseline on the tune rows, but it makes the holdout confirmed fake Real.
+#[test]
+fn rp11_a_confirmed_fake_in_holdout_still_constrains_the_search() {
+    use fakeflac_calibrate::split::{assign_class, Split};
+    let sample = Sample::new("grid-holdout-constraint");
+    let config = fakeflac_calibrate::Config::parse(&read(&sample.write_config(None))).unwrap();
+
+    // Two extra reference albums such that "Sueltas/Mixto" is among the 2 holdout albums of 3.
+    let extra = (0..200)
+        .map(|i| (format!("Extras/A{i}"), format!("Extras/B{i}")))
+        .find(|(a, b)| {
+            let albums = ["Sueltas/Mixto".to_string(), a.clone(), b.clone()];
+            assign_class(&albums, &config.split)["Sueltas/Mixto"] == Split::Holdout
+        })
+        .expect("a pair of album names that puts Sueltas/Mixto in holdout");
+    let mut lines = sample.trusted_lines();
+    for album in [&extra.0, &extra.1] {
+        let rel = format!("{album}/01 – Extra.flac");
+        place("full_band", Container::Flac, &sample.corpus.join(&rel));
+        lines.push(format!("{} | analisis", rel.replace('/', "\\")));
+    }
+    sample.write_trusted(&lines);
+
+    let grid = sample.write_scratch(
+        "grid.toml",
+        &format!(
+            "grid_version = 1\nbaseline = '{}'\nmust_catch = []\nmax_points = 100\n\n\
+             [weights]\nfp = 10.0\nfn = 0.0\nsuspicious_negative = 0.5\nsuspicious_positive = 0.1\n\n\
+             [values]\n\"verdict.gap_fake_db\" = [100.0]\n\"verdict.gap_suspicious_db\" = [100.0]\n\
+             \"verdict.step_fake_db\" = [100.0]\n\"verdict.step_suspicious_db\" = [100.0]\n\
+             \"verdict.gradual_min_cutoff_hz\" = [1000.0]\n",
+            v2_params().display()
+        ),
+    );
+    let o = sample.calibrate(&grid);
+    assert_eq!(o.exit_code, 0, "stderr: {}", o.stderr);
+
+    // Preconditions: the confirmed fake is in holdout, and the point is cheaper on the tune rows.
+    let labels = Table::read(&sample.calibration.join("labels.csv"));
+    let fake = labels.find("path", TRACK_11).expect("confirmed fake row");
+    assert_eq!(labels.get(fake, "split"), "holdout");
+    let result = o.grid.as_ref().expect("grid outcome");
+    assert_eq!(result.points.len(), 1);
+    let point = &result.points[0];
+    assert!(
+        point.cost < result.baseline.cost,
+        "candidate {} must cost less than the baseline {}",
+        point.cost,
+        result.baseline.cost
+    );
+
+    // The scenario: infeasible, not proposed.
+    assert!(result.baseline.feasible);
+    assert!(
+        !point.feasible,
+        "a holdout confirmed fake that is Real makes it infeasible"
+    );
+    assert!(result.proposal.is_none());
+    let report_dir = o.report_dir.as_ref().expect("report folder");
+    assert!(
+        files_under(report_dir).iter().all(|p| !p
+            .file_name()
+            .is_some_and(|n| n.to_string_lossy().starts_with("detection-params"))),
+        "no params file is written"
+    );
+}

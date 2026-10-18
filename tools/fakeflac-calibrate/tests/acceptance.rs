@@ -132,10 +132,32 @@ fn rp11_false_positives_by_origin_and_primary_figure() {
         let results: Vec<_> = eval.targets.iter().filter(|t| t.id == id).collect();
         assert!(!results.is_empty(), "no result for {id}");
         assert!(results.iter().all(|t| t.pass), "{id}: {results:?}");
-        let lines: Vec<&str> = summary.lines().filter(|l| l.contains(id)).collect();
+        let lines: Vec<&str> = summary.lines().filter(|l| has_token(l, id)).collect();
         assert!(!lines.is_empty(), "summary.md does not mention {id}");
         assert!(lines.iter().all(|l| l.contains("PASS")), "{id}: {lines:?}");
     }
+}
+
+/// Whether `id` appears in `line` as a whole token (alphanumeric run), not inside a longer one such
+/// as the run id `YYYYMMDDTHHMMSSZ`, whose digits and `T` can spell `…T1…` at some hours.
+fn has_token(line: &str, id: &str) -> bool {
+    line.split(|c: char| !c.is_ascii_alphanumeric())
+        .any(|t| t == id)
+}
+
+// Scenario: False positives by origin and the primary figure (@RP-11), hour-independent target filter
+#[test]
+fn rp11_target_filter_skips_run_ids() {
+    for header in [
+        "- run id: 20261018T130000Z",
+        "- run id: 20261018T210000Z",
+        "- run id: 20261018T000000Z-2",
+    ] {
+        assert!(!has_token(header, "T1"), "{header}");
+        assert!(!has_token(header, "T2"), "{header}");
+    }
+    assert!(has_token("| T1 | primary | 0 | PASS |", "T1"));
+    assert!(has_token("T2: PASS (0)", "T2"));
 }
 
 // Scenario: Watch list (@RP-11)

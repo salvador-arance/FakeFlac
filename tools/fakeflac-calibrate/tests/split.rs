@@ -132,3 +132,64 @@ fn rp11_extreme_fraction_one_album_all() {
 fn rp11_extreme_fraction_five_albums_all() {
     extreme(5, 1.0, 5);
 }
+
+// Scenario: A mixed-class album takes the strongest class (@RP-11)
+#[test]
+fn rp11_a_mixed_class_album_takes_the_strongest_class() {
+    let sample = Sample::new("mixed-class-album");
+    // CD1 is clean (folder entry), CD2 reviewed (file entry); a confirmed fake sits in CD2.
+    let falso = "Colección/Álbum Ü/CD2/02 – Falso.flac";
+    place("lp16k_dither", Container::Flac, &sample.corpus.join(falso));
+    let mut trusted = sample.trusted_lines();
+    trusted.push("Colección/Álbum Ü/CD2/01 – Dos.flac | revisado".to_string());
+    trusted.push("!Colección/Álbum Ü/CD2/02 – Falso.flac | confirmado falso".to_string());
+    sample.write_trusted(&trusted);
+    let mut confirmed = sample.confirmed_lines();
+    confirmed.push("Colección/Álbum Ü/CD2/02 – Falso.flac | fake | espectrograma".to_string());
+    sample.write_confirmed(&confirmed);
+
+    let o = sample.accept_v2();
+    assert_ok(&o);
+
+    // Counted once, in class reviewed: the reviewed class then holds 2 albums (this one and
+    // Revisión/Ørsted), so with the default 0.30 both go to holdout (minimum of 2); counted as clean
+    // it would be alone in its class and stay in tune.
+    let config = split_config();
+    let expected = assign_class(
+        &[
+            "Colección/Álbum Ü".to_string(),
+            "Revisión/Ørsted".to_string(),
+        ],
+        &config,
+    );
+    assert_eq!(expected["Colección/Álbum Ü"], Split::Holdout);
+
+    let labels = Table::read(&sample.calibration.join("labels.csv"));
+    let album_rows: Vec<_> = labels
+        .rows
+        .iter()
+        .filter(|r| labels.get(r, "album_id") == "Colección/Álbum Ü")
+        .collect();
+    assert!(
+        album_rows.len() > 3,
+        "CD1, CD2, the confirmed fake and the transcodes"
+    );
+    for row in &album_rows {
+        assert_eq!(
+            labels.get(row, "split"),
+            "holdout",
+            "{} has the split of the album",
+            labels.get(row, "path")
+        );
+    }
+    let fake = labels.find("path", falso).expect("confirmed fake row");
+    assert_eq!(labels.get(fake, "origin"), "confirmed_fake");
+    assert_eq!(labels.get(fake, "album_id"), "Colección/Álbum Ü");
+    assert_eq!(labels.get(fake, "split"), "holdout");
+    // Every row keeps its own class for the metrics.
+    let uno = labels.find("path", TRACK_4).unwrap();
+    assert_eq!(labels.get(uno, "class"), "clean");
+    let dos = labels.find("path", TRACK_5).unwrap();
+    assert_eq!(labels.get(dos, "class"), "reviewed");
+    assert_eq!(labels.get(fake, "class"), "positive");
+}
