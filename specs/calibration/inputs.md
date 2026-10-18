@@ -124,7 +124,7 @@ The minimum columns asked for by the issue (`path, truth, origin, encoder, bitra
 
 **Album id.** The path, relative to `FAKEFLAC_CORPUS` with `/` separators, of the folder that holds the track. If that folder's name is a **disc folder**, the album is its parent folder (one level only; OQ-6). A disc folder name matches, ignoring case, one of the `split.disc_folder_prefixes` of the config, then an optional ` `, `-`, `_` or `.`, then 1 to 3 digits, and nothing else (`CD1`, `cd 2`, `Disc-3`, `Disco 1`; not `CD1 Bonus`). A track directly in `FAKEFLAC_CORPUS` has album id `.`. A generated track has the album id of its source.
 
-**Split (OQ-7).** Stratified by class. Albums are grouped by their class (`primary`, `reviewed`, `clean`, `reference`, and `positive` for albums containing only confirmed fakes).
+**Split (OQ-7).** Stratified by class. Albums are grouped by their class (`primary`, `reviewed`, `clean`, `reference`, and `positive` for albums containing only confirmed fakes). An album whose trusted tracks have several classes (for example `CD1` from an `analisis-limpio` folder and a `revisado` file entry in `CD2`) takes the strongest of them, in the order `primary` > `reviewed` > `clean` > `reference`. Confirmed fakes in such an album do not change its class: the album is `positive` only when all its labelled tracks are confirmed fakes. Every row keeps its own class for the metrics; the album class is used only for the split and for the per-class album counts and holdout warnings of the report header.
 
 For each album id:
 
@@ -149,4 +149,4 @@ Within each class:
 Properties:
 - **Stability:** Ordering by hash within each class means adding a new album to a class only places that album into the sorted sequence; it does not change the hash of any existing album. Since $k$ grows by at most 1 per added album, existing albums change split only at the holdout boundary: **at most one existing album moves** per added album (from `holdout` to `tune` when the new album lands in `holdout` and $k$ does not grow; from `tune` to `holdout` when it lands in `tune` and $k$ grows). Albums of other classes never move.
 - **Guarantee on small classes:** A pure independent hash threshold could leave the 5 purchased discs of class `primary` with 0 or 1 holdout album. The stratified split guarantees at least 2 holdout albums whenever a class has $\ge 2$ albums, ensuring the primary holdout metric has adequate data.
-- **`holdout` rows are never used for tuning** (evaluation.md section 7).
+- **`holdout` rows are never used for tuning** (evaluation.md section 7): they never enter the cost or the ranking. The one exception is the hard constraint on confirmed fakes, which checks every confirmed fake, `holdout` included.

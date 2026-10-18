@@ -329,6 +329,22 @@ Feature: Calibration and acceptance against a labelled corpus
     When feasibility is evaluated during grid search
     Then the candidate point is marked infeasible
 
+  @RP-11
+  Scenario: A confirmed fake in holdout still constrains the search
+    Given a candidate parameter set under which a confirmed fake track in holdout receives verdict "real"
+    And on the tune rows that candidate costs less than the baseline
+    When the grid search ranks the points
+    Then the candidate point is marked infeasible
+    And it is not proposed
+
+  @RP-11
+  Scenario: A mixed-class album takes the strongest class
+    Given an album with tracks of class "clean" in "CD1" and of class "reviewed" in "CD2"
+    And a confirmed fake in "CD2"
+    When the stratified split is computed
+    Then the album is counted once, in class "reviewed"
+    And every track of the album, the confirmed fake included, has the split of the album
+
   # --- ffmpeg (no ffmpeg needed) ------------------------------------------
 
   @RP-11
