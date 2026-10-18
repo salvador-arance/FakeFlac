@@ -611,15 +611,7 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
             evaluations.push(evaluation(run, &groups[run.group].rows, &config, baseline));
         }
 
-        // 6. Files: labels.csv (rewritten by every run) and the report folder.
-        // Under --no-generate the rows are incomplete (uncached tracks and entries are skipped), so
-        // labels.csv is left as the last full run wrote it.
-        if !job.no_generate {
-            write_atomic(
-                &roots.calibration.join("labels.csv"),
-                render::labels_csv(&groups[group_of[0]].rows).as_bytes(),
-            )?;
-        }
+        // 6. Files: the report folder, then labels.csv last, so that an exit 1 leaves only cache lines.
         cleanup_generated(&config, &groups, &runs);
 
         let proposal_path = proposal.as_ref().map(|p| report_dir.join(&p.file_name));
@@ -680,6 +672,14 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
             &report_dir.join("report.md"),
             render::markdown(&data, true).as_bytes(),
         )?;
+        // labels.csv is rewritten by every run. Under --no-generate the rows are incomplete
+        // (uncached tracks and entries are skipped), so it is left as the last full run wrote it.
+        if !job.no_generate {
+            write_atomic(
+                &roots.calibration.join("labels.csv"),
+                render::labels_csv(&groups[group_of[0]].rows).as_bytes(),
+            )?;
+        }
 
         if let Some(result) = &search_result {
             let to_score = |s: &grid::Scored| PointScore {
