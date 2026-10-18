@@ -6,7 +6,7 @@ status: proposed
 
 # Sample corpus for CI (OQ-4)
 
-> A small corpus built in temporary folders from the synthetic signals of `specs/detection/fixtures.md`, so that the acceptance path runs in CI (`cargo test`) with no ffmpeg and no real music. Scenarios: `specs/features/calibration.feature`. Expected verdicts are those that `specs/features/detection-lossless.feature` already requires with DetectionParams v2.
+> A small corpus built in temporary folders from the synthetic signals of `specs/detection/fixtures.md`, so that the acceptance path runs in CI (`cargo test`) with no ffmpeg and no real music. Scenarios: `specs/features/calibration.feature`. Expected verdicts with `detection-params.v2.toml` (the tool's default, sections 1 to 3) are the v2 truths of `specs/detection/fixtures.md`, which `detection-lossless.feature` checks in "A v2 params file changes only the guarded verdicts"; with `detection-params.v3.toml`, section 4 ("v3 side by side"). The watch id `W1` below belongs to this synthetic corpus only; it is not the real track FP1 of `specs/detection/rules.md`.
 
 ## 1. Fixture transcoder
 
@@ -84,11 +84,19 @@ Track 5 (`low_hf`, bandwidth extent $\le 16\text{ kHz}$) transcoded to `fx128` (
 
 ## 4. Candidate parameters
 
-`candidate.toml` = `detection-params.v2.toml` with `algorithm_version = 3` and `verdict.gap_fake_db = 4.0`. Only rule values change, so it shares v2's fingerprint. With it, the 6 `fxweak` entries (`G` ≈ 5 dB) become `Fake`, and no negative changes (`full_band` and `hf_bursts` have `G < 4` because they are `Real` under v2; `low_hf` is decided by rule V2 first). The fake row becomes 0 / 0 / 25 / 0, and the verdict-change table against v2 has exactly 6 changes, all `Suspicious → Fake` on positives.
+`candidate.toml` = `detection-params.v2.toml` with `algorithm_version` set to the next free version (1 + the highest `algorithm_version` in `specs/detection/`, 4 today; never 3, which is detection v3) and `verdict.gap_fake_db = 4.0`. Only rule values change, so it shares v2's fingerprint. With it, the 6 `fxweak` entries (`G` ≈ 5 dB) become `Fake`, and no negative changes (`full_band` and `hf_bursts` have `G < 4` because they are `Real` under v2; `low_hf` is decided by rule V2 first). The fake row becomes 0 / 0 / 25 / 0, and the verdict-change table against v2 has exactly 6 changes, all `Suspicious → Fake` on positives.
+
+### v3 side by side (detection v3, ADR-0038)
+
+With `--params detection-params.v2.toml --params detection-params.v3.toml` (same fingerprint: no extra decode):
+
+- The 6 `fxv0` entries (`sfb21_gaps`: gated content up to Nyquist, so `FullBand`) become `Suspicious` (`highBandGaps`) with v3. Every other labelled row has the same verdict as with v2: `fx128` (`lp16k_dither`), `fx320` (`lp20k_floor`) and the confirmed fake have a stationary floor above their low-pass; `fxweak` is already `Suspicious`; `hf_bursts` (track 2, watch `W1`) is `FullBand` but has no gap or step, so it stays `Real`; `full_band` has `B` < 0.5 dB.
+- v3 global fake row: 0 / 12 / 13 / 0 (Real / Suspicious / Fake / Error); the real row is unchanged. The verdict-change table against v2 has exactly 6 changes, all `Fake → Suspicious` on `fxv0` positives.
+- In `tracks.csv`, the v2 rows have empty `U`, `B`, `full_band` and full-band margins; every v3 row with spectra has them filled in.
 
 ## 5. Grid search
 
 Grid: baseline `detection-params.v2.toml`, `must_catch = ["fx128"]`, default weights, `[values] "verdict.gap_fake_db" = [4.0, 6.0]`.
 
-- With `holdout_fraction = 0.0` (everything `tune`): the baseline costs `0.5 · 1 + 0.1 · 6 = 1.1` (1 Suspicious negative, 6 Suspicious positives; `Error` rows left out), and the point `gap_fake_db = 4.0` costs `0.5`. Proposal: `detection-params.v3.toml` with `algorithm_version = 3` and `gap_fake_db = 4.0`, the rest of the baseline text unchanged.
+- With `holdout_fraction = 0.0` (everything `tune`): the baseline costs `0.5 · 1 + 0.1 · 6 = 1.1` (1 Suspicious negative, 6 Suspicious positives; `Error` rows left out), and the point `gap_fake_db = 4.0` costs `0.5`. Proposal: `detection-params.v4.toml` with `algorithm_version = 4` (the next free version, evaluation.md section 7) and `gap_fake_db = 4.0`, the rest of the baseline text unchanged.
 - With `holdout_fraction = 1.0` (everything `holdout`): there is no tune data, every point ties with the baseline, and the output is "no change proposed" with no file written. This shows that holdout rows are never used to choose.
