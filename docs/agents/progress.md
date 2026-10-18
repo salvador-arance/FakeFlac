@@ -21,7 +21,7 @@
   - 14 `.m4a` are YouTube AAC 128 remuxed without re-encode: honest lossy negatives; the label scheme needs a kind for them (one is mislabelled `fake`).
   - One album has the full chain from one master (trusted FLAC → YouTube AAC 128 → MP3 320); its FLAC holds FP4. The spec should pair tracks across versions.
   - `confirmed.txt`/`trusted.txt` grammar must accept MP3/M4A/Opus; new cascade setting kind (incl. Opus 48 kHz → MP3); consider grouping the split by main artist (several albums share artists).
-- Pending UI of H1: RF-06 (results table), RF-07 (spectrogram).
+- Pending UI of H1: RF-07 (spectrogram: `SpectrogramView`, `DetailPanel`). RF-01, RF-05 and RF-06 UI shipped in #27.
 
 **Blockers / questions for the human**
 - Open questions in `rules.md` ("Open questions for G1"), defaults apply unless changed: Q3 (new reason for guarded tracks; default no), Q4 (changes to approved specs; default yes), Q5 (V0 has no low-pass; may be checked from the LAME tag low-pass byte), Q6 (v2 caught rates for v0/aac256 from `summary.md`), Q7 (FP4 stays Fake if its upper content is steady; default accept).

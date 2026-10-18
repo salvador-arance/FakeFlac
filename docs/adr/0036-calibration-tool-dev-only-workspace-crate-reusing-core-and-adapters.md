@@ -1,6 +1,6 @@
 # ADR-0036: Calibration tool: a dev-only workspace crate (`tools/fakeflac-calibrate`) that reuses the core and the adapters, with a JSON Lines spectra cache and ffmpeg as an external process
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-18
 
 ## Context and rationale

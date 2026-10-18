@@ -1,6 +1,6 @@
 # ADR-0034: The analysis runs on std scoped threads in the core
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-15
 - Partially supersedes: ADR-0006 (the thread pool; cooperative cancellation stays)
 

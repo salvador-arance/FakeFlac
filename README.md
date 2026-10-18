@@ -8,7 +8,7 @@ Desktop app for Windows that tells you whether your audio files are what they cl
 
 Supported formats: **WAV, FLAC, MP3, M4A, Opus**. Everything is processed locally; nothing is sent to the Internet. Files are never modified.
 
-> **Status: pre-alpha.** The repository, harness and architecture are in place (milestone H0); the detection engine and UI are not built yet. See [`docs/agents/progress.md`](docs/agents/progress.md).
+> **Status: pre-alpha.** Milestone H0 (harness) is done. Milestone H1 (MVP, WAV and FLAC) is nearly done: the detection engine (v2), folder analysis with progress and cancellation, the main screen and results table, and the calibration tool are built; detection v3 and the spectrogram (RF-07) are pending. MP3, M4A and Opus come in H2. See [`docs/agents/progress.md`](docs/agents/progress.md).
 
 ## How this project is built
 
@@ -30,8 +30,9 @@ Requirements (Windows 10/11 x64): Rust (MSVC toolchain) with **Visual Studio Bui
 
 ```
 npm install
-just check        # fmt, clippy, svelte-check, architecture lint, fast tests
-just test
+just check-fast   # fmt, clippy, svelte-check, architecture lint, quick tests
+just check        # check-fast plus all tests
+just test         # all tests
 npm run tauri dev # run the app in development
 ```
 

@@ -1,6 +1,6 @@
 # ADR-0033: H1 dependency set
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-15
 
 ## Context and rationale

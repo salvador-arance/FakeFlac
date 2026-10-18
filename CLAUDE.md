@@ -21,13 +21,16 @@ Repo docs and code are in English. `docs/planning/` is the historical planning d
 
 ## Commands (single entry point: `justfile`, ADR-019)
 ```
-just check        # fmt, clippy, svelte-check, arch lint, fast tests
+just check-fast   # fmt, clippy, svelte-check, arch lint, quick tests
+just check        # check-fast plus all tests
 just test         # all tests
 just gen          # regenerate TS bindings from Rust (tauri-specta)
 just trace        # validate the traceability matrix
 just lint-arch    # crate dependency rules + atomic design import rules
-just fixtures     # generate synthetic audio fixtures
+just fixtures     # not implemented yet: fixtures are generated inside the tests
 just ci           # what CI runs
+just accept       # acceptance on the local corpus (RP-11); just calibrate adds the grid search
+just privacy-check --base main  # no corpus paths or names in the branch diff (ADR-022)
 just prune-branches  # delete merged branches and clean agent worktrees (after G2); --dry-run lists
 ```
 

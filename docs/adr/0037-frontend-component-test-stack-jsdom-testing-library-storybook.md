@@ -1,6 +1,6 @@
 # ADR-0037: Frontend component test stack: jsdom, Testing Library and Storybook 10
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-18
 
 ## Context and rationale

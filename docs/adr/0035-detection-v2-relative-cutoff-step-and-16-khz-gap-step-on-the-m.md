@@ -1,6 +1,6 @@
 # ADR-0035: Detection v2: relative cutoff step on the mean spectrum and 16 kHz gap step on the per-frame median spectrum
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-18
 
 ## Context and rationale
