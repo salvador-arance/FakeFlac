@@ -94,3 +94,20 @@ Feature: Verdict for lossless files (WAV, FLAC)
     Given the default DetectionParams of the code
     Then they are equal to specs/detection/detection-params.v2.toml
     And every TrackAnalysis carries algorithmVersion 2
+
+  @RF-03 @RNF-04
+  Scenario: Stream without a declared length
+    A FLAC from a streaming encoder may leave total_samples at 0. The length is
+    counted by decoding, so the track is analysed instead of reported as silent.
+    Given the file "lp16k_unknown_length" (lp16k as FLAC with total_samples 0 in STREAMINFO)
+    When it is analysed with DetectionParams v2
+    Then the verdict is "fake"
+    And the estimated cutoff is 16000 Hz ± 200 Hz
+
+  @RF-03
+  Scenario: A silent track reports no cutoff
+    Given the synthetic signal "silence" saved as FLAC
+    When it is analysed with DetectionParams v2
+    Then the verdict is "suspicious"
+    And the reasons are "lowHighFrequencyContent"
+    And no cutoff is reported
