@@ -53,6 +53,8 @@ pub struct FpRow {
     pub fake: u32,
     pub suspicious: u32,
     pub error: u32,
+    /// Albums with at least one `Fake` track.
+    pub albums_fake: u32,
 }
 
 /// A `false-positive` track of `confirmed.txt` (evaluation.md section 5). Measurements are `None`
@@ -99,8 +101,10 @@ pub struct Evaluation {
     /// 16 hex digits of the content hash (evaluation.md section 9).
     pub content_hash: String,
     pub matrix: BTreeMap<SplitSel, ConfusionMatrix>,
-    /// Config order, then `confirmed_fake`.
+    /// Config order, then `confirmed_fake` (split `all`).
     pub by_setting: Vec<SettingRow>,
+    /// The same for each split.
+    pub by_setting_split: BTreeMap<SplitSel, Vec<SettingRow>>,
     /// One row per origin present (the per-class subtotals appear only in the rendered tables).
     pub fp_rows: BTreeMap<SplitSel, Vec<FpRow>>,
     /// `k/n tracks (p %, 95 % CI a–b %), j/m albums` for class `primary`, split `all`.

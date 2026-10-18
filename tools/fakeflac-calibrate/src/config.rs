@@ -69,9 +69,73 @@ pub struct Target {
     pub max_count: u32,
 }
 
+/// Encoders a setting may name (`fixture` is for tests: the binary rejects it).
+pub const ENCODERS: [&str; 4] = ["lame", "aac", "opus", "fixture"];
+
 impl Config {
     /// Parses the text of a config file. Errors are exit 2.
-    pub fn parse(_text: &str) -> Result<Config, ToolError> {
-        todo!("RP-11: calibration.md section 2")
+    pub fn parse(text: &str) -> Result<Config, ToolError> {
+        let config: Config = toml::from_str(text).map_err(|e| {
+            ToolError::input_lines(e.to_string().lines().map(str::to_string).collect())
+        })?;
+        config.validate()?;
+        Ok(config)
+    }
+
+    fn validate(&self) -> Result<(), ToolError> {
+        let mut errors: Vec<String> = Vec::new();
+        if self.config_version != 1 {
+            errors.push(format!(
+                "config_version {} is not supported (expected 1)",
+                self.config_version
+            ));
+        }
+        if !(0.0..=1.0).contains(&self.split.holdout_fraction) {
+            errors.push("split.holdout_fraction must be between 0 and 1".to_string());
+        }
+        if let Some(f) = self.generate.fragment_s {
+            if f.partial_cmp(&0.0) != Some(std::cmp::Ordering::Greater) {
+                errors.push("generate.fragment_s must be greater than 0".to_string());
+            }
+        }
+        let mut ids = std::collections::BTreeSet::new();
+        for s in &self.generate.settings {
+            if s.id.is_empty() || s.id == "none" || s.id == "confirmed_fake" {
+                errors.push(format!("generate.settings: invalid id '{}'", s.id));
+            }
+            if !ids.insert(s.id.as_str()) {
+                errors.push(format!("generate.settings: id '{}' is repeated", s.id));
+            }
+            if !ENCODERS.contains(&s.encoder.as_str()) {
+                errors.push(format!(
+                    "generate.settings '{}': unknown encoder '{}' (expected one of: {})",
+                    s.id,
+                    s.encoder,
+                    ENCODERS.join(", ")
+                ));
+            }
+            if s.ext.is_empty() || s.ext.contains(['/', '\\', '.']) {
+                errors.push(format!(
+                    "generate.settings '{}': invalid ext '{}'",
+                    s.id, s.ext
+                ));
+            }
+        }
+        for t in &self.targets {
+            if !["real", "suspicious", "fake"].contains(&t.verdict.as_str()) {
+                errors.push(format!(
+                    "targets '{}': verdict must be real, suspicious or fake",
+                    t.id
+                ));
+            }
+            if t.classes.is_none() && t.settings.is_none() {
+                errors.push(format!("targets '{}': needs classes or settings", t.id));
+            }
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(ToolError::input_lines(errors))
+        }
     }
 }

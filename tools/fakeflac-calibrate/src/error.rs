@@ -28,3 +28,43 @@ pub struct ToolError {
     pub kind: ExitKind,
     pub lines: Vec<String>,
 }
+
+impl ToolError {
+    /// Exit 2 with one line.
+    pub fn input(message: impl Into<String>) -> ToolError {
+        ToolError {
+            kind: ExitKind::Input,
+            lines: vec![message.into()],
+        }
+    }
+
+    /// Exit 2 with several lines.
+    pub fn input_lines(lines: Vec<String>) -> ToolError {
+        ToolError {
+            kind: ExitKind::Input,
+            lines,
+        }
+    }
+
+    /// Exit 1 with one line.
+    pub fn internal(message: impl Into<String>) -> ToolError {
+        ToolError {
+            kind: ExitKind::Internal,
+            lines: vec![message.into()],
+        }
+    }
+
+    /// Exit 3 with one line.
+    pub fn external(message: impl Into<String>) -> ToolError {
+        ToolError {
+            kind: ExitKind::ExternalTool,
+            lines: vec![message.into()],
+        }
+    }
+}
+
+impl From<std::io::Error> for ToolError {
+    fn from(e: std::io::Error) -> ToolError {
+        ToolError::internal(format!("error: {e}"))
+    }
+}
