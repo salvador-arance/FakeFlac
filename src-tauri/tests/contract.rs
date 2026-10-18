@@ -163,13 +163,15 @@ fn reasons_map_for_every_variant() {
         R::LowHighFrequencyContent,
         R::GradualRolloff,
         R::AmbiguousCutoff,
+        R::HighBandGaps,
     ];
     assert_eq!(
         track_json(&t)["reasons"],
         json!([
             "lowHighFrequencyContent",
             "gradualRolloff",
-            "ambiguousCutoff"
+            "ambiguousCutoff",
+            "highBandGaps"
         ])
     );
 }

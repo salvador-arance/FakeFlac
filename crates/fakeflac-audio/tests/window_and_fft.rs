@@ -3,19 +3,21 @@
 #![allow(clippy::unwrap_used)]
 
 use fakeflac_audio::{fft_size, window::coefficients};
-use fakeflac_core::WindowKind;
+use fakeflac_core::{DetectionParams, WindowKind};
 
 fn close(a: f64, b: f64) -> bool {
     (a - b).abs() < 1e-9
 }
 
+// rules.md v2 section 1 item 4: N is the power of two nearest to sample_rate / target_bin_hz.
 #[test]
-fn fft_size_keeps_resolution_near_5_4_hz() {
-    assert_eq!(fft_size(44_100, 5.4), 8192);
-    assert_eq!(fft_size(48_000, 5.4), 8192);
-    assert_eq!(fft_size(88_200, 5.4), 16_384);
-    assert_eq!(fft_size(96_000, 5.4), 16_384);
-    assert_eq!(fft_size(192_000, 5.4), 32_768);
+fn fft_size_keeps_resolution_near_10_8_hz() {
+    let target = DetectionParams::default().fft.target_bin_hz;
+    assert_eq!(fft_size(44_100, target), 4096);
+    assert_eq!(fft_size(48_000, target), 4096);
+    assert_eq!(fft_size(88_200, target), 8192);
+    assert_eq!(fft_size(96_000, target), 8192);
+    assert_eq!(fft_size(192_000, target), 16_384);
 }
 
 #[test]

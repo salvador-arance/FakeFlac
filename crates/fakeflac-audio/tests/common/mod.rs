@@ -1,10 +1,11 @@
 //! Synthetic test signals of `specs/detection/fixtures.md` (ADR-0022). Generated with a fixed seed,
 //! written once per test binary under `CARGO_TARGET_TMPDIR`. No music is ever used.
 //!
-//! Level note: the spec says "−12 dBFS". Gaussian-like noise at −12 dBFS RMS has peaks above full
-//! scale, and clipping would create content above the low-pass, invalidating the fixture. Every
-//! signal is therefore set to −12 dBFS RMS and then scaled down, if needed, so its peak is −1 dBFS.
-//! Relative levels inside a fixture (noise vs tone) are preserved.
+//! Level note: the spec says "−12 dBFS" (`lp16k_dither`: −40 dBFS). Gaussian-like noise at −12 dBFS
+//! RMS has peaks above full scale, and clipping would create content above the low-pass,
+//! invalidating the fixture. Every signal is therefore set to its RMS level and then scaled down,
+//! if needed, so its peak is at most −1 dBFS. Relative levels inside a fixture (noise vs tone,
+//! signal vs floor) are preserved.
 #![allow(dead_code, clippy::unwrap_used, clippy::expect_used)]
 
 use fakeflac_core::ports::FileEntry;
@@ -109,6 +110,8 @@ struct Spec {
     bits: u16,
     seconds: f64,
     samples: Vec<f64>,
+    /// Seed of the TPDF dither added before rounding; `None` is plain rounding.
+    dither_seed: Option<u64>,
 }
 
 fn build(name: &str, container: Container, path: &Path) {
@@ -120,7 +123,7 @@ fn build(name: &str, container: Container, path: &Path) {
         return;
     }
     let spec = signal(name);
-    let ints = quantize(&spec.samples, spec.bits);
+    let ints = quantize(&spec.samples, spec.bits, spec.dither_seed);
     match container {
         Container::Wav => write_wav(path, &ints, spec.sample_rate, spec.bits),
         Container::Flac => write_flac(path, &ints, spec.sample_rate, spec.bits),
@@ -178,14 +181,36 @@ fn signal(name: &str) -> Spec {
                 bits,
                 seconds: secs,
                 samples: noise,
+                dither_seed: None,
             };
         }
         "silence" => vec![0.0; frames(sr, secs)],
+        // Pink noise (amplitude 1/sqrt(f)) through a brick-wall low-pass at 16 kHz.
+        "lp16k_dither" => shaped_noise(sr, secs, |f| brick(f, 16_000.0) * pink(f), 7),
+        // Pink below 20 kHz, white from 20 kHz up, 15 dB below the pink gain at 20 kHz.
+        "lp20k_floor" => shaped_noise(
+            sr,
+            secs,
+            |f| {
+                if f < 20_000.0 {
+                    pink(f)
+                } else {
+                    pink(20_000.0) * db_to_gain(-15.0)
+                }
+            },
+            8,
+        ),
+        // Pink noise whose part above 16 kHz (8 kHz for hf_bursts) is gated: gain 1 during the last
+        // 0.5 s of every 2 s, `gate_db` the rest of the time.
+        "sfb21_gaps" => gated_pink(sr, secs, 16_000.0, -20.0, 9),
+        "sfb21_gaps_weak" => gated_pink(sr, secs, 16_000.0, -6.0, 10),
+        "hf_bursts" => gated_pink(sr, secs, 8_000.0, -20.0, 11),
         other => panic!("unknown fixture {other}"),
     };
     let mut samples = samples;
     if name != "silence" {
-        set_rms_dbfs(&mut samples, -12.0);
+        let level = if name == "lp16k_dither" { -40.0 } else { -12.0 };
+        set_rms_dbfs(&mut samples, level);
         limit_peak(&mut samples, -1.0);
     }
     Spec {
@@ -193,6 +218,7 @@ fn signal(name: &str) -> Spec {
         bits,
         seconds: secs,
         samples,
+        dither_seed: (name == "lp16k_dither").then_some(70),
     }
 }
 
@@ -203,6 +229,55 @@ fn signal(name: &str) -> Spec {
 fn frames(sr: u32, secs: f64) -> usize {
     const FLAC_BLOCK: usize = 4096;
     (f64::from(sr) * secs) as usize / FLAC_BLOCK * FLAC_BLOCK
+}
+
+/// Pink noise gain: amplitude 1/sqrt(f) above 20 Hz (as in `low_hf`).
+fn pink(f: f64) -> f64 {
+    if f >= 20.0 {
+        1.0 / f.sqrt()
+    } else {
+        0.0
+    }
+}
+
+fn db_to_gain(db: f64) -> f64 {
+    10f64.powf(db / 20.0)
+}
+
+/// Pink noise split exactly in the frequency domain at `edge_hz` (both parts come from the same
+/// random phases, so their sum is the full-band pink noise). The part from `edge_hz` up is
+/// multiplied by a gate: gain 1 during the last 0.5 s of every 2 s and `gate_db` the rest of the
+/// time, with 5 ms raised-cosine ramps placed outside the full-gain window (rising in the 5 ms
+/// before it, falling in the 5 ms after it).
+fn gated_pink(sr: u32, secs: f64, edge_hz: f64, gate_db: f64, seed: u64) -> Vec<f64> {
+    let low = shaped_noise(sr, secs, |f| if f < edge_hz { pink(f) } else { 0.0 }, seed);
+    let high = shaped_noise(sr, secs, |f| if f < edge_hz { 0.0 } else { pink(f) }, seed);
+    let low_gain = db_to_gain(gate_db);
+    low.iter()
+        .zip(&high)
+        .enumerate()
+        .map(|(i, (l, h))| {
+            let t = i as f64 / f64::from(sr);
+            l + h * gate(t % 2.0, low_gain)
+        })
+        .collect()
+}
+
+/// Gate gain at `t` seconds into a 2 s period: 1 in [1.5, 2.0), `low` elsewhere, raised-cosine
+/// ramps of 5 ms immediately before 1.5 s (rising) and after 2.0 s (falling, i.e. from 0 to 5 ms
+/// of the next period).
+fn gate(t: f64, low: f64) -> f64 {
+    const RAMP: f64 = 0.005;
+    let blend = |x: f64| 0.5 * (1.0 - (std::f64::consts::PI * x).cos()); // 0 -> 1 for x in 0..1
+    if t >= 1.5 {
+        1.0
+    } else if t >= 1.5 - RAMP {
+        low + (1.0 - low) * blend((t - (1.5 - RAMP)) / RAMP)
+    } else if t < RAMP {
+        1.0 + (low - 1.0) * blend(t / RAMP)
+    } else {
+        low
+    }
 }
 
 fn brick(f: f64, fc: f64) -> f64 {
@@ -255,9 +330,22 @@ fn limit_peak(x: &mut [f64], dbfs: f64) {
     }
 }
 
-fn quantize(x: &[f64], bits: u16) -> Vec<i32> {
+/// Plain rounding, or with TPDF dither: the sum of two independent uniform values in [-1/2, 1/2)
+/// LSB added before rounding.
+fn quantize(x: &[f64], bits: u16, dither_seed: Option<u64>) -> Vec<i32> {
     let full = f64::from((1i32 << (bits - 1)) - 1);
-    x.iter().map(|v| (v * full).round() as i32).collect()
+    match dither_seed {
+        None => x.iter().map(|v| (v * full).round() as i32).collect(),
+        Some(seed) => {
+            let mut rng = ChaCha8Rng::seed_from_u64(seed);
+            x.iter()
+                .map(|v| {
+                    let tpdf = (rng.random::<f64>() - 0.5) + (rng.random::<f64>() - 0.5);
+                    (v * full + tpdf).round() as i32
+                })
+                .collect()
+        }
+    }
 }
 
 fn write_wav(path: &Path, samples: &[i32], sr: u32, bits: u16) {
