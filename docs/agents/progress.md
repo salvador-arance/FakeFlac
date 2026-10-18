@@ -2,6 +2,27 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-18 - RP-11 calibration tool implemented (feat/RP-11)
+
+**Done**
+- Spec fixes at G1 found during the cycle: #29 (split rule for holdout_fraction 0.0/1.0, stability wording), #30 (mixed-class albums take the strongest class; hard constraint (2) covers holdout confirmed fakes).
+- `tools/fakeflac-calibrate` (ADR-0036): env/containment checks, trusted/confirmed lists, stratified split, ffmpeg transcoder, JSON Lines features cache, evaluation and reports, grid search with feasibility and proposal file, privacy check. `fakeflac-audio::EXTRACTION_VERSION = 2`. No new crate in `Cargo.lock`.
+- `just accept`, `just calibrate`, `just privacy-check` (outside `check`/`ci`) and the `/calibrate` skill.
+- Tests: 8 test files under `tools/fakeflac-calibrate/tests/`, all @RP-11 scenarios. Owner-approved fix of a time-dependent protected test (target filter matched the run id).
+- Three review rounds; all blocking findings fixed. `just check` and `just ci` green.
+
+**Pending**
+- Gate G2 on the `feat/RP-11` PR.
+- Local checklist L1–L7 on the real corpus with real ffmpeg (owner, manual).
+- Next spec PR should record three behaviours the code has but the spec does not state: the kept-audio sidecar `generated/<id>.json` (generation.md §3); `--no-generate` leaves `labels.csv` untouched (calibration.md §2); `privacy-check` exits 1 when a file could not be checked (calibration.md §6).
+- Known limits: no progress output during a long run; on ffmpeg 8.1 most MP3/Opus settings fall back to "version not readable" for `encoder_version`.
+- ADRs 0033–0037 still say `proposed` although merged at G1.
+
+**Blockers / questions for the human**
+- None.
+
+**Next step:** Owner reviews and merges the `feat/RP-11` PR (G2), then runs `just accept` on the real corpus (checklist L1–L7).
+
 ## 2026-10-18 - Calibration tool spec (RP-11) updated from G1 review answers
 
 **Done**
