@@ -6,7 +6,7 @@
 use fakeflac_core::ports::{AudioProbe, FileEntry, FileScanner, SpectrumAnalyzer};
 use fakeflac_core::{
     analyze_folder, AnalysisSlot, AnalysisSummary, AppError, AppErrorCode, AudioFormat,
-    AverageSpectrum, CancelToken, DetectionParams, ProgressEvent, TrackError, Verdict,
+    BandSpectra, CancelToken, DetectionParams, ProgressEvent, TrackError, Verdict,
 };
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -40,19 +40,21 @@ fn scanner(names: &[&str]) -> FakeScanner {
     FakeScanner(Ok(names.iter().map(|n| entry(n)).collect()))
 }
 
-fn spectrum(db: impl Fn(f64) -> f64) -> AverageSpectrum {
-    let sample_rate = 44_100;
-    let n = 8192usize;
-    let bin_hz = f64::from(sample_rate) / n as f64;
-    let power_db = (0..=n / 2).map(|k| db(k as f64 * bin_hz)).collect();
-    AverageSpectrum {
-        sample_rate,
-        bin_hz,
-        power_db,
+/// Band spectra at 44.1 kHz (220 bands of 100 Hz), mean and median equal, level `db(centre)`.
+fn spectrum(db: impl Fn(f64) -> f64) -> BandSpectra {
+    let band_hz = 100.0;
+    let levels: Vec<f64> = (0..220)
+        .map(|b| db((f64::from(b) + 0.5) * band_hz))
+        .collect();
+    BandSpectra {
+        sample_rate: 44_100,
+        band_hz,
+        mean_db: levels.clone(),
+        median_db: levels,
     }
 }
 
-/// Behaviour chosen by file name: `fake*` cliff at 16 kHz, `susp*` cliff at 20.9 kHz,
+/// Behaviour chosen by file name: `fake*` cliff at 16 kHz, `susp*` cliff at 20.5 kHz,
 /// `corrupt*` corrupt stream, `panic*` panics (a decoder bug), anything else flat (real). Optional sleep per track.
 struct FakeAnalyzer {
     delay: Duration,
@@ -87,7 +89,7 @@ impl SpectrumAnalyzer for FakeAnalyzer {
         let s = if name.starts_with("fake") {
             spectrum(|f| if f < 16_000.0 { 0.0 } else { -100.0 })
         } else if name.starts_with("susp") {
-            spectrum(|f| if f < 20_900.0 { 0.0 } else { -100.0 })
+            spectrum(|f| if f < 20_500.0 { 0.0 } else { -100.0 })
         } else {
             spectrum(|_| 0.0)
         };
@@ -427,17 +429,17 @@ fn contract_serialization() {
     );
 }
 
-// Sanity: the fake spectra yield the intended verdicts under the v1 rules (detect_rules.rs V6/V3/V4)
+// Sanity: the fake spectra yield the intended verdicts under the v2 rules (detect_rules.rs V10/V4/V8)
 #[test]
 fn fake_spectra_yield_intended_verdicts() {
     use fakeflac_core::detect::detect;
     let p = DetectionParams::default();
     let flat = spectrum(|_| 0.0);
     let cliff16 = spectrum(|f| if f < 16_000.0 { 0.0 } else { -100.0 });
-    let cliff209 = spectrum(|f| if f < 20_900.0 { 0.0 } else { -100.0 });
+    let cliff205 = spectrum(|f| if f < 20_500.0 { 0.0 } else { -100.0 });
     assert_eq!(detect(Some(&flat), &p).verdict, Verdict::Real);
     assert_eq!(detect(Some(&cliff16), &p).verdict, Verdict::Fake);
-    assert_eq!(detect(Some(&cliff209), &p).verdict, Verdict::Suspicious);
+    assert_eq!(detect(Some(&cliff205), &p).verdict, Verdict::Suspicious);
 }
 
 fn count_started(events: &[ProgressEvent], i: u32) -> usize {

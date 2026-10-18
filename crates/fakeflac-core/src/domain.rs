@@ -45,6 +45,8 @@ pub enum SuspicionReason {
     /// Roll-off without a sharp cliff.
     GradualRolloff,
     AmbiguousCutoff,
+    /// Intermittent empty band above 16 kHz, as left by MP3 encoders (algorithm_version 2).
+    HighBandGaps,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

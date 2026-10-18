@@ -18,7 +18,7 @@ fakeflac-audio · fakeflac-fs · fakeflac-store · fakeflac-export  (adapters)
 | Crate | Responsibility | Depends on |
 |---|---|---|
 | `fakeflac-core` | Domain model, use cases, ports (traits). No I/O, no Tauri | `serde`, `thiserror` only |
-| `fakeflac-audio` | Decoding, windowed FFT, average spectrum, spectrogram | `core` |
+| `fakeflac-audio` | Decoding, windowed FFT, band spectra (mean and median), spectrogram | `core` |
 | `fakeflac-fs` | Recursive scan (`walkdir`), technical metadata (`lofty`) | `core` |
 | `fakeflac-store` | SQLite result cache (`rusqlite`) | `core` |
 | `fakeflac-export` | CSV serialisation | `core` |

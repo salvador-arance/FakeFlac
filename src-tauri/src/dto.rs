@@ -31,6 +31,7 @@ pub enum SuspicionReason {
     LowHighFrequencyContent,
     GradualRolloff,
     AmbiguousCutoff,
+    HighBandGaps,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Type)]
@@ -174,6 +175,7 @@ impl From<core::SuspicionReason> for SuspicionReason {
             }
             core::SuspicionReason::GradualRolloff => SuspicionReason::GradualRolloff,
             core::SuspicionReason::AmbiguousCutoff => SuspicionReason::AmbiguousCutoff,
+            core::SuspicionReason::HighBandGaps => SuspicionReason::HighBandGaps,
         }
     }
 }

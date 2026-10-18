@@ -2,6 +2,34 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-18 - Detection v2 implemented (RF-03, RF-04)
+
+**Done**
+- Detection v2 spec approved at G1 (#21).
+- Recovered `327311e` (decision: the main-screen UI is written by the agents; environment notes). It was pushed to `feat/RF-01-not-a-folder` after #20 was squash-merged, so it never reached `main`. Deleted that remote branch.
+- Branch `feat/RF-03-04-detection-v2`:
+  - `chore`: `BandSpectra` (mean `M` and median `Q`), `DetectionParams` v2, `HighBandGaps` (core, DTO, bindings).
+  - `test`: 64 rule tests in `detect_rules.rs`; 34 scenario tests in `detection_lossless.rs`, with the 5 new fixtures.
+  - `feat`: `measure`, `decide`, `cutoff_estimate` and `detect` per rules.md sections 2 and 3; the adapter samples 64 x 4 frames (N = 4096 at 44.1 kHz) and builds 100 Hz bands.
+  - Review: no blocking findings; wording and invariant improvements applied. `just ci` green.
+
+**Pending**
+- G2: human merges the detection v2 PR. ADR-0035, `rules.md`, ADR-0033 and ADR-0034 are still `status: proposed`.
+- Spec PR (G1) before the UI:
+  - `specs/ui/main-screen.md` has no text for `reason.highBandGaps`.
+  - `specs/traceability.md` and `specs/requirements/RF-03.md` still say "average spectrum".
+  - Not specified: the cutoff reported for a silent track (code returns `None`); a FLAC with `total_samples = 0` is reported as silence (`LowHighFrequencyContent`).
+- Calibration notes (phase 5):
+  - `sfb21_gaps` reports cutoff = Nyquist only because D = 6.15 dB is below the 7 dB threshold.
+  - Medians use the upper middle value for even counts; the prototype probably used `np.median`.
+- Local clean-up blocked by auto mode (the human can run it): remove the worktree `.claude/worktrees/spec-detection-v2-aa8ae3` and the stale local branches (`git branch -D` on the 9 squash-merged branches).
+- Earlier pending items below are unchanged.
+
+**Blockers / questions for the human**
+- None.
+
+**Next step:** spec PR with the points above (`reason.highBandGaps` label first), then `/feature` for the main-screen UI (RF-01 dialog + drop, RF-05 status bar and cancel, RF-06 table).
+
 ## 2026-10-18 - Detection v2 spec (RF-03, RF-04)
 
 **Done**
@@ -30,9 +58,9 @@
 - Earlier follow-ups (RF-02/RF-05 block) still open; `build-windows` takes ~17 min (Tauri built twice).
 
 **Blockers / questions for the human**
-- Offered: the student writes the main-screen UI with Claude guiding and reviewing, instead of agents writing it. Waiting for the answer.
+- None. Decided: the main-screen UI is written by the agents (normal `/feature` cycle), in a new session.
 
-**Next step:** main-screen UI: UI specs are in `specs/ui/`; start with atoms/molecules + stories (S6), then `AnalysisPage` wiring `src/lib/api/`.
+**Next step:** after #20 is merged, `/feature` for the main-screen UI (RF-01 dialog + drop, RF-05 status bar and cancel, RF-06 table): UI specs in `specs/ui/`; atoms/molecules with stories first (S6), then `AnalysisPage` wiring `src/lib/api/` (`startAnalysisOfDropped` for drops). Environment notes for this machine: in Git Bash every command ends with a harmless "cwd file" error and exit code 1; run frontend tests via `just`/PowerShell (`npx vitest` fails); `git push` needs `-c credential.helper= -c "credential.helper=!gh auth git-credential"`.
 
 ## 2026-10-15 - H1: Tauri adapter and API client (RF-01, RF-05)
 

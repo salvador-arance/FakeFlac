@@ -22,5 +22,5 @@ pub use domain::{
 };
 pub use error::{AppError, AppErrorCode};
 pub use params::{DetectionParams, WindowKind};
-pub use spectrum::AverageSpectrum;
+pub use spectrum::BandSpectra;
 pub use summary::summarize_album;
