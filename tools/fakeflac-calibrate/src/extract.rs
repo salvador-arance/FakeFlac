@@ -43,8 +43,6 @@ pub struct Context<'a> {
     pub transcoder: &'a dyn Transcoder,
     pub no_generate: bool,
     pub threads: usize,
-    /// Keep every generated file until the whole run is done (several fingerprints share them).
-    pub defer_cleanup: bool,
 }
 
 /// A generation that failed (generation.md section 2): no row, not cached, retried next run.
@@ -243,6 +241,8 @@ pub fn extract_group(
             continue;
         }
         let Some(extracted) = corpus_results[i].as_ref() else {
+            // Uncached source under --no-generate: its generated entries are not generated either.
+            not_generated += config.generate.settings.len() as u32;
             continue;
         };
         let duration_ms = match extracted.as_ref() {
@@ -375,15 +375,19 @@ pub fn extract_group(
                 }
             };
         let extracted = analyze(&flac, params);
-        let keep = keep_audio || keep_misclassified || ctx.defer_cleanup;
+        let keep = keep_audio || keep_misclassified;
         if keep {
             if transcoded {
                 let side =
                     json!({"ffmpeg_version": ffmpeg_version, "encoder_version": encoder_version});
-                let _ = std::fs::write(sidecar_path(&generated_dir, &gen.id), side.to_string());
+                let _ = crate::fsutil::write_atomic(
+                    &sidecar_path(&generated_dir, &gen.id),
+                    side.to_string().as_bytes(),
+                );
             }
         } else {
             let _ = std::fs::remove_file(&flac);
+            let _ = std::fs::remove_file(sidecar_path(&generated_dir, &gen.id));
         }
         if let Extracted::Error(TrackError::Unreadable(m)) = &extracted {
             return GenResult::Failed(format!("decoded audio is unreadable: {m}"));

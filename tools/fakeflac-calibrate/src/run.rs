@@ -429,9 +429,10 @@ fn run_stamp(secs: i64) -> (String, String) {
     )
 }
 
-/// The run id: the UTC start time, with `-2`, `-3`... appended if that folder already exists.
-fn next_run_id(calibration: &Path, run_id: &str) -> String {
+/// Creates `reports/<run>` atomically; on `AlreadyExists` the id gets `-2`, `-3`... appended.
+fn create_report_dir(calibration: &Path, run_id: &str) -> std::io::Result<(String, PathBuf)> {
     let reports = calibration.join("reports");
+    std::fs::create_dir_all(&reports)?;
     let mut n = 1;
     loop {
         let id = if n == 1 {
@@ -439,19 +440,13 @@ fn next_run_id(calibration: &Path, run_id: &str) -> String {
         } else {
             format!("{run_id}-{n}")
         };
-        if !reports.join(&id).exists() {
-            return id;
+        let dir = reports.join(&id);
+        match std::fs::create_dir(&dir) {
+            Ok(()) => return Ok((id, dir)),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => n += 1,
+            Err(e) => return Err(e),
         }
-        n += 1;
     }
-}
-
-fn create_report_dir(calibration: &Path, run_id: &str) -> std::io::Result<PathBuf> {
-    let reports = calibration.join("reports");
-    std::fs::create_dir_all(&reports)?;
-    let dir = reports.join(run_id);
-    std::fs::create_dir(&dir)?;
-    Ok(dir)
 }
 
 fn tool_commit(env: &Env) -> String {
@@ -535,7 +530,6 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
         transcoder,
         no_generate: job.no_generate,
         threads: worker_threads(),
-        defer_cleanup: fingerprints.len() > 1,
     };
     let mut groups: Vec<GroupResult> = Vec::new();
     for (fp, first) in &fingerprints {
@@ -573,132 +567,138 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
     // 4. Grid search (calibrate). The proposal is built and checked before anything is written
     // (exit 1 leaves nothing new but cache lines).
     let (run_stamp_id, date) = run_stamp(now_secs());
-    let run_id = next_run_id(&roots.calibration, &run_stamp_id);
-    let mut stdout = String::new();
-    let mut grid_outcome: Option<GridOutcome> = None;
-    let mut search_result: Option<grid::SearchResult> = None;
-    let mut proposal: Option<grid::Proposal> = None;
-    if let Some(file) = &grid_file {
-        let base = &runs[0];
-        let search_rows = tune_search_rows(&groups[base.group].rows, &base.evals);
-        let result = grid::search(&base.params, &search_rows, file);
-        if let Some(i) = result.proposal {
-            let values = &result.points[i].values;
-            proposal = Some(grid::build_proposal(
-                &loaded[0].text,
-                &base.params,
-                file,
-                values,
-                &run_id,
-            )?);
+    // The folder is reserved atomically here (retry on AlreadyExists) and removed again if the run
+    // ends in an error, so an exit 1 leaves nothing visible but cache lines.
+    let (run_id, report_dir) = create_report_dir(&roots.calibration, &run_stamp_id)?;
+    let outcome = (|| -> Result<Outcome, ToolError> {
+        let mut stdout = String::new();
+        let mut grid_outcome: Option<GridOutcome> = None;
+        let mut search_result: Option<grid::SearchResult> = None;
+        let mut proposal: Option<grid::Proposal> = None;
+        if let Some(file) = &grid_file {
+            let base = &runs[0];
+            let search_rows = tune_search_rows(&groups[base.group].rows, &base.evals);
+            let result = grid::search(&base.params, &search_rows, file);
+            if let Some(i) = result.proposal {
+                let values = &result.points[i].values;
+                proposal = Some(grid::build_proposal(
+                    &loaded[0].text,
+                    &base.params,
+                    file,
+                    values,
+                    &run_id,
+                )?);
+            }
+            search_result = Some(result);
         }
-        search_result = Some(result);
-    }
-    if let Some(p) = &proposal {
-        let hash = id16(p.text.as_bytes());
-        let group = runs[0].group;
-        let l = Loaded {
-            name: p.file_name.clone(),
-            text: p.text.clone(),
-            params: p.params.clone(),
-            hash,
+        if let Some(p) = &proposal {
+            let hash = id16(p.text.as_bytes());
+            let group = runs[0].group;
+            let l = Loaded {
+                name: p.file_name.clone(),
+                text: p.text.clone(),
+                params: p.params.clone(),
+                hash,
+            };
+            let run = make_run(&l, group, &groups);
+            runs.push(run);
+        }
+
+        // 5. Tables.
+        let mut evaluations: Vec<Evaluation> = Vec::new();
+        for (i, run) in runs.iter().enumerate() {
+            let baseline = (i > 0).then(|| (&runs[0], groups[runs[0].group].rows.as_slice()));
+            evaluations.push(evaluation(run, &groups[run.group].rows, &config, baseline));
+        }
+
+        // 6. Files: labels.csv (rewritten by every run) and the report folder.
+        // Under --no-generate the rows are incomplete (uncached tracks and entries are skipped), so
+        // labels.csv is left as the last full run wrote it.
+        if !job.no_generate {
+            write_atomic(
+                &roots.calibration.join("labels.csv"),
+                render::labels_csv(&groups[group_of[0]].rows).as_bytes(),
+            )?;
+        }
+        cleanup_generated(&config, &groups, &runs);
+
+        let proposal_path = proposal.as_ref().map(|p| report_dir.join(&p.file_name));
+        if let (Some(p), Some(path)) = (&proposal, &proposal_path) {
+            write_atomic(path, p.text.as_bytes())?;
+        }
+        let mode = if grid_file.is_some() {
+            "calibrate"
+        } else {
+            "accept"
         };
-        let run = make_run(&l, group, &groups);
-        runs.push(run);
-    }
-
-    // 5. Tables.
-    let mut evaluations: Vec<Evaluation> = Vec::new();
-    for (i, run) in runs.iter().enumerate() {
-        let baseline = (i > 0).then(|| (&runs[0], groups[runs[0].group].rows.as_slice()));
-        evaluations.push(evaluation(run, &groups[run.group].rows, &config, baseline));
-    }
-
-    // 6. Files: labels.csv (rewritten by every run) and the report folder.
-    write_atomic(
-        &roots.calibration.join("labels.csv"),
-        render::labels_csv(&groups[group_of[0]].rows).as_bytes(),
-    )?;
-    let report_dir = create_report_dir(&roots.calibration, &run_id)?;
-    cleanup_generated(&config, &groups, &runs);
-
-    let proposal_path = proposal.as_ref().map(|p| report_dir.join(&p.file_name));
-    if let (Some(p), Some(path)) = (&proposal, &proposal_path) {
-        write_atomic(path, p.text.as_bytes())?;
-    }
-    let mode = if grid_file.is_some() {
-        "calibrate"
-    } else {
-        "accept"
-    };
-    let commit = tool_commit(env);
-    // Confirmed fakes checked by constraint (2): all of them, tune and holdout.
-    let confirmed = {
-        let base = &runs[0];
-        let checked = groups[base.group]
-            .rows
-            .iter()
-            .zip(base.evals.iter())
-            .filter(|(r, e)| r.origin == "confirmed_fake" && e.verdict != Verdict::Error);
-        let (mut all, mut holdout) = (0_u32, 0_u32);
-        for (r, _) in checked {
-            all += 1;
-            holdout += u32::from(r.split == Split::Holdout);
-        }
-        (all, holdout)
-    };
-    let data = ReportData {
-        run_id: &run_id,
-        date: &date,
-        commit: &commit,
-        mode,
-        config: &config,
-        roots: &roots,
-        groups: &groups,
-        runs: &runs,
-        evaluations: &evaluations,
-        grid: match (&grid_file, &search_result) {
-            (Some(file), Some(result)) => Some(GridReport {
-                file,
-                result,
-                proposal: proposal.as_ref(),
-                confirmed_checked: confirmed.0,
-                confirmed_holdout: confirmed.1,
-            }),
-            _ => None,
-        },
-    };
-    write_atomic(
-        &report_dir.join("tracks.csv"),
-        render::tracks_csv(&runs, &groups).as_bytes(),
-    )?;
-    write_atomic(
-        &report_dir.join("summary.md"),
-        render::markdown(&data, false).as_bytes(),
-    )?;
-    write_atomic(
-        &report_dir.join("report.md"),
-        render::markdown(&data, true).as_bytes(),
-    )?;
-
-    if let Some(result) = &search_result {
-        let to_score = |s: &grid::Scored| PointScore {
-            values: grid_file
+        let commit = tool_commit(env);
+        // Confirmed fakes checked by constraint (2): all of them, tune and holdout.
+        let confirmed = {
+            let base = &runs[0];
+            let checked = groups[base.group]
+                .rows
                 .iter()
-                .flat_map(|f| f.keys.iter())
-                .zip(s.values.iter())
-                .map(|(k, v)| (k.key.clone(), *v))
-                .collect(),
-            cost: s.cost,
-            feasible: s.feasible,
+                .zip(base.evals.iter())
+                .filter(|(r, e)| r.origin == "confirmed_fake" && e.verdict != Verdict::Error);
+            let (mut all, mut holdout) = (0_u32, 0_u32);
+            for (r, _) in checked {
+                all += 1;
+                holdout += u32::from(r.split == Split::Holdout);
+            }
+            (all, holdout)
         };
-        grid_outcome = Some(GridOutcome {
-            baseline: to_score(&result.baseline),
-            points: result.points.iter().map(to_score).collect(),
-            skipped: result.skipped,
-            proposal: proposal_path.clone(),
-        });
-        match &proposal {
+        let data = ReportData {
+            run_id: &run_id,
+            date: &date,
+            commit: &commit,
+            mode,
+            config: &config,
+            roots: &roots,
+            groups: &groups,
+            runs: &runs,
+            evaluations: &evaluations,
+            grid: match (&grid_file, &search_result) {
+                (Some(file), Some(result)) => Some(GridReport {
+                    file,
+                    result,
+                    proposal: proposal.as_ref(),
+                    confirmed_checked: confirmed.0,
+                    confirmed_holdout: confirmed.1,
+                }),
+                _ => None,
+            },
+        };
+        write_atomic(
+            &report_dir.join("tracks.csv"),
+            render::tracks_csv(&runs, &groups).as_bytes(),
+        )?;
+        write_atomic(
+            &report_dir.join("summary.md"),
+            render::markdown(&data, false).as_bytes(),
+        )?;
+        write_atomic(
+            &report_dir.join("report.md"),
+            render::markdown(&data, true).as_bytes(),
+        )?;
+
+        if let Some(result) = &search_result {
+            let to_score = |s: &grid::Scored| PointScore {
+                values: grid_file
+                    .iter()
+                    .flat_map(|f| f.keys.iter())
+                    .zip(s.values.iter())
+                    .map(|(k, v)| (k.key.clone(), *v))
+                    .collect(),
+                cost: s.cost,
+                feasible: s.feasible,
+            };
+            grid_outcome = Some(GridOutcome {
+                baseline: to_score(&result.baseline),
+                points: result.points.iter().map(to_score).collect(),
+                skipped: result.skipped,
+                proposal: proposal_path.clone(),
+            });
+            match &proposal {
             Some(p) => stdout.push_str(&format!(
                 "proposal written: {}\n",
                 proposal_path.as_ref().map_or(p.file_name.clone(), |x| {
@@ -712,57 +712,62 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
                 "no change proposed (no feasible point; see the best infeasible points in the report)\n",
             ),
         }
-    }
-    for (e, run) in evaluations.iter().zip(runs.iter()) {
-        stdout.push_str(&format!(
-            "{}: primary figure {}\n",
-            e.params_name, e.primary_figure
-        ));
-        if mode == "calibrate" {
-            let hold = class_totals(
-                &groups[run.group].rows,
-                &run.evals,
-                "primary",
-                crate::report::SplitSel::Holdout,
-            );
+        }
+        for (e, run) in evaluations.iter().zip(runs.iter()) {
             stdout.push_str(&format!(
-                "  holdout primary figure (headline): {}\n",
-                figure(&hold, config.report.z)
+                "{}: primary figure {}\n",
+                e.params_name, e.primary_figure
+            ));
+            if mode == "calibrate" {
+                let hold = class_totals(
+                    &groups[run.group].rows,
+                    &run.evals,
+                    "primary",
+                    crate::report::SplitSel::Holdout,
+                );
+                stdout.push_str(&format!(
+                    "  holdout primary figure (headline): {}\n",
+                    figure(&hold, config.report.z)
+                ));
+            }
+            for t in e
+                .targets
+                .iter()
+                .filter(|t| t.split == crate::report::SplitSel::All)
+            {
+                stdout.push_str(&format!(
+                    "  {} {} ({})\n",
+                    t.id,
+                    if t.pass { "PASS" } else { "FAIL" },
+                    t.count
+                ));
+            }
+        }
+        if grid_file.is_some() {
+            stdout.push_str(&format!(
+                "confirmed fakes checked by the feasibility constraint: {} ({} in holdout)\n",
+                confirmed.0, confirmed.1
             ));
         }
-        for t in e
-            .targets
-            .iter()
-            .filter(|t| t.split == crate::report::SplitSel::All)
-        {
-            stdout.push_str(&format!(
-                "  {} {} ({})\n",
-                t.id,
-                if t.pass { "PASS" } else { "FAIL" },
-                t.count
-            ));
-        }
-    }
-    if grid_file.is_some() {
         stdout.push_str(&format!(
-            "confirmed fakes checked by the feasibility constraint: {} ({} in holdout)\n",
-            confirmed.0, confirmed.1
+            "report: {}\n",
+            crate::fsutil::plain_path(&report_dir).display()
         ));
-    }
-    stdout.push_str(&format!(
-        "report: {}\n",
-        crate::fsutil::plain_path(&report_dir).display()
-    ));
 
-    Ok(Outcome {
-        exit_code: 0,
-        stdout,
-        stderr: String::new(),
-        report_dir: Some(report_dir),
-        cache: groups.iter().map(|g| g.stats.clone()).collect(),
-        evaluations,
-        grid: grid_outcome,
-    })
+        Ok(Outcome {
+            exit_code: 0,
+            stdout,
+            stderr: String::new(),
+            report_dir: Some(report_dir.clone()),
+            cache: groups.iter().map(|g| g.stats.clone()).collect(),
+            evaluations,
+            grid: grid_outcome,
+        })
+    })();
+    if outcome.is_err() {
+        let _ = std::fs::remove_dir_all(&report_dir);
+    }
+    outcome
 }
 
 /// The rows the grid search reads: tune negatives of the classes primary, reviewed and clean,

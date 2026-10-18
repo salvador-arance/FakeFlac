@@ -1169,6 +1169,7 @@ fn grid_section(md: &mut Md, data: &ReportData<'_>, grid: &GridReport<'_>) {
                 format!("{:.3}", p.cost),
                 if p.feasible { "yes" } else { "no" }.to_string(),
                 p.tally.must_catch_real.to_string(),
+                p.tally.confirmed_real.to_string(),
                 format!(
                     "{} / {} / {} / {}",
                     p.tally.fake_negatives,
@@ -1191,6 +1192,7 @@ fn grid_section(md: &mut Md, data: &ReportData<'_>, grid: &GridReport<'_>) {
             "cost",
             "feasible",
             "must_catch Real",
+            "confirmed fakes Real",
             "tune: Fake neg / Suspicious neg / Real pos / Suspicious pos",
             "smallest margin (dB)",
         ],

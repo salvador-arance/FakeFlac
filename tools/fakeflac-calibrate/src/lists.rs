@@ -552,7 +552,10 @@ fn resolve_path(text: &str, corpus: &Path) -> Result<(PathBuf, bool), String> {
         // Compared per component, not by string prefix.
         let parts = |p: &Path| -> Vec<String> {
             let text = p.to_string_lossy().replace('\\', "/").to_lowercase();
-            let text = text.strip_prefix("//?/").unwrap_or(&text).to_string();
+            let text = match text.strip_prefix("//?/unc/") {
+                Some(rest) => format!("//{rest}"),
+                None => text.strip_prefix("//?/").unwrap_or(&text).to_string(),
+            };
             text.split('/')
                 .filter(|c| !c.is_empty())
                 .map(str::to_string)

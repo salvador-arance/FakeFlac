@@ -265,11 +265,22 @@ pub fn invariant_violations(p: &DetectionParams) -> Vec<&'static str> {
 /// Keys of the `[values]` table in file order (the `toml` table does not keep it).
 fn values_key_order(text: &str) -> Vec<String> {
     let mut in_values = false;
+    let mut prefix = String::new();
     let mut keys = Vec::new();
     for line in text.lines() {
         let t = line.trim();
         if t.starts_with('[') {
-            in_values = t.trim_start_matches('[').starts_with("values]");
+            let header = t
+                .trim_start_matches('[')
+                .split(']')
+                .next()
+                .unwrap_or("")
+                .trim();
+            in_values = header == "values" || header.starts_with("values.");
+            prefix = header
+                .strip_prefix("values.")
+                .map(|p| format!("{}.", p.replace('"', "")))
+                .unwrap_or_default();
             continue;
         }
         if !in_values || t.is_empty() || t.starts_with('#') {
@@ -277,8 +288,9 @@ fn values_key_order(text: &str) -> Vec<String> {
         }
         if let Some((name, _)) = t.split_once('=') {
             let name = name.trim().trim_matches('"').trim_matches('\'').trim();
-            if !name.is_empty() && !keys.iter().any(|k| k == name) {
-                keys.push(name.to_string());
+            let name = format!("{prefix}{name}");
+            if name.len() > prefix.len() && !keys.contains(&name) {
+                keys.push(name);
             }
         }
     }
