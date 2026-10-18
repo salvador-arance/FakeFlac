@@ -1,13 +1,14 @@
 # Backend design (Rust)
 
-> Pipeline: file → technical metadata → N sampled windows → decode → windowed real FFT → average spectrum (power) → cutoff estimate → rules (`DetectionParams`) → `TrackAnalysis`. Formats: WAV, FLAC (H1); MP3, M4A, Opus (H2). All thresholds, the FFT window and the cutoff→bitrate tables are versioned data.
+> Pipeline: file → technical metadata → N sampled windows → decode → windowed real FFT → band spectra (power mean and per-frame median) → cutoff step and gap step → rules (`DetectionParams`) → `TrackAnalysis`. Formats: WAV, FLAC (H1); MP3, M4A, Opus (H2). All thresholds, the FFT window and the cutoff→bitrate tables are versioned data.
 
 ## 1. Analysis pipeline
 
 ```
 path → metadata (fs) → select N windows → decode with seek (f32 mono)
-     → window + real FFT (N=8192 @ 44.1/48 kHz) → average spectrum (dB)
-     → cutoff estimate + shape → apply rules (DetectionParams) → TrackAnalysis
+     → window + real FFT (N=4096 @ 44.1/48 kHz, v2) → 100 Hz bands per frame
+     → mean spectrum (dB of mean power) + median spectrum (median of per-frame dB)
+     → cutoff step + gap step (ADR-0035) → apply rules (DetectionParams) → TrackAnalysis
 ```
 
 - Stages after the FFT are pure functions over arrays; tested with synthetic signals (low-passed noise at 16/19/20 kHz, full band, silence).
@@ -67,9 +68,9 @@ Fixed design decisions:
 - The window is an enum in `DetectionParams` (`Hann | BlackmanHarris4 | Nuttall4 | Kaiser(beta)`); changing it bumps `algorithm_version` and invalidates the cache.
 - Periodic window, `f64` coefficients computed once per (kind, N) and shared across threads.
 - Overlap per window: 50 % for Hann, 75 % for 4-term windows.
-- Average in **power** (|X|²) across segments, convert to dB at the end; never average dB.
+- Average in **power** (|X|²) across frames for the mean spectrum, convert to dB at the end; never average dB across frames. The median spectrum takes the median of per-frame dB (the median does not depend on the scale). The step rules compare levels between neighbouring bands of the finished spectrum (`specs/detection/rules.md`).
 - Normalise by Σw² (noise power) so the noise floor is comparable across windows, and by coherent gain for tones.
-- Real FFT (`realfft`). FFT size by constant resolution: N = nearest power of two to `sample_rate / 5.4 Hz` (8192 at 44.1/48 kHz, 16384 at 88.2/96 kHz) so dB/kHz thresholds hold across sample rates.
+- Real FFT (`realfft`). FFT size by constant resolution: N = nearest power of two to `sample_rate / target_bin_hz` so thresholds hold across sample rates (v1: 5.4 Hz → 8192 at 44.1/48 kHz; v2: 10.8 Hz → 4096 at 44.1/48 kHz and 8192 at 88.2/96 kHz, so that one frame spans few MP3 frames; ADR-0035).
 - The spectrogram uses its own window (Hann, N=2048, 75 % overlap) because its goal is visual/temporal (`spectrogram_window` parameter).
 
 Selection protocol (phase 5, `just bench-windows`): synthetic signals with known truth (ideal low-pass noise at 16/19/20 kHz, slopes 24–120 dB/oct, bass tones at −3 dBFS, 16/24-bit with and without dither) + the real corpus (ADR-0022). Metrics: cutoff error (Hz), false cliffs on real tracks, noise-floor bias, resolvable dynamic range next to a strong tone, final classification, time per track. Rule: the window that minimises cutoff error **without worsening classification** wins; ties go to Hann. The result is recorded in a calibration ADR and in `specs/detection/`.

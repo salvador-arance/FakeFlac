@@ -2,6 +2,22 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-18 - Detection v2 spec (RF-03, RF-04)
+
+**Done**
+- Branch `spec/RF-03-04-detection-v2`, PR for G1. On a local corpus, v1 returns `Real` for real MP3 → FLAC transcodes: the noise or dither above the low-pass sits less than 60 dB below the reference level. The Rust v1 code returned Real for all 16 tracks of an album with known truth, 7 of them transcodes. v2: relative cutoff step on the mean band spectrum + gap step at 16 kHz on the per-frame median spectrum; new params file (`algorithm_version` 2), 5 new fixtures, reason `highBandGaps`, ADR-0035. Evaluation figures are in the PR.
+
+**Pending**
+- G1: human reviews the detection v2 spec PR (thresholds, verdict table, new reason).
+- After G1: `/feature RF-03,RF-04` again: the test author rewrites `detect_rules.rs` / `detection_lossless.rs` and adds the new fixtures; the implementer changes the analyzer output (mean + median band spectra) and `DetectionParams`; `just gen`.
+- Follow-ups noted in the PR, not specified: integrity finding instead of `Error` for partially corrupt tracks; FLAC MD5 check; CSV for Excel in the Spanish locale (revisit ADR-0012).
+- Earlier pending items below are unchanged.
+
+**Blockers / questions for the human**
+- Thresholds were calibrated on the same corpus. Before release, phase 5 (`just accept`) needs more labelled albums, especially intros/skits flagged Fake inside real albums.
+
+**Next step:** G1 on the detection v2 PR; meanwhile the main-screen UI (see the next block).
+
 ## 2026-10-15 - H1: contract v2 in the backend (RF-01)
 
 **Done**
