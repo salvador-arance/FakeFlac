@@ -1,13 +1,11 @@
-//! Average power spectrum from sampled blocks (`specs/detection/rules.md`, section 1).
+//! Band spectra from sampled blocks (`specs/detection/rules.md`, section 1).
 //!
 //! `segments` blocks are spread over the track (skipping `edge_skip_percent` at each end).
 //! Each block holds two FFT frames overlapping by `overlap` (block length `N + hop`), which is
 //! the "block long enough for the FFT and its overlap" of the spec. Only the blocks are kept in
 //! memory, never the whole track (RNF-02).
 
-use crate::window::coefficients;
-use fakeflac_core::{AverageSpectrum, DetectionParams};
-use realfft::RealFftPlanner;
+use fakeflac_core::{BandSpectra, DetectionParams};
 
 pub struct BlockCollector {
     n: usize,
@@ -63,53 +61,10 @@ impl BlockCollector {
         }
     }
 
-    /// Average spectrum over the non-silent frames; `None` if every frame was silent.
-    pub fn finish(self, sample_rate: u32, params: &DetectionParams) -> Option<AverageSpectrum> {
-        let n = self.n;
-        let window = coefficients(params.fft.window, n, params.fft.kaiser_beta);
-        let window_power: f64 = window.iter().map(|w| w * w).sum();
-        let mut planner = RealFftPlanner::<f64>::new();
-        let fft = planner.plan_fft_forward(n);
-        let mut input = fft.make_input_vec();
-        let mut output = fft.make_output_vec();
-        let mut acc = vec![0.0f64; n / 2 + 1];
-        let mut frames = 0u32;
-
-        for block in self
-            .blocks
-            .iter()
-            .filter(|b| b.samples.len() == n + self.hop)
-        {
-            for frame in [&block.samples[..n], &block.samples[self.hop..self.hop + n]] {
-                let rms =
-                    (frame.iter().map(|s| f64::from(*s).powi(2)).sum::<f64>() / n as f64).sqrt();
-                if 20.0 * rms.max(1e-20).log10() < params.input.silence_dbfs {
-                    continue;
-                }
-                for ((x, s), w) in input.iter_mut().zip(frame).zip(&window) {
-                    *x = f64::from(*s) * w;
-                }
-                if fft.process(&mut input, &mut output).is_err() {
-                    continue;
-                }
-                for (a, c) in acc.iter_mut().zip(&output) {
-                    *a += c.norm_sqr();
-                }
-                frames += 1;
-            }
-        }
-        if frames == 0 {
-            return None;
-        }
-        let scale = f64::from(frames) * window_power;
-        Some(AverageSpectrum {
-            sample_rate,
-            bin_hz: f64::from(sample_rate) / n as f64,
-            power_db: acc
-                .into_iter()
-                .map(|p| 10.0 * (p / scale).max(1e-30).log10())
-                .collect(),
-        })
+    /// Mean and median band spectra over the non-silent frames; `None` if every frame was silent.
+    pub fn finish(self, sample_rate: u32, params: &DetectionParams) -> Option<BandSpectra> {
+        let _ = (self.n, self.hop, sample_rate, params);
+        todo!("RF-03: band spectra of rules.md section 1")
     }
 }
 

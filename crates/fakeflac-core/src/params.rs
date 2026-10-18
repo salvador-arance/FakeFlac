@@ -1,4 +1,4 @@
-//! `DetectionParams` (S4, ADR-0011). Mirrors `specs/detection/detection-params.v1.toml`;
+//! `DetectionParams` (S4, ADR-0011). Mirrors `specs/detection/detection-params.v2.toml`;
 //! a test checks that `Default` equals that file. Values are data, never constants in the algorithm.
 
 use serde::{Deserialize, Serialize};
@@ -22,7 +22,9 @@ pub struct DetectionParams {
     pub input: InputParams,
     pub fft: FftParams,
     pub bands: BandParams,
-    pub cutoff: CutoffParams,
+    pub extent: ExtentParams,
+    pub step: StepParams,
+    pub gaps: GapParams,
     pub verdict: VerdictParams,
     pub spectrogram: SpectrogramParams,
 }
@@ -33,6 +35,7 @@ pub struct InputParams {
     pub min_duration_s: f64,
     pub edge_skip_percent: f64,
     pub segments: u32,
+    pub frames_per_segment: u32,
     pub silence_dbfs: f64,
 }
 
@@ -43,7 +46,8 @@ pub struct FftParams {
     pub window: WindowKind,
     pub kaiser_beta: f64,
     pub overlap: f64,
-    pub smoothing_hz: f64,
+    /// Width of the bands of the mean and median spectra.
+    pub band_hz: f64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -57,21 +61,45 @@ pub struct BandParams {
     pub noise_floor_percentile: f64,
 }
 
+/// Content extent `fe` (rules.md section 2).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct CutoffParams {
+pub struct ExtentParams {
     pub content_drop_db: f64,
     pub content_min_width_hz: f64,
-    pub steepness_span_hz: f64,
-    pub full_band_margin_hz: f64,
+}
+
+/// Cutoff step `D` at `fs` (rules.md section 2).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StepParams {
+    pub search_low_hz: f64,
+    pub search_top_margin_hz: f64,
+    pub window_bands: u32,
+    pub rebound_db: f64,
+}
+
+/// Gap step `G` (rules.md section 2).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GapParams {
+    pub edge_hz: f64,
+    pub band_hz: f64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct VerdictParams {
     pub low_hf_threshold_db: f64,
-    pub cliff_min_steepness_db_per_khz: f64,
+    pub gap_fake_db: f64,
+    pub gap_suspicious_db: f64,
+    pub step_fake_db: f64,
+    pub step_suspicious_db: f64,
+    pub step_low_suspicious_db: f64,
+    pub step_high_suspicious_db: f64,
+    pub lossy_min_cutoff_hz: f64,
     pub fake_max_cutoff_hz: f64,
+    pub ambiguous_max_cutoff_hz: f64,
     pub gradual_min_cutoff_hz: f64,
 }
 
@@ -88,22 +116,24 @@ pub struct SpectrogramParams {
 }
 
 impl Default for DetectionParams {
-    /// DetectionParams v1.
+    /// DetectionParams v2: the values of `specs/detection/detection-params.v2.toml`
+    /// (a test checks the equality).
     fn default() -> Self {
         DetectionParams {
-            algorithm_version: 1,
+            algorithm_version: 2,
             input: InputParams {
                 min_duration_s: 5.0,
                 edge_skip_percent: 5.0,
-                segments: 32,
-                silence_dbfs: -70.0,
+                segments: 64,
+                frames_per_segment: 4,
+                silence_dbfs: -60.0,
             },
             fft: FftParams {
-                target_bin_hz: 5.4,
-                window: WindowKind::BlackmanHarris4,
+                target_bin_hz: 10.8,
+                window: WindowKind::Hann,
                 kaiser_beta: 10.0,
-                overlap: 0.75,
-                smoothing_hz: 100.0,
+                overlap: 0.5,
+                band_hz: 100.0,
             },
             bands: BandParams {
                 ref_band_low_hz: 1000.0,
@@ -113,16 +143,31 @@ impl Default for DetectionParams {
                 nyquist_guard_hz: 100.0,
                 noise_floor_percentile: 5.0,
             },
-            cutoff: CutoffParams {
+            extent: ExtentParams {
                 content_drop_db: 60.0,
                 content_min_width_hz: 200.0,
-                steepness_span_hz: 500.0,
-                full_band_margin_hz: 1000.0,
+            },
+            step: StepParams {
+                search_low_hz: 11000.0,
+                search_top_margin_hz: 400.0,
+                window_bands: 3,
+                rebound_db: 6.0,
+            },
+            gaps: GapParams {
+                edge_hz: 16000.0,
+                band_hz: 700.0,
             },
             verdict: VerdictParams {
                 low_hf_threshold_db: -60.0,
-                cliff_min_steepness_db_per_khz: 30.0,
-                fake_max_cutoff_hz: 20500.0,
+                gap_fake_db: 6.0,
+                gap_suspicious_db: 4.0,
+                step_fake_db: 10.0,
+                step_suspicious_db: 7.0,
+                step_low_suspicious_db: 10.0,
+                step_high_suspicious_db: 12.0,
+                lossy_min_cutoff_hz: 14500.0,
+                fake_max_cutoff_hz: 20300.0,
+                ambiguous_max_cutoff_hz: 20800.0,
                 gradual_min_cutoff_hz: 19000.0,
             },
             spectrogram: SpectrogramParams {

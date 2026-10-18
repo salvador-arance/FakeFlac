@@ -4,7 +4,7 @@
 use crate::domain::{AudioFormat, TrackError};
 use crate::error::AppError;
 use crate::params::DetectionParams;
-use crate::spectrum::AverageSpectrum;
+use crate::spectrum::BandSpectra;
 use std::path::PathBuf;
 
 /// A supported file found by the scanner, with its file-system metadata.
@@ -25,10 +25,10 @@ pub struct AudioProbe {
     pub channels: u8,
     pub duration_ms: u64,
     /// `None` when every analysed frame was silent.
-    pub spectrum: Option<AverageSpectrum>,
+    pub spectrum: Option<BandSpectra>,
 }
 
-/// Decodes a file and computes its average spectrum (RF-03). Read-only (RNF-05).
+/// Decodes a file and computes its band spectra (RF-03). Read-only (RNF-05).
 pub trait SpectrumAnalyzer: Send + Sync {
     fn analyze(
         &self,

@@ -46,7 +46,7 @@ export type CutoffEstimate = {
 
 export type ProgressEvent = { kind: "scanned"; total: number } | { kind: "trackStarted"; index: number; path: string } | { kind: "trackDone"; index: number; analysis: TrackAnalysis } | { kind: "finished"; summary: AnalysisSummary } | { kind: "cancelled"; summary: AnalysisSummary };
 
-export type SuspicionReason = "lowHighFrequencyContent" | "gradualRolloff" | "ambiguousCutoff";
+export type SuspicionReason = "lowHighFrequencyContent" | "gradualRolloff" | "ambiguousCutoff" | "highBandGaps";
 
 export type TrackAnalysis = {
 	info: TrackInfo,
