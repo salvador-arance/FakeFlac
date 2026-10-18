@@ -92,3 +92,24 @@ export async function startAnalysisOfDropped(
 export async function cancelAnalysis(): Promise<void> {
   await commands.cancelAnalysis()
 }
+
+/** Window controls of the custom title bar (capabilities in `src-tauri/capabilities/default.json`). */
+export async function minimizeWindow(): Promise<void> {
+  throw new Error('not implemented')
+}
+
+export async function toggleMaximizeWindow(): Promise<void> {
+  throw new Error('not implemented')
+}
+
+export async function closeWindow(): Promise<void> {
+  throw new Error('not implemented')
+}
+
+/** RF-01: what the page needs from Tauri's drag-drop event (`drop` carries the absolute paths). */
+export type DragDropEvent = { type: 'enter' | 'over' | 'leave' } | { type: 'drop'; paths: string[] }
+
+/** RF-01: subscribes to files/folders dragged over the window; resolves with the unlisten function. */
+export async function onDragDrop(_handler: (event: DragDropEvent) => void): Promise<() => void> {
+  throw new Error('not implemented')
+}
