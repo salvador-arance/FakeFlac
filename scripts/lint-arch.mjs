@@ -9,12 +9,18 @@ const violations = []
 
 // ---- 1. Cargo crate dependency rules ------------------------------------
 const ADAPTERS = ['fakeflac-audio', 'fakeflac-fs', 'fakeflac-store', 'fakeflac-export']
+const ALLOWED_TOOL_DEPS = ['fakeflac-core', 'fakeflac-audio', 'fakeflac-fs']
 const crateDeps = (dir) => {
   const toml = readFileSync(join(dir, 'Cargo.toml'), 'utf8')
   const section = toml.split(/^\[dependencies\]/m)[1]?.split(/^\[/m)[0] ?? ''
   return [...section.matchAll(/^(fakeflac[\w-]*)\s*[=.]/gm)].map((m) => m[1])
 }
 const cratesDir = join(root, 'crates')
+const toolsDir = join(root, 'tools')
+const toolCrates = existsSync(toolsDir)
+  ? readdirSync(toolsDir).filter((name) => existsSync(join(toolsDir, name, 'Cargo.toml')))
+  : []
+
 if (existsSync(cratesDir)) {
   for (const name of readdirSync(cratesDir)) {
     const dir = join(cratesDir, name)
@@ -28,6 +34,35 @@ if (existsSync(cratesDir)) {
         if (d !== 'fakeflac-core') {
           violations.push(`crates/${name}: adapters may depend only on fakeflac-core (found ${d})`)
         }
+      }
+    }
+    for (const d of deps) {
+      if (toolCrates.includes(d) || d === 'fakeflac-calibrate') {
+        violations.push(`crates/${name}: product crate must not depend on dev tool '${d}'`)
+      }
+    }
+  }
+}
+
+// src-tauri composition root must not depend on dev tools
+const srcTauriDir = join(root, 'src-tauri')
+if (existsSync(join(srcTauriDir, 'Cargo.toml'))) {
+  const deps = crateDeps(srcTauriDir)
+  for (const d of deps) {
+    if (toolCrates.includes(d) || d === 'fakeflac-calibrate') {
+      violations.push(`src-tauri: composition root must not depend on dev tool '${d}'`)
+    }
+  }
+}
+
+// Dev tools under tools/ (ADR-0036)
+if (existsSync(toolsDir)) {
+  for (const name of toolCrates) {
+    const dir = join(toolsDir, name)
+    const deps = crateDeps(dir)
+    for (const d of deps) {
+      if (!ALLOWED_TOOL_DEPS.includes(d)) {
+        violations.push(`tools/${name}: dev tools may depend only on ${ALLOWED_TOOL_DEPS.join(', ')} (found ${d})`)
       }
     }
   }

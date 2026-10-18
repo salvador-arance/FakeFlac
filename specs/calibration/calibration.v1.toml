@@ -5,11 +5,13 @@ config_version = 1
 [split]                               # inputs.md section 4
 seed = "fakeflac-calibration-1"
 holdout_fraction = 0.30
+min_holdout_albums = 2                # minimum holdout albums per class (OQ-7)
 disc_folder_prefixes = ["cd", "disc", "disk", "disco"]   # CD1, Disc 2, Disco 3 -> merged into the parent album
 
 [generate]                            # generation.md
-fragment_s = 60.0                     # centred fragment; shorter tracks are used whole
-keep_audio = false                    # delete the generated FLAC once its spectra are cached
+# fragment_s = 60.0                   # duration in seconds (centred); omitted / not set = full track (default, OQ-10)
+keep_audio = false                    # delete the generated FLAC once its spectra are cached (OQ-9)
+keep_misclassified = false            # retain generated FLAC only for misclassified tracks to inspect spectrograms (OQ-9)
 decode_args = ["-c:a", "flac", "-sample_fmt", "s16"]   # back to 16-bit FLAC, no dither; Opus stays at 48 kHz
 
 [[generate.settings]]
