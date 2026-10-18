@@ -26,7 +26,8 @@ Numbers: rates as percentages with 1 decimal, dB with 2 decimals, Hz with no dec
 - **Verdict** of a labelled track under a params file: `fakeflac_core::detect` on its cached spectra (`Real`, `Suspicious`, `Fake`), or `Error` with its `TrackError`.
 - **Negatives:** `truth = real`. **Positives:** `truth = fake`. **Evaluation set:** every labelled row except class `reference`. `reference` rows appear only in their own row of section 3.
 - **False positive (FP):** negative with `Fake`. **Soft FP:** negative with `Suspicious`. **False negative (FN):** positive with `Real`. **Detected:** positive with `Fake`. **Caught:** positive with `Fake` or `Suspicious`.
-- Rate denominators exclude `Error` tracks, which are counted in their own column.
+- **Undetectable transcodes:** Generated entries whose source has no content the codec would remove: either the source's measured bandwidth `source.fe <= setting.lowpass_hz`, or the maximum drop in high-frequency bands ($b \ge \text{lowpass\_hz}/100$) between source and transcode is below `generate.min_removed_hf_db`. They cannot exhibit an encoder-induced cutoff step and are classified as undetectable. They are excluded from the `must_catch` feasibility constraint and from the cost calculation, and reported in the `Undetectable` column of the confusion matrices and listed in `report.md`.
+- Rate denominators exclude `Error` tracks and undetectable transcodes, which are counted in their own columns.
 - **Splits:** `all`, `tune`, `holdout` (inputs.md section 4).
 
 ## 3. False positives by origin (main metric; OQ-13)
@@ -47,13 +48,13 @@ One table per params file and split (`all`, `tune`, `holdout`):
 
 - **Global**, per params file and split (`all`, `tune`, `holdout`), over the evaluation set:
 
-| truth \ verdict | Real | Suspicious | Fake | Error | total |
-|---|---|---|---|---|---|
-| real | | | | | |
-| fake | | | | | |
+| truth \ verdict | Real | Suspicious | Fake | Undetectable | Error | total |
+|---|---|---|---|---|---|---|
+| real | | | | — | | |
+| fake | | | | | | |
 
-  followed by the FP rate, the soft-FP rate, the FN rate, the detection rate and the caught rate.
-- **Per encoder setting**, per params file (`all`; `tune` and `holdout` too in `calibrate`): one row per setting in config order, then a `confirmed_fake` row. Columns `Real`, `Suspicious`, `Fake`, `Error`, total, detection rate, FN rate.
+  followed by the FP rate, the soft-FP rate, the FN rate, the detection rate and the caught rate. Detection and caught rates on positives are computed over detectable tracks (`total − Undetectable − Error`).
+- **Per encoder setting**, per params file (`all`; `tune` and `holdout` too in `calibrate`): one row per setting in config order, then a `confirmed_fake` row. Columns `Real`, `Suspicious`, `Fake`, `Undetectable`, `Error`, total, detection rate, FN rate.
 
 ## 5. Watch list and `clean` albums that turn Fake
 
@@ -88,9 +89,9 @@ Reported as `PASS`/`FAIL` with the count, per params file, for `all` and `holdou
 
 - Only rule parameters can be searched: the fields of `[bands]`, `[extent]`, `[step]`, `[gaps]` and `[verdict]`. A key in `[input]`, `[fft]` or `[spectrogram]`, or `algorithm_version`, is an error (exit 2: `extraction parameter; compare params files with accept instead`). Unknown keys and values of the wrong type (`step.window_bands` is an integer) are errors (exit 2).
 - **Points:** the Cartesian product of the value lists, in file order (first key varies slowest). Points that break an invariant are skipped and counted: `gap_suspicious_db ≤ gap_fake_db`, `step_suspicious_db ≤ step_fake_db`, `lossy_min_cutoff_hz < fake_max_cutoff_hz ≤ ambiguous_max_cutoff_hz`, `ref_band_low_hz < ref_band_high_hz`, `hf_band_low_hz < hf_band_high_hz`. More than `max_points` points: exit 2.
-- **Data: `tune` only.** Tune negatives are classes `primary`, `reviewed` and `clean` in `tune`. Tune positives are class `positive` in `tune`. `Error` rows are left out. `holdout` rows never enter the cost or the ranking; the only `holdout` rows the search reads are the confirmed fakes, for hard constraint (2).
-- **Feasible:** (1) no `Real` among the tune positives of the `must_catch` settings; and (2) **hard constraint: no track in `confirmed.txt` of kind `fake` may be classified as `Real`** (verified fakes must never receive a `Real` verdict). Constraint (2) covers **every** confirmed fake, in `tune` and in `holdout`: it is a safety rule, not an objective, and the known-truth album must constrain the search wherever the split puts it. The report says how many of the confirmed fakes checked by (2) are in `holdout`.
-- **Cost:** `fp · #Fake(neg) + fn · #Real(pos) + suspicious_negative · #Suspicious(neg) + suspicious_positive · #Suspicious(pos)`. Weights are confirmed at G1: `fp = 10.0`, `fn = 1.0`, `suspicious_negative = 0.5`, `suspicious_positive = 0.1`.
+- **Data: `tune` only.** Tune negatives are classes `primary`, `reviewed` and `clean` in `tune`. Tune positives are class `positive` in `tune`. `Error` rows and undetectable transcodes are left out. `holdout` rows never enter the cost or the ranking; the only `holdout` rows the search reads are the confirmed fakes, for hard constraint (2).
+- **Feasible:** (1) no `Real` among the detectable tune positives of the `must_catch` settings (undetectable transcodes whose source has no content above `lowpass_hz` are excluded); and (2) **hard constraint: no track in `confirmed.txt` of kind `fake` may be classified as `Real`** (verified fakes must never receive a `Real` verdict). Constraint (2) covers **every** confirmed fake, in `tune` and in `holdout`: it is a safety rule, not an objective, and the known-truth album must constrain the search wherever the split puts it. The report says how many of the confirmed fakes checked by (2) are in `holdout`.
+- **Cost:** `fp · #Fake(neg) + fn · #Real(pos) + suspicious_negative · #Suspicious(neg) + suspicious_positive · #Suspicious(pos)`. Undetectable transcodes are excluded from the cost. Weights are confirmed at G1: `fp = 10.0`, `fn = 1.0`, `suspicious_negative = 0.5`, `suspicious_positive = 0.1`.
 - **Order:** feasible before infeasible; then lower cost; then the larger smallest `nearest_fake_margin_db` among the tune negatives that are not `Fake` (an empty set counts as +∞); then fewer values different from the baseline; then earlier in grid order.
 - The baseline is ranked with the same order. **Proposal** = the best point, only if it ranks strictly above the baseline. Otherwise the output says "no change proposed" (the baseline is at least as good), and no file is written. If no point is feasible, nothing is proposed and the 10 best infeasible points are listed with their `must_catch` FN count.
 - **Rule families and Detection v3.** The tool architecture must support evaluating **rule families** beyond numerical tuning of v2 thresholds. The 4 confirmed false positives of purchased discs have a 16 kHz step $G$ of 10–16 dB, identical to 320 kbps MP3 transcodes. No adjustment of threshold values alone can separate them without failing 320 kbps transcode detection. What distinguishes them is bandwidth: they contain audio energy up to 20.4–21.4 kHz, whereas an MP3 transcode has no content above ~20 kHz.

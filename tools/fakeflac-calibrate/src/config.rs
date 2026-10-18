@@ -32,6 +32,8 @@ pub struct GenerateConfig {
     pub keep_audio: bool,
     pub keep_misclassified: bool,
     pub decode_args: Vec<String>,
+    #[serde(default)]
+    pub min_removed_hf_db: Option<f64>,
     pub settings: Vec<Setting>,
 }
 
@@ -43,6 +45,8 @@ pub struct Setting {
     pub encoder: String,
     pub ext: String,
     pub bitrate_kbps: Option<u32>,
+    #[serde(default)]
+    pub lowpass_hz: Option<u32>,
     pub args: Vec<String>,
 }
 

@@ -12,12 +12,14 @@ status: proposed
 
 The tool's library takes the transcoder as a parameter (ADR-0036). The binary always uses ffmpeg. Tests pass a **fixture transcoder**: for a setting with `encoder = "fixture"`, it ignores the source audio and writes the fixture named in `args[0]` as 16-bit FLAC, recording `encoder_version = "fixture"`. The binary rejects `encoder = "fixture"` with exit 2.
 
-| Setting | `args[0]` (fixture written) | Verdict with v2 |
-|---|---|---|
-| `fx128` | `lp16k_dither` | fake |
-| `fxv0` | `sfb21_gaps` | fake |
-| `fx320` | `lp20k_floor` | fake |
-| `fxweak` | `sfb21_gaps_weak` | suspicious (`highBandGaps`) |
+| Setting | `args[0]` (fixture written) | `lowpass_hz` | Verdict with v2 |
+|---|---|---|---|
+| `fx128` | `lp16k_dither` | 16000 | fake |
+| `fxv0` | `sfb21_gaps` | 22050 | fake |
+| `fx320` | `lp20k_floor` | 20500 | fake |
+| `fxweak` | `sfb21_gaps_weak` | 16000 | suspicious (`highBandGaps`) |
+
+Track 5 (`low_hf`, bandwidth extent $\le 16\text{ kHz}$) transcoded to `fx128` (`lowpass_hz = 16000`) has `source.fe <= setting.lowpass_hz`: it is classified as undetectable and excluded from `must_catch` feasibility and cost.
 
 ## 2. Files
 

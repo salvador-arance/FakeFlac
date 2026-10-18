@@ -13,12 +13,14 @@ disc_folder_prefixes = ["cd", "disc", "disk", "disco"]   # CD1, Disc 2, Disco 3 
 keep_audio = false                    # delete the generated FLAC once its spectra are cached (OQ-9)
 keep_misclassified = false            # retain generated FLAC only for misclassified tracks to inspect spectrograms (OQ-9)
 decode_args = ["-c:a", "flac", "-sample_fmt", "s16"]   # back to 16-bit FLAC, no dither; Opus stays at 48 kHz
+min_removed_hf_db = 12.0              # minimum drop in HF bands (>= lowpass_hz) for a transcode to be detectable
 
 [[generate.settings]]
 id = "cbr128"
 encoder = "lame"
 ext = "mp3"
 bitrate_kbps = 128
+lowpass_hz = 16000
 args = ["-c:a", "libmp3lame", "-b:a", "128k"]
 
 [[generate.settings]]
@@ -26,6 +28,7 @@ id = "cbr192"
 encoder = "lame"
 ext = "mp3"
 bitrate_kbps = 192
+lowpass_hz = 19000
 args = ["-c:a", "libmp3lame", "-b:a", "192k"]
 
 [[generate.settings]]
@@ -33,6 +36,7 @@ id = "cbr256"
 encoder = "lame"
 ext = "mp3"
 bitrate_kbps = 256
+lowpass_hz = 19500
 args = ["-c:a", "libmp3lame", "-b:a", "256k"]
 
 [[generate.settings]]
@@ -40,18 +44,21 @@ id = "cbr320"
 encoder = "lame"
 ext = "mp3"
 bitrate_kbps = 320
+lowpass_hz = 20500
 args = ["-c:a", "libmp3lame", "-b:a", "320k"]
 
 [[generate.settings]]
 id = "v0"
 encoder = "lame"
 ext = "mp3"                           # VBR: no bitrate_kbps
+lowpass_hz = 22050
 args = ["-c:a", "libmp3lame", "-q:a", "0"]
 
 [[generate.settings]]
 id = "v2"
 encoder = "lame"
 ext = "mp3"
+lowpass_hz = 19000
 args = ["-c:a", "libmp3lame", "-q:a", "2"]
 
 [[generate.settings]]
@@ -59,6 +66,7 @@ id = "aac128"
 encoder = "aac"                       # ffmpeg's native AAC encoder
 ext = "m4a"
 bitrate_kbps = 128
+lowpass_hz = 17000
 args = ["-c:a", "aac", "-b:a", "128k"]
 
 [[generate.settings]]
@@ -66,6 +74,7 @@ id = "aac256"
 encoder = "aac"
 ext = "m4a"
 bitrate_kbps = 256
+lowpass_hz = 20000
 args = ["-c:a", "aac", "-b:a", "256k"]
 
 [[generate.settings]]
@@ -73,6 +82,7 @@ id = "opus128"
 encoder = "opus"                      # libopus, VBR by default; decodes at 48 kHz
 ext = "opus"
 bitrate_kbps = 128
+lowpass_hz = 20000
 args = ["-c:a", "libopus", "-b:a", "128k"]
 
 [report]                              # evaluation.md sections 3 and 8

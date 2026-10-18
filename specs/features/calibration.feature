@@ -88,6 +88,13 @@ Feature: Calibration and acceptance against a labelled corpus
     And for every row with spectra m_gap_fake_db equals gap_fake_db minus G
     And the 2 rows of the Error tracks have empty measurements and margins
 
+  @RP-11
+  Scenario: Undetectable transcodes on band-limited sources
+    When a generated transcode has a source whose measured bandwidth extent is below or equal to the setting lowpass
+    Then the transcode is classified as undetectable
+    And it is counted in the Undetectable column of the confusion matrices
+    And it is listed in the undetectable section of report.md
+
   # --- Split -------------------------------------------------------------
 
   @RP-11
@@ -172,6 +179,14 @@ Feature: Calibration and acceptance against a labelled corpus
   Scenario: Generated audio is deleted once cached
     When "accept" runs on the sample corpus
     Then FAKEFLAC_CALIBRATION/generated holds no file
+
+  @RP-11
+  Scenario: --no-generate leaves labels.csv untouched
+    Given "accept" has run once on the sample corpus
+    And the contents of labels.csv are recorded
+    When "accept" runs with "--no-generate"
+    Then labels.csv is byte-identical to the recorded file
+    And missing generated entries are reported as not generated
 
   # --- Several parameter files -------------------------------------------
 
@@ -287,6 +302,13 @@ Feature: Calibration and acceptance against a labelled corpus
     And summary.md does not contain any note of trusted.txt or confirmed.txt
     And labels.csv, tracks.csv and report.md do not contain the value of FAKEFLAC_CORPUS or of FAKEFLAC_CALIBRATION
 
+  @RP-11
+  Scenario: privacy-check exits 1 when a changed file cannot be read
+    Given a changed file in the diff that cannot be read
+    When "privacy-check" runs
+    Then the exit code is 1
+    And the error output reports the unreadable file
+
   @RP-11 @RNF-05
   Scenario: The corpus is not modified
     Given the list of every file under FAKEFLAC_CORPUS with its size and modification time
@@ -322,6 +344,13 @@ Feature: Calibration and acceptance against a labelled corpus
     When "calibrate" runs on the sample corpus
     Then the exit code is 2
     And the error output says "extraction parameter; compare params files with accept instead"
+
+  @RP-11
+  Scenario: Undetectable transcodes are excluded from must_catch feasibility and cost
+    Given a must_catch setting with an undetectable transcode that receives verdict "real"
+    When the grid search evaluates candidate parameters
+    Then the undetectable transcode does not cause must_catch feasibility to fail
+    And it does not contribute to the grid cost
 
   @RP-11
   Scenario: Feasibility requires that no confirmed fake is Real
