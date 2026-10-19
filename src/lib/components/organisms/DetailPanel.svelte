@@ -7,9 +7,11 @@
     track: TrackAnalysis | null
     spectrogram: Spectrogram | null
     loading: boolean
+    /** The spectrogram request failed for this track (e.g. the file was moved after the analysis). */
+    unavailable?: boolean
   }
 
-  let { track, spectrogram, loading }: Props = $props()
+  let { track, spectrogram, loading, unavailable = false }: Props = $props()
 
   let cutoffHz = $derived(track?.cutoff?.frequencyHz ?? null)
 
@@ -32,9 +34,13 @@
       </p>
     {:else}
       <p class="summary">{summary}</p>
-      <div class="spectrogram">
-        <SpectrogramView {spectrogram} {cutoffHz} {loading} />
-      </div>
+      {#if unavailable}
+        <p class="error-text">{t('spectrogram.unavailable')}</p>
+      {:else}
+        <div class="spectrogram">
+          <SpectrogramView {spectrogram} {cutoffHz} {loading} />
+        </div>
+      {/if}
     {/if}
   {/if}
 </section>

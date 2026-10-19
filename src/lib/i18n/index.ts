@@ -27,6 +27,7 @@ const EN: Record<string, string> = {
   'detail.cutoff': 'Cutoff {khz} kHz',
   'spectrogram.label': 'Spectrogram',
   'spectrogram.loading': 'Loading spectrogram…',
+  'spectrogram.unavailable': 'Cannot show the spectrogram of this file',
 }
 
 const ES: Record<string, string> = {

@@ -61,6 +61,7 @@
   // a response or failure for an older one (a row no longer selected) is discarded.
   let spectrogram = $state.raw<Spectrogram | null>(null)
   let spectrogramLoading = $state(false)
+  let spectrogramUnavailable = $state(false)
   let spectrogramRequest = 0
 
   let selectedTrack = $derived(
@@ -71,6 +72,7 @@
     spectrogramRequest += 1
     spectrogram = null
     spectrogramLoading = false
+    spectrogramUnavailable = false
   }
 
   async function handleSelect(index: number) {
@@ -86,12 +88,13 @@
     try {
       result = await getSpectrogram(track.info.path)
     } catch {
-      // No text for a failed spectrogram in H1: the panel keeps the verdict line, without image.
+      // The panel keeps the verdict line and shows `spectrogram.unavailable` (main-screen.md).
       result = null
     }
     if (request !== spectrogramRequest) return
     spectrogram = result
     spectrogramLoading = false
+    spectrogramUnavailable = result === null
   }
 
   function beginRun() {
@@ -139,7 +142,12 @@
 </script>
 
 {#snippet detailPanel()}
-  <DetailPanel track={selectedTrack} {spectrogram} loading={spectrogramLoading} />
+  <DetailPanel
+    track={selectedTrack}
+    {spectrogram}
+    loading={spectrogramLoading}
+    unavailable={spectrogramUnavailable}
+  />
 {/snippet}
 
 <MainLayout detail={showDetail ? detailPanel : undefined}>
