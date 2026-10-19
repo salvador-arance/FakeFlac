@@ -129,3 +129,80 @@ fn a_garbage_file_is_an_error_not_a_panic() {
     let result = SymphoniaAnalyzer.spectrogram(&path, &DetectionParams::default().spectrogram);
     assert!(result.is_err(), "{result:?}");
 }
+
+fn assert_lp16k_like(s: &Spectrogram) {
+    let h = s.height as usize;
+    assert_eq!(s.height, 512);
+    assert!(s.width > 0 && s.width <= 1200, "width {}", s.width);
+    assert_eq!(s.data.len(), s.width as usize * h);
+    let hz_of_row = |f: usize| f as f64 * s.max_frequency_hz / f64::from(s.height);
+    for f in (0..h).filter(|f| hz_of_row(*f) > 16_200.0) {
+        let mean = row_mean(s, f);
+        assert!(mean <= 63.0, "row {f} mean {mean:.1}");
+    }
+    for f in (0..h).filter(|f| hz_of_row(*f) > 500.0 && hz_of_row(*f) < 15_000.0) {
+        let mean = row_mean(s, f);
+        assert!(mean >= 128.0, "row {f} mean {mean:.1}");
+    }
+}
+
+// @RF-07 Scenario: Spectrogram shape (stream that does not declare its length: two passes)
+#[test]
+fn unknown_length_stream_gives_the_same_shape_and_stop_band() {
+    let path = fixture("lp16k_unknown_length", Container::Flac);
+    let s = SymphoniaAnalyzer
+        .spectrogram(&path, &DetectionParams::default().spectrogram)
+        .expect("spectrogram of lp16k_unknown_length");
+    assert_lp16k_like(&s);
+}
+
+// A file shorter than one FFT frame: one column, `height` rows, no panic.
+#[test]
+fn a_file_shorter_than_one_frame_has_one_column() {
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("spectrogram_tiny");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("tiny.wav");
+    let spec = hound::WavSpec {
+        channels: 1,
+        sample_rate: 44_100,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let mut w = hound::WavWriter::create(&path, spec).unwrap();
+    for i in 0..1000 {
+        w.write_sample(((i as f64 * 0.3).sin() * 8000.0) as i16)
+            .unwrap();
+    }
+    w.finalize().unwrap();
+    let s = SymphoniaAnalyzer
+        .spectrogram(&path, &DetectionParams::default().spectrogram)
+        .expect("spectrogram of a tiny file");
+    assert_eq!(s.width, 1);
+    assert_eq!(s.height, 512);
+    assert_eq!(s.data.len(), 512);
+}
+
+// A container that understates its length (STREAMINFO total_samples smaller than the audio):
+// the result stays well-formed and bounded.
+#[test]
+fn an_understated_length_still_gives_a_bounded_spectrogram() {
+    let full = fixture("lp16k", Container::Flac);
+    let mut bytes = std::fs::read(full).unwrap();
+    // STREAMINFO data starts at byte 8; the 36-bit total is bit 108: low nibble of byte 13, then 4 bytes.
+    let at = 8 + 13;
+    let total: u64 = 100_000;
+    bytes[at] = (bytes[at] & 0xF0) | ((total >> 32) & 0x0F) as u8;
+    for i in 0..4 {
+        bytes[at + 1 + i] = (total >> (24 - 8 * i)) as u8;
+    }
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("spectrogram_understated");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("understated.flac");
+    std::fs::write(&path, &bytes).unwrap();
+    let s = SymphoniaAnalyzer
+        .spectrogram(&path, &DetectionParams::default().spectrogram)
+        .expect("spectrogram of an understated stream");
+    assert_eq!(s.height, 512);
+    assert!(s.width > 0 && s.width <= 1200, "width {}", s.width);
+    assert_eq!(s.data.len(), s.width as usize * 512);
+}

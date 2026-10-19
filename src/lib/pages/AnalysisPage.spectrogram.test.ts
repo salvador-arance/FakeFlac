@@ -280,3 +280,19 @@ describe('@RF-07 Scenario: Keyboard navigation', () => {
     expect(screen.getByTestId('cutoff-line').getAttribute('data-cutoff-hz')).toBe('19000')
   })
 })
+
+describe('@RF-07 Scenario: A Suspicious track shows its reason in plain words', () => {
+  it('shows the cutoff, the verdict and the reason of the selected row', async () => {
+    const spectrograms = fakeSpectrograms()
+    await mountWithFinishedRun([
+      { path: A, verdict: 'suspicious', cutoffHz: 17000, reasons: ['highBandGaps'] },
+    ])
+    await selectRow('a.flac')
+    await vi.waitFor(() => expect(api.getSpectrogram).toHaveBeenCalledWith(A))
+    spectrograms.resolve(A, makeSpectrogram({ width: 2, height: 4 }))
+    await vi.waitFor(() => expect(image()).not.toBeNull())
+    expect((document.body.textContent ?? '').replace(/\s+/g, ' ')).toContain(
+      'Cutoff 17.0 kHz · Suspicious · Frequent gaps above 16 kHz, as in an MP3',
+    )
+  })
+})

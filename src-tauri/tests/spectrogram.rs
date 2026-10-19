@@ -86,3 +86,14 @@ fn spectrogram_json_matches_the_contract() {
         })
     );
 }
+
+// @RNF-09 A path with non-ASCII characters reaches the decoder intact.
+#[test]
+fn a_non_ascii_path_gives_a_spectrogram() {
+    let dir = temp_dir("Ñandú – Ü");
+    let path = dir.join("Canción ‘x’ – Ü.wav");
+    write_noise_wav(&path, 8);
+    let s = get_spectrogram(&path).expect("spectrogram of a Unicode path");
+    assert_eq!(s.height, 512);
+    assert!(s.width > 0);
+}

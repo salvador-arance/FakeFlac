@@ -65,7 +65,7 @@ describe('DetailPanel: spectrogram', () => {
     expect(text(container)).toContain('Cutoff 16.0 kHz · Fake')
   })
 
-  // @RF-07 "... and the reason in plain words": the existing wording of the reasons
+  // @RF-07 Scenario: A Suspicious track shows its reason in plain words (existing wording)
   it.each([
     ['gradualRolloff', 'High frequencies fade out gradually'],
     ['ambiguousCutoff', 'Sharp cutoff at a high frequency'],
