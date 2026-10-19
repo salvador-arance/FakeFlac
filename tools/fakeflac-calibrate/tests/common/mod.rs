@@ -38,6 +38,11 @@ pub fn v2_params() -> PathBuf {
     repo_root().join("specs/detection/detection-params.v2.toml")
 }
 
+/// Detection v3: v2 plus the optional `[full_band]` section (rules.md, ADR-0038).
+pub fn v3_params() -> PathBuf {
+    repo_root().join("specs/detection/detection-params.v3.toml")
+}
+
 pub fn v1_params() -> PathBuf {
     repo_root().join("specs/detection/detection-params.v1.toml")
 }
@@ -978,6 +983,16 @@ pub fn shared_v2_and_candidate() -> &'static SharedRun {
         let sample = Sample::new_shared("shared-two");
         let candidate = sample.candidate_params();
         let outcome = sample.accept(&[v2_params(), candidate]);
+        SharedRun { sample, outcome }
+    })
+}
+
+/// Cold run with v2 and v3 in one invocation (sample-corpus.md section 4, "v3 side by side").
+pub fn shared_v2_and_v3() -> &'static SharedRun {
+    static CELL: OnceLock<SharedRun> = OnceLock::new();
+    CELL.get_or_init(|| {
+        let sample = Sample::new_shared("shared-v2-v3");
+        let outcome = sample.accept(&[v2_params(), v3_params()]);
         SharedRun { sample, outcome }
     })
 }
