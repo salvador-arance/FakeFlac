@@ -48,13 +48,15 @@
     // clientHeight is 0 before layout: then only the detail minimum applies
     const available = content?.clientHeight ?? 0
     const max = available > 0 ? available - MIN_TABLE_HEIGHT - SPLITTER_HEIGHT : Infinity
-    return Math.round(Math.max(MIN_DETAIL_HEIGHT, Math.min(max, height)))
+    return Math.max(MIN_DETAIL_HEIGHT, Math.min(max, height))
   }
 
-  // the splitter delta is positive downward: moving it down shrinks the detail
+  // the splitter delta is positive downward: moving it down shrinks the detail.
+  // The height stays fractional (sub-pixel deltas under display scaling); it is rounded only for
+  // display and storage. Clamping first drops what a smaller window has already hidden.
   function resize(delta: number) {
-    detailHeight = clamp(detailHeight - delta)
-    saveDetailHeight(detailHeight)
+    detailHeight = clamp(clamp(detailHeight) - delta)
+    saveDetailHeight(Math.round(detailHeight))
   }
 </script>
 
@@ -71,7 +73,7 @@
     </div>
     {#if detail}
       <Splitter orientation="horizontal" onresize={resize} />
-      <div class="layout-detail" style:height="{detailHeight}px">
+      <div class="layout-detail" style:height="{Math.round(detailHeight)}px">
         {@render detail()}
       </div>
     {/if}

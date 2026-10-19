@@ -13,6 +13,7 @@
   let lastY = 0
 
   function startDrag(e: PointerEvent) {
+    if (e.button !== 0) return
     // keep the text from being selected while dragging; focus is lost with preventDefault, so set it
     e.preventDefault()
     ;(e.currentTarget as HTMLElement).focus()
@@ -40,11 +41,16 @@
   }
 </script>
 
-<svelte:window onpointermove={moveDrag} onpointerup={endDrag} onpointercancel={endDrag} />
+<!-- blur: a pointerup may never arrive when the window loses focus mid-drag -->
+<svelte:window
+  onpointermove={moveDrag}
+  onpointerup={endDrag}
+  onpointercancel={endDrag}
+  onblur={endDrag}
+/>
 
 <!-- a focusable separator is the WAI-ARIA window splitter widget; Svelte classes the role as static -->
-<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 <div
   class="splitter"
   role="separator"
