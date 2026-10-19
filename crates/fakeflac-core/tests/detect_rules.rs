@@ -803,9 +803,9 @@ fn rf04_low_treble_is_never_fake() {
     assert_eq!(d.reasons, vec![LowHighFrequencyContent]);
 }
 
-// Scenario Outline: Verdict by signal (sfb21_gaps): no cliff in the median, a 20 dB drop in the
-// median at 16 kHz and gated content up to Nyquist. The mean spectrum drops 6 dB at 16 kHz (fs 15950
-// Hz, in the lossy range, D = 6 >= max_lossy_step_db = 3). The upper window has M = -6 dB and
+// Scenario Outline: Verdict by signal (sfb21_gaps): gated content up to Nyquist. The median
+// spectrum drops 19 dB at 16 kHz (G = 19), the mean spectrum only 6 dB, which is its cutoff step
+// (fs 15950 Hz, in the lossy range, D = 6 >= max_lossy_step_db = 3). The upper window has M = -6 dB and
 // Q = -19 dB: U = -6 dB, B = 13 dB pass the thresholds, but with v4 defaults (ADR-0039) the lossy
 // step removes the guard, so the gap rule V3 stands: Fake, no reasons. With the v3 file's values
 // (no max_lossy_step_db) the track is full band and Suspicious(HighBandGaps). Cutoff: Nyquist.

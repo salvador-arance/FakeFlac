@@ -76,6 +76,20 @@ fn v4_file_is_accepted_and_has_max_lossy_step_db() {
     assert_eq!(p.full_band.unwrap().max_lossy_step_db, Some(3.0));
 }
 
+// The v3 stand-in of `crates/fakeflac-core/tests/detect_rules.rs` (`v3_params()`: the defaults, v4,
+// with `max_lossy_step_db = None` and `algorithm_version = 3`) is exactly what the v3 file says.
+// Built here because tests cannot be shared across crates.
+#[test]
+fn v3_file_equals_the_v4_defaults_without_max_lossy_step_db() {
+    let mut expected = DetectionParams {
+        algorithm_version: 3,
+        ..DetectionParams::default()
+    };
+    expected.full_band.as_mut().unwrap().max_lossy_step_db = None;
+    let p: DetectionParams = toml::from_str(&spec_text("detection-params.v3.toml")).unwrap();
+    assert_eq!(p, expected);
+}
+
 #[test]
 fn v2_file_is_accepted_and_has_no_full_band_section() {
     let p: DetectionParams = toml::from_str(&spec_text("detection-params.v2.toml")).unwrap();

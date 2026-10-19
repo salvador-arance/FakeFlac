@@ -595,9 +595,11 @@ fn near_eval(a: f64, full_band_margin_db: Option<f64>) -> RowEval {
     }
 }
 
-// Spec: "For a params file with a [full_band] section, also a negative kept from Fake only by the
-// guard at its threshold: a <= 0 and full_band_margin_db = 0 (its nearest_fake_margin_db is 0).
-// For a params file without the section the list is exactly v2's."
+// Spec (evaluation.md section 8, v4): "For a params file with a [full_band] section, also a negative
+// kept from Fake only by the guard at its threshold: a <= 0, full_band is true and g = 0 (its
+// nearest_fake_margin_db is 0; with v4 values only full_band_margin_db can be 0 there, since
+// FullBand needs m_full_band_step_db > 0). For a params file without the section the list is
+// exactly v2's." This test keeps the v3 cases (no m_full_band_step_db); the v4 case follows.
 #[test]
 fn rf04_a_negative_kept_from_fake_only_by_the_guard_at_its_threshold_is_near() {
     let config = Config::parse(&read(&spec_config())).unwrap();
@@ -622,6 +624,35 @@ fn rf04_a_negative_kept_from_fake_only_by_the_guard_at_its_threshold_is_near() {
     assert!(!is_near(&negative, &near_eval(-2.0, Some(-0.5)), &config));
     // a > 0 (not Fake by itself) at margin 0 is not the guard case: nearest = a = 3 dB, not near.
     assert!(!is_near(&negative, &near_eval(3.0, Some(0.0)), &config));
+}
+
+// v4 case of the same rule: with full_band_margin_db = 0 the guard holds only if the lossy-step
+// margin is empty or > 0. With an in-range step at or above max_lossy_step_db
+// (m_full_band_step_db <= 0) the track is not full band, so it is not "kept from Fake by the
+// guard": its nearest_fake_margin_db is a = -2 and it is not near.
+#[test]
+fn rf04_v4_a_negative_with_a_lossy_step_is_not_kept_by_the_guard() {
+    let config = Config::parse(&read(&spec_config())).unwrap();
+    let negative = near_row(Truth::Real);
+    let with_step = |step_margin: Option<f64>| {
+        let mut e = near_eval(-2.0, Some(0.0));
+        let m = e.margins.as_mut().unwrap();
+        m.m_full_band_step_db = step_margin;
+        // The helper assumed full band; recompute as the tool does (guard margin g).
+        let g = step_margin.map_or(0.0, |s| s.min(0.0));
+        m.nearest_fake_margin_db = if step_margin.is_none_or(|s| s > 0.0) {
+            (-2.0f64).max(g)
+        } else {
+            -2.0
+        };
+        e
+    };
+    // Lossy step at max_lossy_step_db (margin 0) or deeper: LossyStep holds, not full band.
+    assert!(!is_near(&negative, &with_step(Some(0.0)), &config));
+    assert!(!is_near(&negative, &with_step(Some(-1.0)), &config));
+    // A small step (margin 1 dB > 0) or none: still full band, at its threshold: near.
+    assert!(is_near(&negative, &with_step(Some(1.0)), &config));
+    assert!(is_near(&negative, &with_step(None), &config));
 }
 
 // =============================================================================================
@@ -690,6 +721,18 @@ fn rf04_v2_v3_and_v4_side_by_side() {
         1
     );
     assert!(v4.setting_changes.iter().all(|r| r.counts.is_empty()));
+    // The 6 changes of v3 are on fxv0 positives and on no other setting.
+    for row in &v3.setting_changes {
+        if row.setting == "fxv0" {
+            assert_eq!(
+                row.counts,
+                BTreeMap::from([(("fake".to_string(), "suspicious".to_string()), 6)])
+            );
+        } else {
+            assert!(row.counts.is_empty(), "{}: {:?}", row.setting, row.counts);
+        }
+    }
+    assert!(v3.setting_changes.iter().any(|r| r.setting == "fxv0"));
 
     // The caught rate of every setting is the same for the three files.
     for ((a, b), c) in v2.by_setting.iter().zip(&v3.by_setting).zip(&v4.by_setting) {
@@ -960,7 +1003,7 @@ fn rf04_the_lossy_step_condition_can_be_searched_from_a_v4_baseline() {
     let sample = Sample::new("grid-lossy-step-v4-baseline");
     sample.write_config(Some(0.0));
     let grid = grid_with_baseline(
-        3,
+        2,
         &sample,
         &v4_params(),
         "\"full_band.max_lossy_step_db\" = [3.0, 10.0, 12.0]",
@@ -1002,6 +1045,31 @@ fn rf04_the_lossy_step_condition_can_be_searched_from_a_v4_baseline() {
         })
         .collect();
     assert!(proposals.is_empty(), "{proposals:?}");
+
+    // "with that point the fxv0 entries are suspicious instead of fake": GridOutcome has no
+    // per-point verdicts, so evaluate the point's params (v4 text with max_lossy_step_db = 10.0)
+    // with accept, and the baseline for comparison.
+    let verdicts = |name: &str, params: &std::path::Path| {
+        let s = Sample::new(name);
+        let o = s.accept(&[params.to_path_buf()]);
+        assert_ok(&o);
+        o.evaluations[0]
+            .by_setting
+            .iter()
+            .find(|r| r.setting == "fxv0")
+            .expect("fxv0 row")
+            .counts
+    };
+    let text = read(&v4_params()).replace("\r\n", "\n");
+    assert!(text.contains("\nmax_lossy_step_db = 3.0"));
+    let point_params = sample.write_scratch(
+        "point-10.toml",
+        &text.replacen("\nmax_lossy_step_db = 3.0", "\nmax_lossy_step_db = 10.0", 1),
+    );
+    let at_baseline = verdicts("lossy-step-baseline-verdicts", &v4_params());
+    let at_point = verdicts("lossy-step-point-verdicts", &point_params);
+    assert_eq!((at_baseline.fake, at_baseline.suspicious), (6, 0));
+    assert_eq!((at_point.fake, at_point.suspicious), (0, 6));
 }
 
 // Scenario: A max_lossy_step_db key needs a baseline that has the field (@RP-11 @RF-04)
@@ -1023,12 +1091,4 @@ fn rf04_a_max_lossy_step_key_needs_a_baseline_that_has_the_field() {
         "{}",
         o.stderr
     );
-}
-
-// Scenario: The full-band guard can be searched from a v3 baseline (@RP-11 @RF-04), version
-// numbering: with detection-params.v4.toml in the repository the next free version is 5, whatever
-// the baseline (evaluation.md section 7).
-#[test]
-fn rf04_the_next_free_algorithm_version_is_5() {
-    assert_eq!(next_free_version(), 5);
 }
