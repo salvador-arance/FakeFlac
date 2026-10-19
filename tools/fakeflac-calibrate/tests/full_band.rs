@@ -12,9 +12,15 @@
 mod common;
 
 use common::*;
+use fakeflac_calibrate::cache::Extracted;
+use fakeflac_calibrate::evaluate::{is_near, Margins, RowEval};
+use fakeflac_calibrate::model::{LabelRow, RowRoot, Truth};
 use fakeflac_calibrate::report::{Counts, SplitSel};
-use fakeflac_core::DetectionParams;
+use fakeflac_calibrate::split::Split;
+use fakeflac_calibrate::{run, CalibrateArgs, Command, Config, Env};
+use fakeflac_core::{DetectionParams, TrackError, Verdict};
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 fn counts(real: u32, suspicious: u32, fake: u32, error: u32) -> Counts {
     Counts {
@@ -111,16 +117,101 @@ fn rf04_v2_and_v3_side_by_side() {
         );
     }
 
-    // The per-setting table of v3 has the full-band columns (the layout is not pinned: presence
-    // only), and the figures behind them are those of the sample corpus: fxv0 is full band, the
-    // transcodes with a stationary floor and fxweak (B about 2.4 dB) are not.
-    let summary = report_text(o, "summary.md");
-    assert!(
-        summary
-            .lines()
-            .any(|l| l.trim_start().starts_with('|') && l.contains("full_band")),
-        "summary.md has no per-setting table with a full_band column"
+    // The per-setting full-band table of v3 (evaluation.md section 4): one row per setting, the
+    // FullBand count of the detectable positives and the median, p95 and maximum of B. The figures
+    // are those of the sample corpus: fxv0 is full band, the transcodes with a stationary floor and
+    // fxweak (B about 2.4 dB) are not. A params file without [full_band] has no such rows.
+    assert!(v2.full_band_by_setting.is_empty());
+    assert_eq!(
+        v3.full_band_by_setting
+            .iter()
+            .map(|r| r.setting.as_str())
+            .collect::<Vec<_>>(),
+        v3.by_setting
+            .iter()
+            .map(|r| r.setting.as_str())
+            .collect::<Vec<_>>(),
+        "a row per setting, in the order of the per-setting table"
     );
+    for row in &v3.full_band_by_setting {
+        let expected = if row.setting == "fxv0" { 6 } else { 0 };
+        assert_eq!(
+            row.full_band, expected,
+            "full_band count of {}",
+            row.setting
+        );
+        let burst: Vec<f64> = rows_of(&t, V3)
+            .into_iter()
+            .filter(|r| t.get(r, "truth") == "fake" && t.get(r, "setting") == row.setting)
+            .map(|r| t.get(r, "B"))
+            .filter(|b| !b.is_empty())
+            .map(num)
+            .collect();
+        if burst.is_empty() {
+            continue;
+        }
+        let (median, p95, max) = (
+            row.burst_median
+                .unwrap_or_else(|| panic!("median of B for {}", row.setting)),
+            row.burst_p95
+                .unwrap_or_else(|| panic!("p95 of B for {}", row.setting)),
+            row.burst_max
+                .unwrap_or_else(|| panic!("max of B for {}", row.setting)),
+        );
+        assert!(
+            median <= p95 + 1e-9 && p95 <= max + 1e-9,
+            "{} {median} {p95} {max}",
+            row.setting
+        );
+        let csv_max = burst.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        assert!(
+            (max - csv_max).abs() <= 0.011,
+            "max of B of {}: {max} against tracks.csv {csv_max}",
+            row.setting
+        );
+    }
+    let fxv0 = v3
+        .full_band_by_setting
+        .iter()
+        .find(|r| r.setting == "fxv0")
+        .expect("fxv0 row");
+    assert!(
+        fxv0.burst_median.is_some() && fxv0.burst_p95.is_some() && fxv0.burst_max.is_some(),
+        "{fxv0:?}"
+    );
+
+    // Per-setting change table, directly: 6 fake -> suspicious on fxv0 and nothing elsewhere; the
+    // baseline has none.
+    assert!(v2.setting_changes.is_empty());
+    assert!(!v3.setting_changes.is_empty());
+    for row in &v3.setting_changes {
+        if row.setting == "fxv0" {
+            assert_eq!(
+                row.counts,
+                BTreeMap::from([(("fake".to_string(), "suspicious".to_string()), 6)])
+            );
+        } else {
+            assert!(row.counts.is_empty(), "{}: {:?}", row.setting, row.counts);
+        }
+    }
+    assert!(v3.setting_changes.iter().any(|r| r.setting == "fxv0"));
+
+    // Watch list, directly: W1 has U, B and full_band true with v3, none with v2.
+    let w1 = |e: &fakeflac_calibrate::report::Evaluation| {
+        e.watch
+            .iter()
+            .find(|w| w.watch_id == "W1")
+            .expect("W1 entry")
+            .clone()
+    };
+    let (w3, w2) = (w1(v3), w1(v2));
+    assert!(w3.upper_level_db.is_some() && w3.upper_burst_db.is_some());
+    assert_eq!(w3.full_band, Some(true));
+    assert_eq!(
+        (w2.upper_level_db, w2.upper_burst_db, w2.full_band),
+        (None, None, None)
+    );
+
     let mut full_band_by_setting: BTreeMap<String, u32> = BTreeMap::new();
     for r in rows_of(&t, V3) {
         let setting = t.get(r, "setting");
@@ -331,8 +422,11 @@ fn rf04_full_band_key_needs_a_baseline_with_a_full_band_section() {
 }
 
 // Scenario: The full-band guard can be searched from a v3 baseline (@RP-11 @RF-04)
-// The spec pins only that the point costs less than the baseline. A point keeps no verdicts, so the
-// fxv0 Suspicious -> Fake flip is checked by rf04_v2_and_v3_side_by_side (v2 has no guard).
+// With everything in tune (sample-corpus.md sections 4 and 5), the v3 baseline costs 0.5 (1
+// Suspicious negative) + 0.1 * 12 (6 fxv0 and 6 fxweak Suspicious positives) = 1.7. With
+// min_burst_db = 100 the guard never fires: the 6 fxv0 entries are Fake instead of Suspicious
+// (0.6 less), so the point costs 1.1. The proposal is that point, and calibrate evaluates it as
+// the last params file of the run, so its verdicts are checked on that evaluation.
 #[test]
 fn rf04_the_full_band_guard_can_be_searched_from_a_v3_baseline() {
     let sample = Sample::new("grid-full-band-v3-baseline");
@@ -356,6 +450,12 @@ fn rf04_the_full_band_guard_can_be_searched_from_a_v3_baseline() {
         })
         .expect("point full_band.min_burst_db = 100.0");
     assert!(
+        (result.baseline.cost - 1.7).abs() < 1e-9,
+        "baseline cost {}",
+        result.baseline.cost
+    );
+    assert!((point.cost - 1.1).abs() < 1e-9, "cost {}", point.cost);
+    assert!(
         point.cost < result.baseline.cost,
         "point cost {} baseline cost {}",
         point.cost,
@@ -363,12 +463,33 @@ fn rf04_the_full_band_guard_can_be_searched_from_a_v3_baseline() {
     );
     assert!(point.feasible && result.baseline.feasible);
 
+    // "with the point min_burst_db = 100.0 the fxv0 entries are fake instead of suspicious"
+    assert_eq!(o.evaluations.len(), 2, "baseline and proposal");
+    let fxv0 = |i: usize| {
+        o.evaluations[i]
+            .by_setting
+            .iter()
+            .find(|r| r.setting == "fxv0")
+            .expect("fxv0 row")
+            .counts
+    };
+    assert_eq!(
+        (fxv0(0).fake, fxv0(0).suspicious),
+        (0, 6),
+        "baseline: fxv0 suspicious"
+    );
+    assert_eq!(
+        (fxv0(1).fake, fxv0(1).suspicious),
+        (6, 0),
+        "point: fxv0 fake"
+    );
+
     let report_dir = o.report_dir.as_ref().expect("report folder");
-    let proposal = report_dir.join("detection-params.v4.toml");
+    let proposal = report_dir.join(format!("detection-params.v{}.toml", next_free_version()));
     assert_eq!(result.proposal.as_deref(), Some(proposal.as_path()));
     let text = read(&proposal);
     let parsed: DetectionParams = toml::from_str(&text).unwrap();
-    assert_eq!(parsed.algorithm_version, 4);
+    assert_eq!(parsed.algorithm_version, next_free_version());
     let value: toml::Value = toml::from_str(&text).unwrap();
     assert_eq!(
         value["full_band"]["min_burst_db"].as_float(),
@@ -377,4 +498,122 @@ fn rf04_the_full_band_guard_can_be_searched_from_a_v3_baseline() {
     );
     let lines: Vec<&str> = text.lines().collect();
     assert_eq!(lines[1], "# Changed: full_band.min_burst_db 3.0 -> 100.0");
+}
+
+// Scenario: The full-band guard can be searched from a v3 baseline (@RP-11 @RF-04), exit-code
+// table of calibration.md section 2 and evaluation.md section 7: when the repository is not found
+// the proposal's version cannot be allocated safely, so the tool exits 2 and, as every exit 2,
+// writes nothing: no cache lines, no generated fragments, no report folder.
+#[test]
+fn rf04_calibrate_without_a_repository_root_exits_2_and_writes_nothing() {
+    let sample = Sample::new("grid-no-repo-root");
+    sample.write_config(Some(0.0));
+    let grid = grid_with_baseline(
+        2,
+        &sample,
+        &v3_params(),
+        "\"full_band.min_burst_db\" = [3.0, 100.0]",
+    );
+    let before = snapshot(&sample.calibration);
+    let env = Env {
+        repo_root: None,
+        ..sample.env()
+    };
+    let o = run(
+        &Command::Calibrate(CalibrateArgs {
+            grid,
+            config: sample.config_path(),
+        }),
+        &env,
+        &FixtureTranscoder,
+    );
+    assert_eq!(o.exit_code, 2, "stderr: {}", o.stderr);
+    assert!(o.report_dir.is_none());
+    assert_eq!(
+        snapshot(&sample.calibration),
+        before,
+        "exit 2 writes nothing in FAKEFLAC_CALIBRATION"
+    );
+}
+
+// ---- Near-threshold list (evaluation.md section 8) --------------------------------------------
+
+fn near_row(truth: Truth) -> LabelRow {
+    LabelRow {
+        root: RowRoot::Corpus,
+        path: "a/b.flac".to_string(),
+        truth,
+        origin: "trusted",
+        trust_origin: String::new(),
+        class: "primary".to_string(),
+        encoder: String::new(),
+        setting: String::new(),
+        bitrate_kbps: None,
+        encoder_version: String::new(),
+        fragment: None,
+        source_path: String::new(),
+        album_id: "a".to_string(),
+        split: Split::Tune,
+        watch_id: String::new(),
+        extracted: Arc::new(Extracted::Error(TrackError::TooShort)),
+        undetectable: false,
+    }
+}
+
+/// Measurements of a track with `a = m_gap_fake_db` (no step) and the given full-band margin.
+fn near_eval(a: f64, full_band_margin_db: Option<f64>) -> RowEval {
+    let nearest = match full_band_margin_db {
+        Some(f) if f >= 0.0 => a.max(f),
+        _ => a,
+    };
+    RowEval {
+        verdict: Verdict::Suspicious,
+        reasons: Vec::new(),
+        error: None,
+        m: None,
+        margins: Some(Margins {
+            m_low_hf_db: 50.0,
+            m_gap_fake_db: a,
+            m_gap_suspicious_db: a + 2.0,
+            m_step_fake_db: None,
+            m_step_suspicious_db: None,
+            m_step_low_db: None,
+            m_step_high_db: None,
+            m_gradual_hz: None,
+            fs_fake_range_hz: None,
+            m_full_band_level_db: full_band_margin_db,
+            m_full_band_burst_db: full_band_margin_db,
+            full_band_margin_db,
+            nearest_fake_margin_db: nearest,
+        }),
+    }
+}
+
+// Spec: "For a params file with a [full_band] section, also a negative kept from Fake only by the
+// guard at its threshold: a <= 0 and full_band_margin_db = 0 (its nearest_fake_margin_db is 0).
+// For a params file without the section the list is exactly v2's."
+#[test]
+fn rf04_a_negative_kept_from_fake_only_by_the_guard_at_its_threshold_is_near() {
+    let config = Config::parse(&read(&spec_config())).unwrap();
+    let negative = near_row(Truth::Real);
+
+    // With [full_band]: a = -2 and full_band_margin_db = 0 -> nearest_fake_margin_db = 0.
+    let guarded = near_eval(-2.0, Some(0.0));
+    assert_eq!(
+        guarded.margins.as_ref().unwrap().nearest_fake_margin_db,
+        0.0
+    );
+    assert!(
+        is_near(&negative, &guarded, &config),
+        "at the guard's threshold"
+    );
+
+    // The same a without the section (v2's list): nearest = a = -2, not near for a negative.
+    assert!(!is_near(&negative, &near_eval(-2.0, None), &config));
+
+    // With [full_band] but the guard well inside (margin 5 dB) or failing (< 0): not near.
+    assert!(!is_near(&negative, &near_eval(-2.0, Some(5.0)), &config));
+    assert!(!is_near(&negative, &near_eval(-2.0, Some(-0.5)), &config));
+    // a > 0 (not Fake by itself) at margin 0 is not the guard case: nearest = a = 3 dB, not near.
+    assert!(!is_near(&negative, &near_eval(3.0, Some(0.0)), &config));
 }
