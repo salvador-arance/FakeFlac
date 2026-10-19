@@ -2,6 +2,24 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-19 - RF-04 Detection v4 spec approved (G1, #42)
+
+**Done**
+- Measured analysis of the failed v3 acceptance run (aggregates only): no `(U, B)` setting works; the deepest step's position separates W1–W3 from transcodes and confirmed fakes. Proposal document (git-ignored, local only): `target/rf04/rf04-v3-threshold-proposal.md`.
+- PR #42 `spec(RF-04)` merged at G1 (56a15b1): detection v4 = v3 window and values plus `full_band.max_lossy_step_db = 3.0` (no `FullBand` with a step of 3 dB or more in the lossy range, so V4 is never guarded). `detection-params.v4.toml` (default, `algorithm_version` 4); v2/v3 files stay loadable. W4 (FP4) stays Fake (Q7 accepted). Acceptance v4 in `rules.md` §7 (A6 "not worse than v2", A8 gate ≤ 5 % FullBand on protected settings; predictions in §7.1). ADR-0039 accepted (amends ADR-0038).
+- Fixture steps measured once before G1 (recorded in `fixtures.md`): `sfb21_gaps` D 6.15 dB at 16050 Hz (Fake again with v4), `shelf19k5_bursts` D 20.8 at 19550, `sfb21_gaps_aa21k` step at 21050 (stays guarded), `hf_bursts` D 0.48 at 20950.
+- PR #41 (handoff) merged; merged branches pruned; analysis worktrees removed.
+
+**Pending**
+- `/feature RF-04` (v4) on the local branch `feat/RF-04` (v3 implementation, 7 commits, never pushed): rebase onto main (expect conflicts in `specs/traceability.md` row RF-04 — keep main's — and `docs/architecture/backend.md`); test stage updates the protected tests listed in ADR-0039 "Consequences" (incl. `default_params_equal_versioned_file`, `every_analysis_carries_algorithm_version_3`, FP4/`sfb21_gaps` tests, next free version 5) and derives v4 tests; implement `max_lossy_step_db`, `validate()` bounds, `m_full_band_step_db`; update `backend.md` (v4 default); review; `just ci`; then real-corpus `just accept --params …v2.toml --params …v4.toml` for A1–A8 before the PR.
+- Review improvements left from the v3 work (see the RF-04 v3 block below): full-band per-setting table only on split `all`; `calibrate` exits 2 outside a git checkout; malformed `detection-params.v*.toml` skipped silently when allocating a version.
+- RF-07 known deviations (block below); MainLayout splitter (H1 UI); RF-15 spec input (2026-10-18 block).
+
+**Blockers / questions for the human**
+- Open questions in `rules.md` with defaults: Q3, Q5, Q6, Q8 (defaults apply); Q9 (targets T2/T3 counting undetectable transcodes; calibration spec), Q10 (`/calibrate` has no feasible point: 2 detectable cbr128 tune transcodes are Real), Q11 (A8 bound 5 %).
+
+**Next step:** `/feature RF-04` (detection v4), starting from the local branch `feat/RF-04`.
+
 ## 2026-10-19 - RF-07 spectrogram merged (#39, #40)
 
 **Done**

@@ -1,6 +1,6 @@
 # ADR-0039: Detection v4: the full-band guard does not apply when there is a step inside the lossy range (amends ADR-0038)
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-19
 
 ## Context and rationale
