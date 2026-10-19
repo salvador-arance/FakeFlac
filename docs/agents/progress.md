@@ -2,6 +2,29 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-19 - RF-04 Detection v3 implemented; acceptance fails (back to G1)
+
+**Done**
+- Branch `feat/RF-04` (local, not pushed; 7 commits 02b9919..7f9ff67): tests from `detection-full-band.feature` and the @RF-04 scenarios of `calibration.feature`, the protected tests listed in ADR-0038, `validate()` (incl. NaN); core v3 (U, B, `is_full_band`, guard on V3/V4, `Default` = v3) and calibration tool support (`[full_band]`, grid v2, next-free proposal version, U/B columns and tables). `just ci` and `just privacy-check` green; two review rounds, no blocking findings. Traceability row updated on that branch.
+- Real-corpus `just accept` v2 vs v3 (run 20261019T091918Z, report in `$FAKEFLAC_CALIBRATION/reports/`): **A1, A2, A3 fail; A8 shows the guard firing on many transcodes.** A4, A5 (gate), A7 pass.
+  - A1: W1–W3 Suspicious; W4 (FP4) stays Fake (B 2.86 < 3; Q7 case).
+  - A2: `confirmed_fake` 8/15 Fake (7 moved to Suspicious). A3: primary 1 Fake (FP4), T1 FAIL.
+  - A8: FullBand share of transcodes: cbr128 44 %, cbr192 28 %, cbr256 41 %, cbr320 29 %, v2 60 %, aac128 59 %, opus128 73 %, v0 ~92 %. Fake rate drops 14–74 pp per setting (caught rate unchanged).
+  - Cause (thresholds, not code): U median of real tracks ≈ −36 dB (p5 −55); of low-passed transcodes −65 to −75 dB (p95 ≈ −45 to −50), so `min_level_db` −70 sits inside the transcode distribution; B ≥ 3 does not filter it. FP1–FP3 have U −57, −45, −51: no U threshold alone separates them.
+  - A6: T2 (4) and T3 (8) fail on split `all` for **v2 too** (holdout passes), so A6's premise does not hold in this run.
+
+**Pending**
+- RF-04: G1 decision (below), then a new params version (or a new discriminator) through a spec PR; `feat/RF-04` is rebased on it, re-run `just accept`, then PR (G2). Do not retune in implement (`rules.md` §7).
+- Review improvements left on `feat/RF-04` (need spec lines first): full-band per-setting columns only on split `all` (evaluation.md §4 asks per split); `calibrate` exits 2 outside a git checkout even with no proposal; a malformed `detection-params.v*.toml` is skipped silently when allocating the next version.
+- RF-15 spec input: unchanged from the 2026-10-18 block.
+- RF-07 (spectrogram): spec approved, tests and UI pending.
+
+**Blockers / questions for the human**
+- G1 on RF-04: new v3 values (e.g. a much stricter `min_level_db`, measured on this run's `tracks.csv`) or another discriminator; accept FP4 staying Fake (Q7)?; why T2/T3 already fail with v2.
+- `git push` over HTTPS has no credential helper (`gh auth setup-git`).
+
+**Next step:** `/feature RF-07` (spectrogram), independent of RF-04.
+
 ## 2026-10-18 - RF-04 Detection v3 spec approved (G1)
 
 **Done**
