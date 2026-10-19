@@ -3,12 +3,13 @@
 use crate::{mp3, mp4};
 use fakeflac_core::{AudioCodec, BitrateMode, TrackError};
 use std::fs::File;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 use symphonia::core::codecs::audio::{AudioDecoder, AudioDecoderOptions};
 use symphonia::core::errors::Error;
 use symphonia::core::formats::probe::Hint;
 use symphonia::core::formats::{FormatOptions, FormatReader, TrackType};
-use symphonia::core::io::MediaSourceStream;
+use symphonia::core::io::{MediaSource, MediaSourceStream};
 use symphonia::core::meta::MetadataOptions;
 
 #[derive(Debug, Clone, Copy)]
@@ -18,6 +19,40 @@ pub struct StreamInfo {
     pub bit_depth: Option<u8>,
     /// Frames declared by the container, if known.
     pub total_frames: Option<u64>,
+}
+
+/// A file seen from `start` on, so that a format reader can begin at the first audio frame.
+struct FromOffset {
+    file: File,
+    start: u64,
+}
+
+impl Read for FromOffset {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.file.read(buf)
+    }
+}
+
+impl Seek for FromOffset {
+    fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
+        let absolute = match pos {
+            SeekFrom::Start(p) => SeekFrom::Start(self.start.saturating_add(p)),
+            other => other,
+        };
+        let at = self.file.seek(absolute)?;
+        Ok(at.saturating_sub(self.start))
+    }
+}
+
+impl MediaSource for FromOffset {
+    fn is_seekable(&self) -> bool {
+        true
+    }
+
+    fn byte_len(&self) -> Option<u64> {
+        let len = self.file.metadata().ok()?.len();
+        Some(len.saturating_sub(self.start))
+    }
 }
 
 /// What the stream declares besides its samples (`specs/detection/lossy-source.md` section 2).
@@ -37,7 +72,7 @@ pub struct MonoStream {
     pub declared: Declared,
     /// Frames fewer than `info.total_frames` the decoder may legitimately return. MP3 lengths
     /// come from the frame count of the tag and the decoder trims the encoder delay and padding
-    /// (up to two frames); every other format is exact.
+    /// (`Mp3Info::length_tolerance`); every other format is exact.
     length_tolerance: u64,
     format: Box<dyn FormatReader>,
     decoder: Box<dyn AudioDecoder>,
@@ -77,19 +112,33 @@ impl MonoStream {
             _ => {}
         }
         let file = File::open(path).map_err(|e| TrackError::Unreadable(e.to_string()))?;
-        let mss = MediaSourceStream::new(Box::new(file), Default::default());
-        let mut hint = Hint::new();
-        if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-            hint.with_extension(ext);
-        }
-        let format = symphonia::default::get_probe()
-            .probe(
-                &hint,
-                mss,
-                FormatOptions::default(),
-                MetadataOptions::default(),
-            )
-            .map_err(|e| TrackError::CorruptStream(e.to_string()))?;
+        let format: Box<dyn FormatReader> = if let Some(info) = &mp3_info {
+            // The probe scans from byte 0 and trips over large ID3v2 tags (artwork with false
+            // syncs): the MP3 reader opens at the first frame the adapter found instead.
+            let source = FromOffset {
+                file,
+                start: info.first_frame_pos,
+            };
+            let mss = MediaSourceStream::new(Box::new(source), Default::default());
+            let reader =
+                symphonia::default::formats::MpaReader::try_new(mss, FormatOptions::default())
+                    .map_err(|e| TrackError::CorruptStream(e.to_string()))?;
+            Box::new(reader)
+        } else {
+            let mss = MediaSourceStream::new(Box::new(file), Default::default());
+            let mut hint = Hint::new();
+            if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                hint.with_extension(ext);
+            }
+            symphonia::default::get_probe()
+                .probe(
+                    &hint,
+                    mss,
+                    FormatOptions::default(),
+                    MetadataOptions::default(),
+                )
+                .map_err(|e| TrackError::CorruptStream(e.to_string()))?
+        };
         let track = format
             .default_track(TrackType::Audio)
             .ok_or_else(|| TrackError::UnsupportedFormat("no audio track".into()))?;
@@ -113,9 +162,9 @@ impl MonoStream {
         let mut length_tolerance = 0;
         if let Some(info) = &mp3_info {
             // symphonia estimates the length of an MP3 and trims the encoder delay: use the frame
-            // count of the stream and allow the decoder two frames less.
+            // count of the stream and allow the decoder the delay and padding it trims.
             total_frames = Some(info.frames * u64::from(info.samples_per_frame));
-            length_tolerance = 2 * u64::from(info.samples_per_frame);
+            length_tolerance = info.length_tolerance();
         }
         let decoder = symphonia::default::get_codecs()
             .make_audio_decoder(&codec, &AudioDecoderOptions::default())
@@ -137,7 +186,7 @@ impl MonoStream {
 
     /// Decodes the whole stream, calling `sink(frame_offset, mono_samples)` per packet.
     /// Returns the number of decoded frames. A stream that ends before the declared length
-    /// (MP3: by more than two frames), or a packet that fails to decode, is a `CorruptStream` (RNF-04).
+    /// (MP3: by more than the tolerance), or a packet that fails to decode, is a `CorruptStream` (RNF-04).
     pub fn for_each_chunk(&mut self, mut sink: impl FnMut(u64, &[f32])) -> Result<u64, TrackError> {
         let mut interleaved: Vec<f32> = Vec::new();
         let mut mono: Vec<f32> = Vec::new();
@@ -214,12 +263,78 @@ mod tests {
         out
     }
 
+    /// A file under `target/unit-tmp` removed when dropped.
+    struct TempFile(std::path::PathBuf);
+
+    impl Drop for TempFile {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.0);
+        }
+    }
+
     fn decode(name: &str, bytes: &[u8]) -> Result<u64, TrackError> {
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/unit-tmp");
         std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join(format!("decode-{}-{name}.mp3", std::process::id()));
-        std::fs::write(&path, bytes).unwrap();
-        MonoStream::open(&path)?.for_each_chunk(|_, _| {})
+        let path = TempFile(dir.join(format!("decode-{}-{name}.mp3", std::process::id())));
+        std::fs::write(&path.0, bytes).unwrap();
+        MonoStream::open(&path.0)?.for_each_chunk(|_, _| {})
+    }
+
+    /// Like `tagged_mp3`, with a LAME extension declaring `delay` and `padding`.
+    fn lame_mp3(declared: u32, audio_frames: usize, delay: u32, padding: u32) -> Vec<u8> {
+        let mut out = tagged_mp3(declared, audio_frames);
+        out[44 + 4..44 + 13].copy_from_slice(b"LAME3.99r");
+        out[69] = (delay >> 4) as u8;
+        out[70] = (((delay & 0xF) << 4) | (padding >> 8)) as u8;
+        out[71] = (padding & 0xFF) as u8;
+        out
+    }
+
+    /// An ID3v2.4 tag of `payload` bytes.
+    fn id3v2(payload: Vec<u8>) -> Vec<u8> {
+        let n = payload.len();
+        let mut out = b"ID3\x04\0\0".to_vec();
+        out.extend_from_slice(&[
+            ((n >> 21) & 0x7F) as u8,
+            ((n >> 14) & 0x7F) as u8,
+            ((n >> 7) & 0x7F) as u8,
+            (n & 0x7F) as u8,
+        ]);
+        out.extend(payload);
+        out
+    }
+
+    #[test]
+    fn lame_tagged_mp3_with_maximal_padding_passes() {
+        assert!(decode("lame", &lame_mp3(40, 40, 576, 2304)).is_ok());
+    }
+
+    #[test]
+    fn truncated_lame_tagged_mp3_is_corrupt() {
+        let bytes = lame_mp3(40, 40, 576, 2304);
+        let half = &bytes[..bytes.len() / 2];
+        assert!(matches!(
+            decode("lamehalf", half),
+            Err(TrackError::CorruptStream(_))
+        ));
+    }
+
+    #[test]
+    fn mp3_behind_a_huge_id3v2_tag_decodes() {
+        let mut bytes = id3v2(vec![0x55; (1 << 20) + 4096]);
+        bytes.extend(tagged_mp3(40, 40));
+        assert!(decode("bigid3", &bytes).is_ok());
+    }
+
+    #[test]
+    fn mp3_behind_an_id3v2_tag_with_fake_syncs_decodes() {
+        let mut blob = Vec::new();
+        for _ in 0..2000 {
+            blob.extend_from_slice(&[0xFF, 0xF3, 0x90, 0x00, 0x11, 0xFF, 0xFD, 0xA0, 0x00, 0x22]);
+        }
+        let mut bytes = id3v2(blob);
+        bytes.extend(tagged_mp3(40, 40));
+        assert!(decode("fakesync", &bytes).is_ok());
     }
 
     #[test]

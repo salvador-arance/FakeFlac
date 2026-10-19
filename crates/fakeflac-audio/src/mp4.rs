@@ -280,10 +280,11 @@ fn check_aac_lc(esds: &[u8]) -> Result<(), TrackError> {
     }
     // object type, stream type, buffer size (3), max and average bitrate, then the specific info.
     match config.first() {
-        Some(0x40) => {}
+        // MPEG-4 audio, and MPEG-2 AAC Main, LC and SSR: the AudioSpecificConfig decides.
+        Some(0x40 | 0x66 | 0x67 | 0x68) => {}
         Some(other) => {
             return Err(TrackError::UnsupportedFormat(format!(
-                "audio object type indication {other:#04x} is not MPEG-4 AAC"
+                "audio object type indication {other:#04x} is not AAC"
             )))
         }
         None => return Err(bad()),
@@ -313,18 +314,27 @@ fn check_aac_lc(esds: &[u8]) -> Result<(), TrackError> {
 mod tests {
     use super::*;
 
-    fn write(name: &str, bytes: &[u8]) -> std::path::PathBuf {
+    /// A file under `target/unit-tmp` removed when dropped.
+    struct TempFile(std::path::PathBuf);
+
+    impl Drop for TempFile {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.0);
+        }
+    }
+
+    fn write(name: &str, bytes: &[u8]) -> TempFile {
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/unit-tmp");
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join(format!("mp4-{}-{name}.m4a", std::process::id()));
         std::fs::write(&path, bytes).unwrap();
-        path
+        TempFile(path)
     }
 
     fn ftyp() -> Vec<u8> {
         let mut v = 16u32.to_be_bytes().to_vec();
         v.extend_from_slice(b"ftyp");
-        v.extend_from_slice(b"M4A     ");
+        v.extend_from_slice(b"M4A \0\0\0\0");
         v
     }
 
@@ -340,19 +350,19 @@ mod tests {
     fn wrapping_largesize_is_corrupt_not_a_loop() {
         // pos (16) + largesize wraps to 0.
         let path = write("wrap", &with_large_box(u64::MAX - 15));
-        assert!(matches!(read(&path), Err(TrackError::CorruptStream(_))));
+        assert!(matches!(read(&path.0), Err(TrackError::CorruptStream(_))));
     }
 
     #[test]
     fn maximal_largesize_is_corrupt_not_a_panic() {
         let path = write("max", &with_large_box(u64::MAX));
-        assert!(matches!(read(&path), Err(TrackError::CorruptStream(_))));
+        assert!(matches!(read(&path.0), Err(TrackError::CorruptStream(_))));
     }
 
     #[test]
     fn box_larger_than_the_file_is_corrupt() {
         let path = write("big", &with_large_box(1 << 40));
-        assert!(matches!(read(&path), Err(TrackError::CorruptStream(_))));
+        assert!(matches!(read(&path.0), Err(TrackError::CorruptStream(_))));
     }
 
     #[test]
@@ -362,14 +372,13 @@ mod tests {
         v.extend_from_slice(b"mdat");
         v.extend_from_slice(&[0u8; 32]);
         let path = write("zero", &v);
-        assert!(matches!(read(&path), Err(TrackError::CorruptStream(_))));
+        assert!(matches!(read(&path.0), Err(TrackError::CorruptStream(_))));
     }
 
-    #[test]
-    fn esds_with_a_non_mpeg4_object_type_is_unsupported() {
-        // esds: version/flags, ES descriptor, DecoderConfig (object type 0x6B), ASC descriptor.
-        let asc = [0x05, 0x02, 0x12, 0x10];
-        let mut config = vec![0x6B, 0x15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    /// esds: version/flags, ES descriptor, DecoderConfig (`object_type`), ASC descriptor.
+    fn esds(object_type: u8, asc_first: u8) -> Vec<u8> {
+        let asc = [0x05, 0x02, asc_first, 0x10];
+        let mut config = vec![object_type, 0x15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         config.extend_from_slice(&asc);
         let mut es = vec![0, 1, 0];
         es.push(0x04);
@@ -377,8 +386,24 @@ mod tests {
         es.extend_from_slice(&config);
         let mut esds = vec![0, 0, 0, 0, 0x03, es.len() as u8];
         esds.extend_from_slice(&es);
+        esds
+    }
+
+    #[test]
+    fn esds_with_a_non_aac_object_type_is_unsupported() {
         assert!(matches!(
-            check_aac_lc(&esds),
+            check_aac_lc(&esds(0x6B, 0x12)),
+            Err(TrackError::UnsupportedFormat(_))
+        ));
+    }
+
+    #[test]
+    fn esds_with_an_mpeg2_aac_indication_defers_to_the_audio_object_type() {
+        // AAC LC (object type 2: first ASC byte 0x12) is accepted under 0x67.
+        assert!(check_aac_lc(&esds(0x67, 0x12)).is_ok());
+        // SBR (object type 5: 0x2A) is still HE-AAC.
+        assert!(matches!(
+            check_aac_lc(&esds(0x40, 0x2A)),
             Err(TrackError::UnsupportedFormat(_))
         ));
     }

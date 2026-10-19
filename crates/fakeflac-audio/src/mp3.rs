@@ -37,9 +37,24 @@ pub struct Mp3Info {
     pub declared_bitrate_kbps: Option<u32>,
     pub encoder: Option<String>,
     pub encoder_lowpass_hz: Option<u32>,
+    /// Byte offset of the first frame header (the tag frame, when there is one).
+    pub first_frame_pos: u64,
+    /// Encoder delay and padding from the LAME extension, in samples.
+    pub delay_padding: Option<(u32, u32)>,
 }
 
 impl Mp3Info {
+    /// Samples fewer than the declared length the decoder may legitimately return: it trims the
+    /// encoder delay and padding the LAME tag declares (plus two frames of slack), or up to three
+    /// frames when the stream has no such fields.
+    pub fn length_tolerance(&self) -> u64 {
+        let frame = u64::from(self.samples_per_frame);
+        match self.delay_padding {
+            Some((delay, padding)) => u64::from(delay) + u64::from(padding) + 2 * frame,
+            None => 3 * frame,
+        }
+    }
+
     pub fn duration_ms(&self) -> u64 {
         self.frames * u64::from(self.samples_per_frame) * 1000 / u64::from(self.sample_rate.max(1))
     }
@@ -123,7 +138,12 @@ impl Header {
         if self.bitrate_kbps == 0 {
             return None;
         }
-        let coefficient = u64::from(self.samples_per_frame() / 8);
+        // Layer I counts 4-byte slots: 12 per kbps-second; Layers II and III count bytes.
+        let coefficient = if self.layer == 1 {
+            12
+        } else {
+            u64::from(self.samples_per_frame() / 8)
+        };
         let base = coefficient * u64::from(self.bitrate_kbps) * 1000 / u64::from(self.sample_rate);
         Some(if self.layer == 1 {
             (base + u64::from(self.padding)) * 4
@@ -166,6 +186,7 @@ struct Tag {
     encoder: Option<String>,
     vbr_method: Option<u8>,
     lowpass_hz: Option<u32>,
+    delay_padding: Option<(u32, u32)>,
 }
 
 fn be32(b: &[u8]) -> Option<u32> {
@@ -194,6 +215,7 @@ impl Tag {
                 encoder: None,
                 vbr_method: None,
                 lowpass_hz: None,
+                delay_padding: None,
             });
         }
         None
@@ -231,8 +253,9 @@ impl Tag {
             encoder: None,
             vbr_method: None,
             lowpass_hz: None,
+            delay_padding: None,
         };
-        if let Some(ext) = take(11) {
+        if let Some(ext) = rest.get(..11) {
             let printable = |b: &u8| (0x20..0x7F).contains(b);
             let field = &ext[..9];
             if field[..4].iter().all(printable) && field.iter().all(|b| printable(b) || *b == 0) {
@@ -240,6 +263,13 @@ impl Tag {
                 tag.encoder = Some(text.trim_end_matches([' ', '\0']).to_string());
                 tag.vbr_method = Some(ext[9] & 0x0F);
                 tag.lowpass_hz = (ext[10] != 0).then(|| u32::from(ext[10]) * 100);
+                // Bytes 21 to 23 of the extension: two 12-bit fields, delay then padding.
+                if let Some(&[b0, b1, b2]) = rest.get(21..24) {
+                    tag.delay_padding = Some((
+                        (u32::from(b0) << 4) | (u32::from(b1) >> 4),
+                        (u32::from(b1 & 0x0F) << 8) | u32::from(b2),
+                    ));
+                }
             }
         }
         tag
@@ -397,6 +427,8 @@ pub fn read(path: &Path) -> Result<Mp3Info, TrackError> {
         declared_bitrate_kbps,
         encoder: tag.as_ref().and_then(|t| t.encoder.clone()),
         encoder_lowpass_hz: tag.as_ref().and_then(|t| t.lowpass_hz),
+        first_frame_pos: first_pos,
+        delay_padding: tag.as_ref().and_then(|t| t.delay_padding),
     })
 }
 
@@ -489,12 +521,21 @@ fn walk_frames(
 mod tests {
     use super::*;
 
-    fn write(name: &str, bytes: &[u8]) -> std::path::PathBuf {
+    /// A file under `target/unit-tmp` removed when dropped.
+    struct TempFile(std::path::PathBuf);
+
+    impl Drop for TempFile {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.0);
+        }
+    }
+
+    fn write(name: &str, bytes: &[u8]) -> TempFile {
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/unit-tmp");
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join(format!("mp3-{}-{name}.mp3", std::process::id()));
         std::fs::write(&path, bytes).unwrap();
-        path
+        TempFile(path)
     }
 
     fn frames(header: [u8; 4], len: usize, count: usize) -> Vec<u8> {
@@ -510,14 +551,20 @@ mod tests {
     fn layer_ii_is_unsupported_not_corrupt() {
         // MPEG-1 Layer II, 192 kbps, 44.1 kHz: 144 * 192000 / 44100 = 626 bytes.
         let path = write("l2", &frames([0xFF, 0xFD, 0xA0, 0x00], 626, 12));
-        assert!(matches!(read(&path), Err(TrackError::UnsupportedFormat(_))));
+        assert!(matches!(
+            read(&path.0),
+            Err(TrackError::UnsupportedFormat(_))
+        ));
     }
 
     #[test]
     fn layer_i_is_unsupported_not_corrupt() {
         // MPEG-1 Layer I, 256 kbps, 44.1 kHz: (12 * 256000 / 44100) * 4 = 276 bytes.
         let path = write("l1", &frames([0xFF, 0xFF, 0x80, 0x00], 276, 12));
-        assert!(matches!(read(&path), Err(TrackError::UnsupportedFormat(_))));
+        assert!(matches!(
+            read(&path.0),
+            Err(TrackError::UnsupportedFormat(_))
+        ));
     }
 
     #[test]
@@ -529,8 +576,37 @@ mod tests {
         }
         bytes.extend_from_slice(&frames([0xFF, 0xFB, 0x90, 0x00], 417, 6));
         let path = write("id3", &bytes);
-        let info = read(&path).unwrap();
+        let info = read(&path.0).unwrap();
         assert_eq!(info.frames, 6);
         assert_eq!(info.declared_bitrate_kbps, Some(128));
+    }
+
+    #[test]
+    fn long_unpadded_layer_i_is_unsupported_not_corrupt() {
+        // MPEG-1 Layer I, 128 kbps, 44.1 kHz, unpadded: (12 * 128000 / 44100) * 4 = 136 bytes.
+        // The file is longer than the scan window, so the confirming frame is read from it.
+        let count = (SYNC_SEARCH_LIMIT as usize + 8192) / 136 + 16;
+        let path = write("l1long", &frames([0xFF, 0xFF, 0x40, 0x00], 136, count));
+        assert!(matches!(
+            read(&path.0),
+            Err(TrackError::UnsupportedFormat(_))
+        ));
+    }
+
+    #[test]
+    fn lame_delay_and_padding_are_read() {
+        let mut tag = vec![0xFF, 0xFB, 0x90, 0x00];
+        tag.resize(417, 0);
+        tag[36..40].copy_from_slice(b"Info");
+        tag[40..44].copy_from_slice(&1u32.to_be_bytes());
+        tag[44..48].copy_from_slice(&5u32.to_be_bytes());
+        tag[48..57].copy_from_slice(b"LAME3.99r");
+        // 576 = 0x240 and 2304 = 0x900.
+        tag[69..72].copy_from_slice(&[0x24, 0x09, 0x00]);
+        tag.extend(frames([0xFF, 0xFB, 0x90, 0x00], 417, 5));
+        let path = write("lame", &tag);
+        let info = read(&path.0).unwrap();
+        assert_eq!(info.delay_padding, Some((576, 2304)));
+        assert_eq!(info.length_tolerance(), 576 + 2304 + 2 * 1152);
     }
 }
