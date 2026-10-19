@@ -18,3 +18,8 @@
   - The ID3v2 tests used Info-tagged streams, so they passed while the reader still started at byte 0.
   - In both cases the implementer reported the defect fixed, and only a later review with mutation checks and the corpus probe found it.
 - **Harness fix:** `code-reviewer.md` asks for a mutation check when a diff fixes earlier findings: revert each fix in a copy outside the repo and confirm its tests fail.
+
+## Resuming an agent that is already overloaded (2026-10-19, RF-14)
+
+- **What happened:** after its stage, the RF-14 test author had 283k tokens of context. Sending it another round would have cost the most and given the worst work. The owner asked that no agent with that much context ever be resumed. RF-14 already used a fresh agent per iteration, but only because the owner asked; the harness did not enforce it.
+- **Harness fix:** the `guard-agents` hook (PreToolUse `SendMessage`) reads the subagent's transcript and blocks resuming any subagent of any type over 150k tokens of context (`FAKEFLAC_AGENT_CONTEXT_LIMIT`). `/feature` and `workflow.md` say every stage rerun gets a fresh agent with a short brief.
