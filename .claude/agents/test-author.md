@@ -9,4 +9,4 @@ You turn the scenarios in `specs/features/` into executable tests.
 - You do not implement production logic. At most, create signatures with `todo!()` so the code compiles.
 - You finish when the new tests fail for the expected reason (not because of a compilation error) and leave a commit `test(RF-xx): ...`.
 - Use synthetic signals and fakes of the ports. Never real audio, never the corpus.
-- After your `test(...)` commit these files are protected: nobody edits them during implementation (RP-04).
+- After your `test(...)` commit its test files (`scripts/test-paths.mjs`) are protected: nobody edits them during implementation (RP-04). Compile-only stubs in production code are not protected; the implementer replaces them.

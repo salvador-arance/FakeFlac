@@ -1,5 +1,6 @@
 // PreToolUse (Edit|Write|NotebookEdit): containment and stage-based protection (RP-04, RP-06).
 import { readInput, projectDir, currentStage, relToProject, block } from './_lib.mjs'
+import { isTest } from '../../scripts/test-paths.mjs'
 
 const input = readInput()
 const file = input.tool_input?.file_path ?? input.tool_input?.notebook_path
@@ -12,11 +13,6 @@ if (rel === null) {
   block(`Blocked: ${file} is outside the repository. Agents never write outside the repo (RP-06).`)
 }
 
-const isTest = (p) =>
-  /(^|\/)tests\//.test(p) ||
-  /\.(test|spec)\.(ts|js|mjs|svelte)$/.test(p) ||
-  /\.stories\.(ts|svelte)$/.test(p) ||
-  p.endsWith('.feature')
 const isSpec = (p) => p.startsWith('specs/')
 
 const stage = currentStage(dir)

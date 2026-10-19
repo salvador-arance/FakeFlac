@@ -16,3 +16,5 @@ Procedure (each step sets the stage in `.claude/stage`, which the hooks enforce)
 7. Run `/handoff`. Never merge: gate G2 is the human's.
 
 If at any point the spec or a test looks wrong: stop, explain, and return to gate G1. Never adjust them silently.
+
+**One agent per iteration.** Every time a stage runs again (back to `test`, back to `implement`, each review round), launch a fresh agent of that type: test author, implementer, reviewer or any other subagent. Do not resume a finished one with `SendMessage`. Give the new agent a short brief instead: scope agreed with the owner, what earlier rounds decided and changed (commit hashes), and exactly what to do now. The `guard-agents` hook blocks resuming any subagent whose context is over 150k tokens (`FAKEFLAC_AGENT_CONTEXT_LIMIT`).

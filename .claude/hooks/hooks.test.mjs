@@ -102,3 +102,41 @@ test('stop-check: skips when stop_hook_active is set (no infinite loop)', () => 
 test('stop-check: skips in the test stage (tests are expected to be red)', () => {
   assert.equal(run('stop-check.mjs', {}, { stage: 'test' }).code, 0)
 })
+
+// guard-agents: a fake session whose subagent transcript ends with a call of `tokens` input tokens.
+function sendTo(agent, tokens, { env = {}, to = agent } = {}) {
+  const home = mkdtempSync(join(tmpdir(), 'ff-agents-'))
+  try {
+    const session = join(home, 'session')
+    if (tokens !== null) {
+      mkdirSync(join(session, 'subagents'), { recursive: true })
+      const usage = (n) => JSON.stringify({ message: { usage: { input_tokens: 10, cache_read_input_tokens: n - 10, output_tokens: 5 } } })
+      writeFileSync(join(session, 'subagents', `agent-${agent}.jsonl`), [usage(1000), usage(tokens), 'not json'].join('\n'))
+    }
+    return run('guard-agents.mjs', { tool_name: 'SendMessage', transcript_path: `${session}.jsonl`, tool_input: { to, message: 'go on' } }, { env })
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+}
+
+test('guard-agents: blocks resuming a subagent over the context limit', () => {
+  const r = sendTo('a1b2', 283_000)
+  assert.equal(r.code, 2)
+  assert.match(r.stderr, /283k tokens of context/)
+})
+
+test('guard-agents: allows resuming a subagent under the limit', () => {
+  assert.equal(sendTo('a1b2', 90_000).code, 0)
+})
+
+test('guard-agents: the limit comes from FAKEFLAC_AGENT_CONTEXT_LIMIT', () => {
+  assert.equal(sendTo('a1b2', 90_000, { env: { FAKEFLAC_AGENT_CONTEXT_LIMIT: '50000' } }).code, 2)
+})
+
+test('guard-agents: an agent with no transcript in this session is not checked', () => {
+  assert.equal(sendTo('a1b2', null).code, 0)
+})
+
+test('guard-agents: a recipient that is not a plain id is not checked', () => {
+  assert.equal(sendTo('a1b2', 283_000, { to: '../a1b2' }).code, 0)
+})
