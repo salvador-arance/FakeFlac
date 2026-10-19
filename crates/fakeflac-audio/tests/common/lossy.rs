@@ -11,11 +11,12 @@
 //! - The AAC spectral codebook 1 (ISO/IEC 14496-3, spectral Huffman codebook 1, 81 codewords of four
 //!   values in {-1, 0, 1}) and the scale-factor codebook entry for a difference of 0 (ISO/IEC
 //!   14496-3, scale-factor Huffman codebook: index 60, one bit, code 0) are standard data. The
-//!   codebook 1 lengths and codes live in `aac_codebook1.rs`, an MPL-2.0 file with the attribution
+//!   codebook 1 lengths and codes live in `aac_tables.rs`, an MPL-2.0 file with the attribution
 //!   to `symphonia-codec-aac` 0.6.1 (`codebooks.rs`); the rest of this file is MIT. The test of
 //!   `lossy_fixtures.rs` verifies them by decoding a fixture (lossy-fixtures.md section 3).
 //! - The long-window scale-factor band offsets for 44.1 and 48 kHz (ISO/IEC 14496-3 table 4.109) are
-//!   the standard ones, as in the same source.
+//!   standard data too; they live in `aac_tables.rs` with the attribution to `symphonia-codec-aac`
+//!   0.6.1 (`common.rs`).
 //! - The decoded level of each writer (`MP3_GLOBAL_GAIN`, `AAC_GLOBAL_GAIN`) was chosen by the test
 //!   stage so that the decoded RMS of a full-band fixture lies between -30 and -12 dBFS
 //!   (lossy-fixtures.md, "Level").
@@ -24,9 +25,9 @@
 use rand::{RngExt, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
-// MPL-2.0 file with the two tables copied from symphonia-codec-aac; this file stays MIT.
-#[path = "aac_codebook1.rs"]
-mod aac_codebook1;
+// MPL-2.0 file with the tables copied from symphonia-codec-aac; this file stays MIT.
+#[path = "aac_tables.rs"]
+mod aac_tables;
 
 /// `global_gain` of every MP3 granule (lossy-fixtures.md 1.1, "Level"). Decoded RMS of a full-band
 /// 44.1 kHz fixture: see `lossy_fixtures.rs`, `levels_are_between_minus_30_and_minus_12_dbfs`.
@@ -462,14 +463,7 @@ pub fn mp4_header_len(file: &[u8]) -> (usize, usize) {
 
 // ---- AAC-LC in M4A -----------------------------------------------------------------------------
 
-/// Long-window scale-factor band offsets for 44.1 and 48 kHz (ISO/IEC 14496-3 table 4.109).
-const SWB_OFFSET_LONG_48K: [usize; 50] = [
-    0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 48, 56, 64, 72, 80, 88, 96, 108, 120, 132, 144, 160,
-    176, 196, 216, 240, 264, 292, 320, 352, 384, 416, 448, 480, 512, 544, 576, 608, 640, 672, 704,
-    736, 768, 800, 832, 864, 896, 928, 1024,
-];
-
-use aac_codebook1::{SPECTRUM_CODEBOOK1_CODES, SPECTRUM_CODEBOOK1_LENS};
+use aac_tables::{SPECTRUM_CODEBOOK1_CODES, SPECTRUM_CODEBOOK1_LENS, SWB_OFFSET_LONG_48K};
 
 #[derive(Debug, Clone)]
 pub struct AacSpec {
