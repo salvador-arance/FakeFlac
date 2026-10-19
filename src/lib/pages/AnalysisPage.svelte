@@ -1,9 +1,11 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte'
+  import type { Spectrogram } from '../model'
   import {
     ApiError,
     cancelAnalysis,
     closeWindow,
+    getSpectrogram,
     minimizeWindow,
     onDragDrop,
     pickFolder,
@@ -11,6 +13,7 @@
     startAnalysisOfDropped,
     toggleMaximizeWindow,
   } from '../api'
+  import DetailPanel from '../components/organisms/DetailPanel.svelte'
   import FolderDropZone from '../components/organisms/FolderDropZone.svelte'
   import ResultsTable from '../components/organisms/ResultsTable.svelte'
   import StatusBar from '../components/organisms/StatusBar.svelte'
@@ -54,12 +57,54 @@
     }
   }
 
+  // RF-07: spectrogram of the selected row. `spectrogramRequest` identifies the latest request;
+  // a response or failure for an older one (a row no longer selected) is discarded.
+  let spectrogram = $state.raw<Spectrogram | null>(null)
+  let spectrogramLoading = $state(false)
+  let spectrogramRequest = 0
+
+  let selectedTrack = $derived(
+    store.rows.find((row) => row.index === store.selectedIndex)?.analysis ?? null,
+  )
+
+  function clearSpectrogram() {
+    spectrogramRequest += 1
+    spectrogram = null
+    spectrogramLoading = false
+  }
+
+  async function handleSelect(index: number) {
+    if (index === store.selectedIndex) return
+    store.select(index)
+    clearSpectrogram()
+    const track = store.rows.find((row) => row.index === index)?.analysis
+    if (!track || track.verdict === 'error') return
+
+    const request = spectrogramRequest
+    spectrogramLoading = true
+    let result: Spectrogram | null = null
+    try {
+      result = await getSpectrogram(track.info.path)
+    } catch {
+      // No text for a failed spectrogram in H1: the panel keeps the verdict line, without image.
+      result = null
+    }
+    if (request !== spectrogramRequest) return
+    spectrogram = result
+    spectrogramLoading = false
+  }
+
+  function beginRun() {
+    clearSpectrogram()
+    store.begin()
+  }
+
   async function handleOpenFolder() {
     if (store.phase === 'scanning' || store.phase === 'analysing') return
     const path = await pickFolder()
     if (!path) return
 
-    store.begin()
+    beginRun()
     try {
       await startAnalysis(path, (ev) => store.apply(ev))
     } catch (err) {
@@ -71,7 +116,7 @@
     if (store.phase === 'scanning' || store.phase === 'analysing') return
     if (!paths || paths.length === 0) return
 
-    store.begin()
+    beginRun()
     try {
       const summary = await startAnalysisOfDropped(paths, (ev) => store.apply(ev))
       if (summary === null) {
@@ -89,9 +134,15 @@
   let canOpen = $derived(store.phase !== 'scanning' && store.phase !== 'analysing')
   let canCancel = $derived(store.phase === 'scanning' || store.phase === 'analysing')
   let isEmpty = $derived(store.phase === 'ready' && store.rows.length === 0)
+  // main-screen.md "Screen states": the detail panel is hidden until there are rows.
+  let showDetail = $derived(store.rows.length > 0)
 </script>
 
-<MainLayout>
+{#snippet detailPanel()}
+  <DetailPanel track={selectedTrack} {spectrogram} loading={spectrogramLoading} />
+{/snippet}
+
+<MainLayout detail={showDetail ? detailPanel : undefined}>
   {#snippet titleBar()}
     <TitleBar
       title={t('app.title')}
@@ -118,7 +169,7 @@
           rows={store.rows}
           selectedIndex={store.selectedIndex}
           sort={store.sort}
-          onselect={(index) => store.select(index)}
+          onselect={handleSelect}
           onsort={(column) => store.toggleSort(column)}
         />
       {/if}
