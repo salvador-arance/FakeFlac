@@ -9,6 +9,11 @@ Feature: Calibration and acceptance against a labelled corpus
   lossy range (fixtures.md, "Verdicts with v4": derived, and measured once
   before G1 at D 6.15 dB, fs 16050 Hz); the test stage confirms it first and
   stops for G1 if it does not hold.
+  Changed for detection v5 (specs/detection/lossy-source.md, Q13 (c)): with
+  detection-params.v5.toml in the repository, proposals take
+  algorithm_version 6; two error messages of trusted.txt and confirmed.txt
+  name the lossy formats and the kind "real" (specs/calibration/lossy.md, C11).
+  Lossy rows: calibration-lossy.feature.
 
   # --- Environment -------------------------------------------------------
 
@@ -311,7 +316,7 @@ Feature: Calibration and acceptance against a labelled corpus
       | Colección\Álbum Ü \| comprado                            | unknown origin 'comprado' (expected one of: cd-log, accuraterip, bandcamp, qobuz, tienda, revisado, usuario, analisis-limpio, analisis) |
       | Colección\No existe \| revisado                          | path does not exist: Colección\No existe   |
       | Colección\Álbum Ü                                        | missing origin                             |
-      | Colección\Álbum Ü\folder.jpg \| revisado                 | not a FLAC or WAV file                     |
+      | Colección\Álbum Ü\folder.jpg \| revisado                 | not a supported audio file (FLAC, WAV, MP3, M4A or Opus) |
       | ..\fuera \| revisado                                     | '..' is not allowed                        |
       | Compras\Ñandú – Ácido, Vol. 1 (2024) \| tienda           | already listed at line 4                   |
       | !Colección\Álbum Ü\CD1 \| x                              | exclusion is not inside any listed folder  |
@@ -374,7 +379,7 @@ Feature: Calibration and acceptance against a labelled corpus
       | Revisión\Ørsted\01 – Tres.wav \| fake                       | also trusted (trusted.txt line 7)               |
       | Sueltas\Mixto\06 – Falso.flac \| false-positive             | not a trusted track                             |
       | Sueltas\Mixto \| false-positive                             | must be a file                                  |
-      | Sueltas\Mixto\06 – Falso.flac \| dudoso                     | unknown kind 'dudoso' (expected fake or false-positive) |
+      | Sueltas\Mixto\06 – Falso.flac \| dudoso                     | unknown kind 'dudoso' (expected fake, real or false-positive) |
 
   # --- Unicode, privacy and read-only corpus ------------------------------
 
@@ -415,8 +420,8 @@ Feature: Calibration and acceptance against a labelled corpus
     When "calibrate" runs on the sample corpus
     Then the exit code is 0
     And the baseline cost is 1.1 and the cost of "gap_fake_db = 4.0" is 0.5
-    And the report folder holds detection-params.v5.toml
-    And that file parses to detection-params.v2.toml with algorithm_version 5 and gap_fake_db 4.0
+    And the report folder holds detection-params.v6.toml
+    And that file parses to detection-params.v2.toml with algorithm_version 6 and gap_fake_db 4.0
     And its first two lines are the "PROPOSAL" and "Changed: verdict.gap_fake_db 6.0 -> 4.0" comments
     And no file in the repository has changed
 
@@ -453,7 +458,7 @@ Feature: Calibration and acceptance against a labelled corpus
     When "calibrate" runs on the sample corpus
     Then the exit code is 0
     And with the point "full_band.min_burst_db = 100.0" the fxv0 entries are "fake" instead of "suspicious", and its cost is lower than the baseline cost
-    And the report folder holds detection-params.v5.toml with algorithm_version 5 and full_band.min_burst_db 100.0
+    And the report folder holds detection-params.v6.toml with algorithm_version 6 and full_band.min_burst_db 100.0
     And its second line is the comment "# Changed: full_band.min_burst_db 3.0 -> 100.0"
 
   @RP-11 @RF-04
@@ -525,7 +530,7 @@ Feature: Calibration and acceptance against a labelled corpus
 
   @RP-11
   Scenario: ffmpeg missing when a transcode is needed
-    Given the sample corpus with the settings of calibration.v1.toml and an empty features folder
+    Given the sample corpus with the default config (calibration.v2.toml, whose settings are those of calibration.v1.toml plus the lossy entries) and an empty features folder
     And FAKEFLAC_FFMPEG points to a file that does not exist
     When the binary runs "accept"
     Then the exit code is 3

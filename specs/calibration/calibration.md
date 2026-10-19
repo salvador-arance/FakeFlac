@@ -1,16 +1,16 @@
 ---
 id: SPEC-CALIBRATION
-requirements: [RP-11, RF-03, RF-04, RNF-04, RNF-05, RNF-09]
+requirements: [RP-11, RF-03, RF-04, RF-15, RNF-04, RNF-05, RNF-09]
 status: proposed
 adr: ADR-0036
-config: specs/calibration/calibration.v1.toml
+config: specs/calibration/calibration.v2.toml (v1 kept and loadable)
 ---
 
 # Calibration and acceptance tool (`just accept`, `/calibrate`)
 
 > A dev-only binary turns the user's music library into a corpus with known truth, runs the Rust detector on it with one or more `DetectionParams` files, and writes a confusion-matrix report. `/calibrate` also searches a grid of rule parameters on the `tune` split and proposes a new `detection-params.vN.toml`, which it never commits. Where the tool lives and its dependencies: ADR-0036.
 
-Related specs: [inputs.md](inputs.md) (`trusted.txt`, `confirmed.txt`, `labels.csv`, split) · [generation.md](generation.md) (transcodes, features cache) · [evaluation.md](evaluation.md) (run outputs, comparison, grid search) · [sample-corpus.md](sample-corpus.md) (CI corpus) · scenarios: `specs/features/calibration.feature`.
+Related specs: [inputs.md](inputs.md) (`trusted.txt`, `confirmed.txt`, `labels.csv`, split) · [generation.md](generation.md) (transcodes, features cache) · [evaluation.md](evaluation.md) (run outputs, comparison, grid search) · [sample-corpus.md](sample-corpus.md) (CI corpus) · [lossy.md](lossy.md) (lossy files, RF-15) · scenarios: `specs/features/calibration.feature`, `specs/features/calibration-lossy.feature`.
 
 ## Open questions and G1 decisions
 
@@ -40,9 +40,11 @@ The 17 open questions for Gate G1 have been reviewed and decided by the owner. T
 
 In: WAV and FLAC negatives, transcodes to FLAC, the v2 rule family (`specs/detection/rules.md`: v2 files, v3 files, which add the optional `[full_band]` section, and v4 files, which add the optional `full_band.max_lossy_step_db`), confusion matrices, margins, parameter comparison, grid search over rule parameters.
 
-Out (the design must allow adding them later without changing the file formats): lossy-format detection (RF-15: positives would be the lossy files themselves instead of FLAC transcodes; `labels.csv` already has `encoder` and `setting`), upsamples (RF-12: a new `setting` kind), file integrity, and any change to the thresholds. New parameters go in their own spec PR.
+Lossy-format detection (RF-15) is **in** since [lossy.md](lossy.md): lossy files as labelled tracks (honest encodes, cascades, the user's lossy labels), chains of versions of one master, split units, and lossy tables kept apart from every lossless figure.
 
-The app's contract (`specs/contracts/commands.md`) does not change. The tool's contract is its command line (section 2) and its files ([inputs.md](inputs.md), [generation.md](generation.md), [evaluation.md](evaluation.md)).
+Out (the design must allow adding them later without changing the file formats): upsamples (RF-12: a new `setting` kind), file integrity, grid search over `[lossy]` values, and any change to the thresholds. New parameters go in their own spec PR.
+
+The calibration tool does not change the app's contract (`specs/contracts/commands.md`); its version 3 (lossy formats) comes from detection v5 (`specs/detection/lossy-source.md`, ADR-0041), not from the tool. The tool's contract is its command line (section 2) and its files ([inputs.md](inputs.md), [generation.md](generation.md), [evaluation.md](evaluation.md)).
 
 ## 2. Commands
 
@@ -55,7 +57,7 @@ Every command goes through `just` (ADR-0019). The recipes run the release build 
 | `just privacy-check` | `fakeflac-calibrate privacy-check [--base REF]` | Section 6. Default `REF` is `main`. |
 
 - `--params` may be repeated. The default is `specs/detection/detection-params.v2.toml`. The first file is the **baseline** that the others are compared against. A params file may live outside the repository (for example a proposal in `FAKEFLAC_CALIBRATION/reports/…`).
-- `--config` defaults to `specs/calibration/calibration.v1.toml` and `--grid` to `specs/calibration/calibrate-grid.v1.toml` (baseline v2). The v3 parameters, including `[full_band]`, are searched with `--grid specs/calibration/calibrate-grid.v2.toml` (baseline v3). The defaults stay on v2 so that the sample corpus expectations ([sample-corpus.md](sample-corpus.md)) do not change; the acceptance run of detection v4 passes the v2 and v4 params files explicitly (rules.md section 7). No grid file has a v4 baseline yet (rules.md, Q10).
+- `--config` defaults to `specs/calibration/calibration.v2.toml` (v1 plus the lossy entries of RF-15, [lossy.md](lossy.md) section 8; `calibration.v1.toml` stays loadable) and `--grid` to `specs/calibration/calibrate-grid.v1.toml` (baseline v2). The v3 parameters, including `[full_band]`, are searched with `--grid specs/calibration/calibrate-grid.v2.toml` (baseline v3). The defaults stay on v2 so that the sample corpus expectations ([sample-corpus.md](sample-corpus.md)) do not change; the acceptance run of detection v4 passes the v2 and v4 params files explicitly (rules.md section 7). No grid file has a v4 baseline yet (rules.md, Q10).
 - `--no-generate` evaluates the labelled tracks that already have cached spectra and skips missing generated entries. It leaves `labels.csv` untouched. The report counts them as "not generated".
 - None of these recipes is part of `just ci`. The CI-runnable acceptance is a `cargo test` of the tool on the sample corpus ([sample-corpus.md](sample-corpus.md)).
 
@@ -97,7 +99,7 @@ check env → parse trusted.txt, confirmed.txt → enumerate tracks → album id
 ```
 
 - Spectra are produced by `fakeflac_audio::SymphoniaAnalyzer` (`SpectrumAnalyzer::analyze`). Measurements and verdicts come from `fakeflac_core::detect::{measure, decide, cutoff_estimate}` and the silent-track rule of `detect` (rules.md section 1.6). The tool does not reimplement any detection step (ADR-0036).
-- Corpus tracks are enumerated with `fakeflac_fs::WalkDirScanner` (hidden entries skipped, links not followed). Only FLAC and WAV count as trusted or confirmed tracks.
+- Corpus tracks are enumerated with `fakeflac_fs::WalkDirScanner` (hidden entries skipped, links not followed). Only FLAC and WAV count as trusted or confirmed tracks, except where RF-15 adds MP3, M4A and Opus files ([lossy.md](lossy.md) section 1.1).
 - Extraction and transcoding run on `cores − 1` std threads. Results are sorted (section "Determinism") so the thread count never changes any output.
 - **Determinism.** With the same inputs, cache and parameters, two runs produce byte-identical `labels.csv`, `tracks.csv` and report files, except for the run id, the date and the cache statistics.
 

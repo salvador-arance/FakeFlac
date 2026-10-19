@@ -51,7 +51,7 @@ A relative path whose first folder name starts with `#` or `!` is written with a
 - The line is split at every `|` (the character cannot appear in Windows file names). Field 1 is the path, field 2 the origin, and fields 3 onwards, joined again with `|`, are the note. Each field is trimmed. Spaces around `|` are optional.
 - **Path.** `\` and `/` are both separators. A trailing separator and a leading `.\` or `./` are ignored. A `..` component is an error (`'..' is not allowed`), checked before the path is resolved. A relative path is joined to `library_root`. An absolute path must lie inside `library_root` (`path is outside library_root`). The path must exist (`path does not exist: <path as written>`). On one line, only the first of these path errors is reported. Names are used exactly as written, with no Unicode normalisation (RNF-09).
 - **Folder:** every FLAC and WAV file below it, recursively (hidden entries skipped, links not followed). A folder with no FLAC or WAV file is an error (`no FLAC or WAV files under this folder`).
-- **File:** that track only. The extension must be `.flac` or `.wav`, ignoring case (`not a FLAC or WAV file`).
+- **File:** that track only. The extension must be `.flac`, `.wav`, `.mp3`, `.m4a` or `.opus`, ignoring case (`not a supported audio file (FLAC, WAV, MP3, M4A or Opus)`). Lossy files, the `formats=` attribute of folder entries and the other attributes of field 2: `lossy.md` section 1 (RF-15).
 - **Origin:** exactly one of the values in 1.5, in lower case (`unknown origin 'x' (expected one of: cd-log, accuraterip, …)`). Missing or empty: `missing origin`. Missing path: `missing path`.
 - The same path listed twice (compared as canonical paths) is an error on the later line (`already listed at line N`).
 
@@ -87,8 +87,9 @@ Same grammar as `trusted.txt` (1.1 to 1.4 and 1.6, with `confirmed.txt` in the m
 |---|---|---|
 | `fake` | folder (recursive, exclusions allowed) or file | Confirmed fake, checked by hand on a spectrogram. Label `truth = fake`, `origin = confirmed_fake`. A track that is also included by `trusted.txt` is an error (`also trusted (trusted.txt line N)`). |
 | `false-positive` | file only (`must be a file`) | A trusted track that an earlier detector flagged and that the user confirmed lossless. It must be included by `trusted.txt` (`not a trusted track`). It keeps its trusted label and gets a watch id `W1`, `W2`… in line order. Watch tracks are listed one by one in every run (evaluation.md section 5). |
+| `real` (RF-15) | lossy folder or file | An honest lossy file: its content matches its declared bitrate. `lossy.md` section 1.3 |
 
-Unknown kind: `unknown kind 'x' (expected fake or false-positive)`. If the file is missing, there are no confirmed fakes and no watch list.
+`fake` lines may also cover lossy files, with the attributes of `lossy.md` section 1.2. Unknown kind: `unknown kind 'x' (expected fake, real or false-positive)`. If the file is missing, there are no confirmed fakes and no watch list.
 
 Known truth for `confirmed.txt` (to be populated by the user once this spec is approved):
 - `fake`: tracks 03, 04, 11, 13, 15 and 16 of *Center of Attention* and the 9 tracks of *Hitler Wears Hermes 5* (track 01 excluded because it was never certain).
@@ -118,7 +119,7 @@ Written by every run, after extraction, from `trusted.txt`, `confirmed.txt` and 
 | `split` | `tune` or `holdout` (section 4) |
 | `watch_id` | `W1`… for `false-positive` tracks, otherwise empty |
 
-The minimum columns asked for by the issue (`path, truth, origin, encoder, bitrate_kbps, album_id, split`) are all present. A generated entry whose audio was deleted keeps its row (its spectra are cached by recipe).
+RF-15 appends the columns of `lossy.md` section 2 (`domain`, `codec`, …) after `watch_id`. The minimum columns asked for by the issue (`path, truth, origin, encoder, bitrate_kbps, album_id, split`) are all present. A generated entry whose audio was deleted keeps its row (its spectra are cached by recipe).
 
 ## 4. Albums and the `tune`/`holdout` split
 
@@ -126,7 +127,7 @@ The minimum columns asked for by the issue (`path, truth, origin, encoder, bitra
 
 **Split (OQ-7).** Stratified by class. Albums are grouped by their class (`primary`, `reviewed`, `clean`, `reference`, and `positive` for albums containing only confirmed fakes). An album whose trusted tracks have several classes (for example `CD1` from an `analisis-limpio` folder and a `revisado` file entry in `CD2`) takes the strongest of them, in the order `primary` > `reviewed` > `clean` > `reference`. Confirmed fakes in such an album do not change its class: the album is `positive` only when all its labelled tracks are confirmed fakes. Every row keeps its own class for the metrics; the album class is used only for the split and for the per-class album counts and holdout warnings of the report header.
 
-For each album id:
+For each album id (with RF-15, for each **split unit**: an album id unless a `group=` or `chain=` attribute joins several albums, `lossy.md` section 3):
 
 ```
 h = fnv1a64( utf8(split.seed) ++ [0x0A] ++ utf8(album_id) )

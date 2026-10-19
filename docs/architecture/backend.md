@@ -88,11 +88,13 @@ Selection protocol (phase 5, planned recipe `just bench-windows`, not written ye
 | M4A | Lossy (AAC); may hold ALAC (lossless) | `symphonia` (isomp4 + AAC) | H2 | Codec inside the container is detected; ALAC is treated as lossless |
 | Opus | Lossy | Separate decoder (ADR-0030) | H2 | symphonia does not decode Opus; spike first |
 
-All formats go through the same `SpectrumAnalyzer` port: the adapter picks a decoder by format and returns `f32` samples; the rest of the pipeline is common (ADR-0031).
+All formats go through the same `SpectrumAnalyzer` port: the adapter picks a decoder by format and returns `f32` samples; the rest of the pipeline is common (ADR-0031). H2 decoding of MP3 and M4A (symphonia features `mp3`, `aac`, `isomp4`, `alac`) and the stream information the adapter reports (codec, declared bitrate, bitrate mode, LAME tag): ADR-0040 (proposed) and `specs/detection/lossy-source.md` section 2. Opus stays pending the spike.
 
 ## 9. Provenance of lossy files (RF-15)
 
 **Question:** was this 320 kbps MP3 encoded from a good source or from something with a lower bitrate?
+
+**Specified** (proposed, G1 pending) as detection v5: `specs/detection/lossy-source.md`, `specs/detection/detection-params.v5.toml` (`[lossy]`), ADR-0041; calibration in `specs/calibration/lossy.md`. The H2 part below is what v5 implements, except the per-frame bitrate, padding and sfb21 signals, which v5 leaves as candidates.
 
 **Main signal (H2): spectral cutoff vs declared bitrate.** Encoders apply a bitrate-dependent low-pass (indicative: ≈ 16 kHz at 128 kbps, ≈ 19 kHz at 192, ≈ 20 kHz at 256, ≈ 20.5 kHz at 320 in LAME; AAC and Opus have other tables). A 320 kbps file whose content stops at 16 kHz betrays a ≈ 128 kbps origin. A **cutoff → source-bitrate table per codec and encoder** is kept versioned in `DetectionParams` and calibrated with the R3 corpus.
 
