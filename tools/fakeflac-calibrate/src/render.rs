@@ -16,6 +16,7 @@ use crate::fmt;
 use crate::grid::{GridFile, Proposal, SearchResult};
 use crate::model::{album_class_of, LabelRow, Truth, CLASSES};
 use crate::report::{ConfusionMatrix, Evaluation, SettingRow, SplitSel};
+use fakeflac_core::detect::{is_full_band, Measurements};
 use fakeflac_core::Verdict;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -92,7 +93,7 @@ pub fn labels_csv(rows: &[LabelRow]) -> String {
     out
 }
 
-pub const TRACKS_HEADER: [&str; 30] = [
+pub const TRACKS_HEADER: [&str; 37] = [
     "params_file",
     "algorithm_version",
     "path",
@@ -113,6 +114,9 @@ pub const TRACKS_HEADER: [&str; 30] = [
     "D",
     "fs",
     "G",
+    "U",
+    "B",
+    "full_band",
     "m_low_hf_db",
     "m_gap_fake_db",
     "m_gap_suspicious_db",
@@ -122,8 +126,22 @@ pub const TRACKS_HEADER: [&str; 30] = [
     "m_step_high_db",
     "m_gradual_hz",
     "fs_fake_range_hz",
+    "m_full_band_level_db",
+    "m_full_band_burst_db",
+    "full_band_margin_db",
+    "m_full_band_step_db",
     "nearest_fake_margin_db",
 ];
+
+/// `true`, `false`, or empty when the file has no `[full_band]` section or `U` or `B` is undefined.
+fn full_band_cell(run: &ParamsRun, m: Option<&Measurements>) -> String {
+    match m {
+        Some(m) if run.params.full_band.is_some() && m.upper_level_db.is_some() => {
+            is_full_band(m, &run.params).to_string()
+        }
+        _ => String::new(),
+    }
+}
 
 /// `tracks.csv`: one row per (params file, labelled track).
 pub fn tracks_csv(runs: &[ParamsRun], groups: &[GroupResult]) -> String {
@@ -160,6 +178,9 @@ pub fn tracks_csv(runs: &[ParamsRun], groups: &[GroupResult]) -> String {
                 fmt::opt_db(m.map(|m| m.step_db)),
                 fmt::opt_hz(m.and_then(|m| m.step_hz)),
                 fmt::opt_db(m.map(|m| m.gap_db)),
+                fmt::opt_db(m.and_then(|m| m.upper_level_db)),
+                fmt::opt_db(m.and_then(|m| m.upper_burst_db)),
+                full_band_cell(run, m),
                 fmt::opt_db(g.map(|g| g.m_low_hf_db)),
                 fmt::opt_db(g.map(|g| g.m_gap_fake_db)),
                 fmt::opt_db(g.map(|g| g.m_gap_suspicious_db)),
@@ -169,6 +190,10 @@ pub fn tracks_csv(runs: &[ParamsRun], groups: &[GroupResult]) -> String {
                 fmt::opt_db(g.and_then(|g| g.m_step_high_db)),
                 fmt::opt_hz(g.and_then(|g| g.m_gradual_hz)),
                 fmt::opt_hz(g.and_then(|g| g.fs_fake_range_hz)),
+                fmt::opt_db(g.and_then(|g| g.m_full_band_level_db)),
+                fmt::opt_db(g.and_then(|g| g.m_full_band_burst_db)),
+                fmt::opt_db(g.and_then(|g| g.full_band_margin_db)),
+                fmt::opt_db(g.and_then(|g| g.m_full_band_step_db)),
                 fmt::opt_db(g.map(|g| g.nearest_fake_margin_db)),
             ]));
         }
@@ -297,6 +322,65 @@ fn setting_rows_table(md: &mut Md, rows: &[SettingRow]) {
         ],
         &table,
     );
+}
+
+/// Per setting: detectable positives that are `FullBand`, and the distribution of `B`
+/// (evaluation.md section 4). Only for a params file with a `[full_band]` section.
+fn full_band_table(md: &mut Md, eval: &Evaluation) {
+    if eval.full_band_by_setting.is_empty() {
+        return;
+    }
+    md.line("Full-band guard per setting (detectable positives; `B` over those with `B` defined):");
+    md.blank();
+    let table: Vec<Vec<String>> = eval
+        .full_band_by_setting
+        .iter()
+        .map(|r| {
+            vec![
+                r.setting.clone(),
+                r.full_band.to_string(),
+                fmt::opt_db(r.burst_median),
+                fmt::opt_db(r.burst_p95),
+                fmt::opt_db(r.burst_max),
+            ]
+        })
+        .collect();
+    md.table(
+        &["setting", "full_band", "B median", "B p95", "B max"],
+        &table,
+    );
+}
+
+/// Verdict changes of the positives against the baseline, one row per setting (section 9).
+fn setting_changes_table(md: &mut Md, eval: &Evaluation) {
+    if eval.setting_changes.is_empty() {
+        return;
+    }
+    md.line("Changes on positives per setting:");
+    md.blank();
+    let table: Vec<Vec<String>> = eval
+        .setting_changes
+        .iter()
+        .map(|c| {
+            let changes = if c.counts.is_empty() {
+                "none".to_string()
+            } else {
+                c.counts
+                    .iter()
+                    .map(|((from, to), n)| format!("{from} -> {to}: {n}"))
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            };
+            vec![
+                c.setting.clone(),
+                changes,
+                c.detection_rate_change_pp
+                    .map(|x| format!("{} pp", fmt::pct_value(x / 100.0)))
+                    .unwrap_or_else(|| "n/a".to_string()),
+            ]
+        })
+        .collect();
+    md.table(&["setting", "changes", "detection rate change"], &table);
 }
 
 fn matrix_table(md: &mut Md, m: &ConfusionMatrix) {
@@ -738,6 +822,9 @@ fn watch_section(md: &mut Md, eval: &Evaluation, full: bool) {
         "fs",
         "fe",
         "H",
+        "U",
+        "B",
+        "full_band",
         "nearest_fake_margin_db",
     ]);
     let rows: Vec<Vec<String>> = eval
@@ -760,6 +847,9 @@ fn watch_section(md: &mut Md, eval: &Evaluation, full: bool) {
                 fmt::opt_hz(w.step_hz),
                 fmt::opt_hz(w.extent_hz),
                 fmt::opt_db(w.high_frequency_db),
+                fmt::opt_db(w.upper_level_db),
+                fmt::opt_db(w.upper_burst_db),
+                w.full_band.map(|b| b.to_string()).unwrap_or_default(),
                 fmt::opt_db(w.nearest_fake_margin_db),
             ]);
             cells
@@ -824,6 +914,7 @@ fn params_section(md: &mut Md, data: &ReportData<'_>, idx: usize, full: bool) {
         md.blank();
         setting_rows_table(md, &eval.by_setting_split[sel]);
     }
+    full_band_table(md, eval);
 
     watch_section(md, eval, full);
 
@@ -932,6 +1023,7 @@ fn params_section(md: &mut Md, data: &ReportData<'_>, idx: usize, full: bool) {
             })
             .collect();
         md.table(&head, &table);
+        setting_changes_table(md, eval);
     }
 
     if full {
@@ -960,10 +1052,12 @@ fn measure_cells(e: &RowEval) -> Vec<String> {
         fmt::opt_db(m.map(|m| m.step_db)),
         fmt::opt_hz(m.and_then(|m| m.step_hz)),
         fmt::opt_db(m.map(|m| m.gap_db)),
+        fmt::opt_db(m.and_then(|m| m.upper_level_db)),
+        fmt::opt_db(m.and_then(|m| m.upper_burst_db)),
     ]
 }
 
-const MEASURE_HEAD: [&str; 6] = ["H", "F", "fe", "D", "fs", "G"];
+const MEASURE_HEAD: [&str; 8] = ["H", "F", "fe", "D", "fs", "G", "U", "B"];
 
 /// The per-track lists of `report.md` (evaluation.md sections 5, 8 and 9).
 fn full_lists(md: &mut Md, data: &ReportData<'_>, idx: usize) {
@@ -1087,6 +1181,8 @@ fn full_lists(md: &mut Md, data: &ReportData<'_>, idx: usize) {
                     fmt::opt_db(e.m.as_ref().map(|m| m.gap_db)),
                     fmt::opt_db(e.m.as_ref().map(|m| m.step_db)),
                     fmt::opt_hz(e.m.as_ref().and_then(|m| m.step_hz)),
+                    fmt::opt_db(e.m.as_ref().and_then(|m| m.upper_level_db)),
+                    fmt::opt_db(e.m.as_ref().and_then(|m| m.upper_burst_db)),
                 ]
             })
             .collect();
@@ -1100,6 +1196,8 @@ fn full_lists(md: &mut Md, data: &ReportData<'_>, idx: usize) {
                 "G",
                 "D",
                 "fs",
+                "U",
+                "B",
             ],
             &table,
         );

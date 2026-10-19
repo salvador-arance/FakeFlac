@@ -1,7 +1,10 @@
-//! Rule-level tests of `specs/detection/rules.md` v2 (sections 1 item 6, 2 and 3) on hand-built
-//! band spectra and hand-built measurements, plus the supported extensions (RF-14).
-//! Scenarios: `specs/features/detection-lossless.feature` (@RF-03 @RF-04).
-//! Protected after the `test(RF-03,RF-04)` commit.
+//! Rule-level tests of `specs/detection/rules.md` (sections 1 item 6, 2, 3 and 4) on hand-built
+//! band spectra, hand-built measurements and hand-built parameters, plus the supported extensions
+//! (RF-14). Scenarios: `specs/features/detection-lossless.feature` (@RF-03 @RF-04) and, for the
+//! full-band guard (v3, amended by v4), `specs/features/detection-full-band.feature` (@RF-04), at
+//! the end of this file. Protected after the `test(RF-03,RF-04)` commit; the v3 changes to the
+//! v2-derived tests listed in ADR-0038 and the v4 changes listed in ADR-0039 ("Consequences") were
+//! made in the `test(RF-04)` commits of detection v3 and v4.
 //!
 //! The spectra are written for bands of 100 Hz at 44.1 kHz: band `b` has its centre at
 //! `(b + 0.5) * 100` Hz, there are 220 bands and `top` is band 219 (centre 21 950 Hz).
@@ -9,7 +12,8 @@
 
 #![allow(clippy::expect_used)]
 
-use fakeflac_core::detect::{cutoff_estimate, decide, detect, measure, Measurements};
+use fakeflac_core::detect::{cutoff_estimate, decide, detect, is_full_band, measure, Measurements};
+use fakeflac_core::params::{FullBandParams, ParamsError};
 use fakeflac_core::{AudioFormat, BandSpectra, DetectionParams, SuspicionReason, Verdict};
 
 fn params() -> DetectionParams {
@@ -375,6 +379,8 @@ fn clean() -> Measurements {
         step_db: 0.0,
         step_hz: None,
         gap_db: 0.0,
+        upper_level_db: None,
+        upper_burst_db: None,
     }
 }
 
@@ -797,19 +803,36 @@ fn rf04_low_treble_is_never_fake() {
     assert_eq!(d.reasons, vec![LowHighFrequencyContent]);
 }
 
-// Scenario Outline: Verdict by signal (sfb21_gaps): no cliff in the mean, a 20 dB drop in the
-// median at 16 kHz -> V3 Fake, and the cutoff is Nyquist (there is no step).
+// Scenario Outline: Verdict by signal (sfb21_gaps): gated content up to Nyquist. The median
+// spectrum drops 19 dB at 16 kHz (G = 19), the mean spectrum only 6 dB, which is its cutoff step
+// (fs 15950 Hz, in the lossy range, D = 6 >= max_lossy_step_db = 3). The upper window has M = -6 dB and
+// Q = -19 dB: U = -6 dB, B = 13 dB pass the thresholds, but with v4 defaults (ADR-0039) the lossy
+// step removes the guard, so the gap rule V3 stands: Fake, no reasons. With the v3 file's values
+// (no max_lossy_step_db) the track is full band and Suspicious(HighBandGaps). Cutoff: Nyquist.
 #[test]
-fn rf04_sfb21_gaps_are_fake_without_a_cutoff_step() {
+fn rf04_sfb21_gaps_are_fake_because_of_the_lossy_step() {
     let s = spectra_at(
         44_100,
         |b| if b < 160 { 0.0 } else { -6.0 },
         |b| if b < 160 { 0.0 } else { -19.0 },
     );
-    let d = detect(Some(&s), &params());
+    let p = params();
+    let m = measure(&s, &p);
+    near(m.upper_level_db.expect("U"), -6.0);
+    near(m.upper_burst_db.expect("B"), 13.0);
+    near(m.step_db, 6.0);
+    assert_eq!(m.step_hz, Some(15_950.0));
+    assert!(!is_full_band(&m, &p), "the lossy step removes the guard");
+    let d = detect(Some(&s), &p);
     assert_eq!(d.verdict, Verdict::Fake);
     assert!(d.reasons.is_empty());
     assert_eq!(d.cutoff.expect("cutoff").frequency_hz, 22_050.0);
+
+    let v3 = v3_params();
+    assert!(is_full_band(&m, &v3), "full band with the v3 values");
+    let d = detect(Some(&s), &v3);
+    assert_eq!(d.verdict, Verdict::Suspicious);
+    assert_eq!(d.reasons, vec![HighBandGaps]);
 }
 
 // Scenario Outline: Verdict by signal (sfb21_gaps_weak): G = 5 dB -> V5.
@@ -851,4 +874,709 @@ fn supported_extensions() {
     assert_eq!(AudioFormat::from_extension("mp3"), None);
     assert_eq!(AudioFormat::from_extension("txt"), None);
     assert_eq!(AudioFormat::from_extension(""), None);
+}
+// =============================================================================================
+// Full-band guard, detection v3 amended by v4 (specs/features/detection-full-band.feature, @RF-04)
+// Rules: specs/detection/rules.md sections 2 to 4, DetectionParams v4 (ADR-0038, ADR-0039). The
+// tests named rf04_v3_* were written for v3 and keep their assertions under the v4 defaults; the
+// rf04_v4_* tests cover what v4 adds or changes.
+// Names chosen by the test author (not pinned by the spec):
+//   Measurements.upper_level_db / upper_burst_db: Option<f64>  (U and B, None = undefined)
+//   fakeflac_core::detect::is_full_band(&Measurements, &DetectionParams) -> bool
+//   fakeflac_core::params::{FullBandParams { low_hz, high_hz, min_level_db, min_burst_db,
+//                           max_lossy_step_db: Option<f64> }, ParamsError}  and  DetectionParams.full_band: Option<FullBandParams>
+//   DetectionParams::validate(&self) -> Result<(), ParamsError>, whose Display text contains the
+//   inequality that does not hold, written as in the feature ("full_band.low_hz < full_band.high_hz").
+// =============================================================================================
+
+/// The parameters of `specs/detection/detection-params.v2.toml` as far as the core can express
+/// them: v4 without the `[full_band]` section (the audio crate's tests load the real file).
+fn v2_params() -> DetectionParams {
+    DetectionParams {
+        algorithm_version: 2,
+        full_band: None,
+        ..DetectionParams::default()
+    }
+}
+
+/// The parameters of `specs/detection/detection-params.v3.toml`: v4 without `max_lossy_step_db`,
+/// so the guard has no step condition (the audio crate's tests load the real file).
+fn v3_params() -> DetectionParams {
+    let mut p = DetectionParams {
+        algorithm_version: 3,
+        ..DetectionParams::default()
+    };
+    p.full_band
+        .as_mut()
+        .expect("the defaults have a [full_band] section")
+        .max_lossy_step_db = None;
+    p
+}
+
+// ---- Measurements ---------------------------------------------------------------------------
+
+// Scenario: Upper level and burstiness are medians over the upper window.
+// L_ref = -30 dB (all bands at -30 dB in the reference range). The window [20700, 21000) holds the
+// bands centred at 20750, 20850 and 20950 Hz (bands 207 to 209); the neighbours at 20650 and
+// 21050 Hz (bands 206 and 210) are outside and would change the medians if they were counted.
+#[test]
+fn rf04_v3_upper_level_and_burstiness_are_medians_over_the_upper_window() {
+    let mean = |b: usize| match b {
+        207 => -70.0,
+        208 => -80.0,
+        209 => -75.0,
+        _ => -30.0,
+    };
+    let median_ = |b: usize| match b {
+        207 => -80.0,
+        208 => -82.0,
+        209 => -80.0,
+        206 | 210 => -90.0,
+        _ => -30.0,
+    };
+    let s = spectra_at(44_100, mean, median_);
+    let p = params();
+    let m = measure(&s, &p);
+    // U: median of M - L_ref = (-40, -50, -45) = -45. B: median of M - Q = (10, 2, 5) = 5.
+    near(m.upper_level_db.expect("U is defined"), -45.0);
+    near(m.upper_burst_db.expect("B is defined"), 5.0);
+    assert!(is_full_band(&m, &p), "the track is full band");
+}
+
+// Scenario: An even number of window bands takes the upper middle value.
+// full_band.low_hz = 20800 leaves the bands centred at 20850 and 20950 Hz.
+#[test]
+fn rf04_v3_even_window_takes_the_upper_middle_value() {
+    let mean = |b: usize| match b {
+        208 => -80.0,
+        209 => -70.0,
+        _ => -30.0,
+    };
+    let median_ = |b: usize| match b {
+        208 => -82.0,
+        209 => -74.0,
+        _ => -30.0,
+    };
+    let s = spectra_at(44_100, mean, median_);
+    let mut p = params();
+    p.full_band
+        .as_mut()
+        .expect("v3 has a [full_band] section")
+        .low_hz = 20_800.0;
+    let m = measure(&s, &p);
+    // U: (-50, -40) -> the larger, -40. B: (2, 4) -> the larger, 4.
+    near(m.upper_level_db.expect("U is defined"), -40.0);
+    near(m.upper_burst_db.expect("B is defined"), 4.0);
+}
+
+// Scenario Outline: Upper level and burstiness are undefined without an upper window.
+// Example 1: 32 kHz (Nyquist 16 kHz) with v3 parameters: no band in [20700, 21000).
+#[test]
+fn rf04_v3_no_upper_window_at_32k_leaves_u_and_b_undefined() {
+    let s = spectra_at(32_000, |_| 0.0, |_| 0.0);
+    let p = params();
+    let m = measure(&s, &p);
+    assert_eq!(m.upper_level_db, None);
+    assert_eq!(m.upper_burst_db, None);
+    assert!(!is_full_band(&m, &p), "the track is not full band");
+}
+
+// Example 2: 44.1 kHz with the parameters of detection-params.v2.toml (no [full_band] section).
+#[test]
+fn rf04_v3_no_full_band_section_leaves_u_and_b_undefined() {
+    let s = spectra_at(44_100, |_| 0.0, |_| -10.0);
+    let p = v2_params();
+    let m = measure(&s, &p);
+    assert_eq!(m.upper_level_db, None);
+    assert_eq!(m.upper_burst_db, None);
+    assert!(!is_full_band(&m, &p), "the track is not full band");
+}
+
+// ---- Verdict rules on given measurements ------------------------------------------------------
+
+/// The measurements of the feature's tables: H, G, D, fs, fe, U and B.
+#[allow(clippy::too_many_arguments)]
+fn tab(h: f64, g: f64, d: f64, fs: Option<f64>, fe: f64, u: f64, b: f64) -> Measurements {
+    Measurements {
+        noise_floor_db: -80.0,
+        high_frequency_db: h,
+        extent_hz: fe,
+        step_db: d,
+        step_hz: fs,
+        gap_db: g,
+        upper_level_db: Some(u),
+        upper_burst_db: Some(b),
+    }
+}
+
+// Scenario Outline: Confirmed false positives whose deepest step is above the lossy range are not
+// Fake. U and B are the values measured on the real tracks (rules.md, "Why v3 was replaced").
+#[test]
+fn rf04_v3_confirmed_false_positives_are_suspicious() {
+    let p = params();
+    for (id, g, d, fs, fe, u, b) in [
+        ("FP1", 18.39, 8.93, 20_450.0, 20_900.0, -56.64, 9.53),
+        ("FP2", 13.18, 14.79, 21_450.0, 21_400.0, -44.74, 30.60),
+        ("FP3", 10.26, 14.70, 21_250.0, 21_100.0, -51.46, 10.76),
+    ] {
+        let m = tab(-20.0, g, d, Some(fs), fe, u, b);
+        assert!(is_full_band(&m, &p), "{id}: full band");
+        assert_eq!(
+            decide(&m, &p),
+            (Verdict::Suspicious, vec![HighBandGaps]),
+            "{id}"
+        );
+    }
+}
+
+// Scenario Outline: FP4 stays Fake (known limitation). Its deepest step (14.22 dB at 19.45 kHz) is
+// in the lossy range, so v4 never guards it, whatever its upper window holds. The first row has
+// the U and B measured on the real track, the second illustrative bursty content.
+#[test]
+fn rf04_v4_fp4_stays_fake() {
+    let p = params();
+    for (u, b) in [(-47.06, 2.86), (-45.0, 8.0)] {
+        let m = tab(-20.0, -0.25, 14.22, Some(19_450.0), 22_050.0, u, b);
+        assert!(!is_full_band(&m, &p), "U = {u}, B = {b}: not full band");
+        assert_eq!(decide(&m, &p), (Verdict::Fake, vec![]), "U = {u}, B = {b}");
+    }
+}
+
+// Scenario Outline: The same evidence without content above the lossy range is still Fake.
+#[test]
+fn rf04_v3_the_same_evidence_without_content_above_is_fake() {
+    let p = params();
+    for (pattern, g, d, fs, fe, u, b) in [
+        (
+            "FP1 gap over a floor",
+            18.39,
+            8.93,
+            20_450.0,
+            22_050.0,
+            -50.0,
+            0.3,
+        ),
+        (
+            "FP4 step over a floor",
+            -0.25,
+            14.22,
+            19_450.0,
+            22_050.0,
+            -45.0,
+            0.3,
+        ),
+        (
+            "320 kbps: gap, step at 20.5 kHz",
+            12.0,
+            25.0,
+            20_450.0,
+            22_050.0,
+            -55.0,
+            0.3,
+        ),
+        (
+            "128 kbps: gap, step at 16 kHz",
+            15.0,
+            30.0,
+            16_050.0,
+            22_050.0,
+            -48.0,
+            0.2,
+        ),
+        (
+            "AAC/Opus: step only at 20 kHz",
+            -0.5,
+            20.0,
+            19_950.0,
+            22_050.0,
+            -60.0,
+            0.4,
+        ),
+        (
+            "gap, near digital silence above",
+            9.0,
+            40.0,
+            20_450.0,
+            20_600.0,
+            -95.0,
+            6.0,
+        ),
+    ] {
+        let m = tab(-20.0, g, d, Some(fs), fe, u, b);
+        assert!(!is_full_band(&m, &p), "{pattern}: not full band");
+        assert_eq!(decide(&m, &p), (Verdict::Fake, vec![]), "{pattern}");
+    }
+}
+
+// ---- Boundaries at the thresholds -------------------------------------------------------------
+
+// Scenario Outline: The guard holds at its thresholds and not below them.
+#[test]
+fn rf04_v3_the_guard_holds_at_its_thresholds_and_not_below_them() {
+    let p = params();
+    for (u, b, full_band, verdict, reasons) in [
+        (-70.0, 3.0, true, Verdict::Suspicious, vec![HighBandGaps]),
+        (-70.1, 3.0, false, Verdict::Fake, vec![]),
+        (-70.0, 2.9, false, Verdict::Fake, vec![]),
+        (-20.0, 2.9, false, Verdict::Fake, vec![]),
+        (-90.0, 9.0, false, Verdict::Fake, vec![]),
+    ] {
+        let m = tab(-20.0, 10.0, 0.0, None, 22_050.0, u, b);
+        assert_eq!(is_full_band(&m, &p), full_band, "U = {u}, B = {b}");
+        assert_eq!(decide(&m, &p), (verdict, reasons), "U = {u}, B = {b}");
+    }
+}
+
+// Scenario Outline: The gap and step thresholds keep their v2 boundaries when the track is not
+// full band (U = -50 dB, B = 0.3 dB).
+#[test]
+fn rf04_v3_gap_and_step_thresholds_keep_their_v2_boundaries() {
+    let p = params();
+    for (g, d, fs, verdict, reasons) in [
+        (6.0, 0.0, None, Verdict::Fake, vec![]),
+        (5.99, 0.0, None, Verdict::Suspicious, vec![HighBandGaps]),
+        (0.0, 10.0, Some(20_250.0), Verdict::Fake, vec![]),
+        (
+            0.0,
+            9.99,
+            Some(20_250.0),
+            Verdict::Suspicious,
+            vec![AmbiguousCutoff],
+        ),
+        (0.0, 10.0, Some(20_300.0), Verdict::Real, vec![]),
+    ] {
+        let m = tab(-20.0, g, d, fs, 22_050.0, -50.0, 0.3);
+        assert_eq!(
+            decide(&m, &p),
+            (verdict, reasons),
+            "G = {g}, D = {d}, fs = {fs:?}"
+        );
+    }
+}
+
+// ---- What the guard never changes ---------------------------------------------------------------
+
+// Scenario Outline: The guard only turns Fake into Suspicious (U = -40 dB, B = 8 dB). The v3 row
+// "gap and lossy step: V5 comes first" is Fake with v4: see the scenarios "A cutoff step in the
+// lossy range removes the guard" and "A v3 params file still gives the v3 verdicts" below.
+#[test]
+fn rf04_v3_the_guard_only_turns_fake_into_suspicious() {
+    let p = params();
+    #[allow(clippy::type_complexity)]
+    let rows: Vec<(
+        &str,
+        f64,
+        f64,
+        f64,
+        Option<f64>,
+        f64,
+        Verdict,
+        Vec<SuspicionReason>,
+    )> = vec![
+        (
+            "weak gap (V5 as in v2)",
+            -20.0,
+            5.0,
+            0.0,
+            None,
+            22_050.0,
+            Verdict::Suspicious,
+            vec![HighBandGaps],
+        ),
+        (
+            "step above the lossy range (V8)",
+            -20.0,
+            0.0,
+            13.0,
+            Some(20_450.0),
+            22_050.0,
+            Verdict::Suspicious,
+            vec![AmbiguousCutoff],
+        ),
+        (
+            "anti-aliasing step at 21.5 kHz",
+            -20.0,
+            0.0,
+            30.0,
+            Some(21_550.0),
+            21_500.0,
+            Verdict::Real,
+            vec![],
+        ),
+        (
+            "little treble (V2 comes first)",
+            -65.0,
+            12.0,
+            20.0,
+            Some(19_450.0),
+            22_050.0,
+            Verdict::Suspicious,
+            vec![LowHighFrequencyContent],
+        ),
+        (
+            "no evidence",
+            -20.0,
+            1.0,
+            3.0,
+            Some(18_050.0),
+            22_050.0,
+            Verdict::Real,
+            vec![],
+        ),
+    ];
+    for (case, h, g, d, fs, fe, verdict, reasons) in rows {
+        let m = tab(h, g, d, fs, fe, -40.0, 8.0);
+        assert_eq!(decide(&m, &p), (verdict, reasons), "{case}");
+    }
+}
+
+// Scenario: Without a [full_band] section the guard is disabled whatever U and B are.
+#[test]
+fn rf04_v3_without_a_full_band_section_the_guard_is_disabled() {
+    let p = v2_params();
+    let m = tab(-20.0, 18.39, 8.93, Some(20_450.0), 20_900.0, -45.0, 8.0);
+    assert!(!is_full_band(&m, &p), "the track is not full band");
+    assert_eq!(decide(&m, &p), (Verdict::Fake, vec![]));
+}
+
+// ---- Parameters (rules.md section 4) --------------------------------------------------------------
+
+// The defaults of the code are v4 (the audio crate's test compares them with the file).
+#[test]
+fn rf04_v3_defaults_are_v3() {
+    let p = DetectionParams::default();
+    assert_eq!(p.algorithm_version, 4);
+    assert_eq!(
+        p.full_band,
+        Some(FullBandParams {
+            low_hz: 20_700.0,
+            high_hz: 21_000.0,
+            min_level_db: -70.0,
+            min_burst_db: 3.0,
+            max_lossy_step_db: Some(3.0),
+        })
+    );
+}
+
+// Scenario Outline: Valid parameter files deserialise and validate (the validation half):
+// the defaults (v4), v3 (no max_lossy_step_db) and v2 (no [full_band] section).
+#[test]
+fn rf04_v3_valid_parameters_are_accepted() {
+    DetectionParams::default()
+        .validate()
+        .expect("the defaults are valid");
+    v3_params()
+        .validate()
+        .expect("params without max_lossy_step_db are valid");
+    v2_params()
+        .validate()
+        .expect("params without [full_band] are valid");
+}
+
+/// Validates `p` and returns the text of the error.
+fn rejection(p: &DetectionParams) -> String {
+    let e: ParamsError = p.validate().expect_err("the parameters are invalid");
+    e.to_string()
+}
+
+// Scenario Outline: Invalid parameter files are rejected (the validation rows).
+#[test]
+fn rf04_v3_full_band_high_must_exceed_low() {
+    let mut p = params();
+    p.full_band.as_mut().expect("full_band").high_hz = 20_700.0; // equal to low_hz
+    let text = rejection(&p);
+    assert!(
+        text.contains("full_band.low_hz < full_band.high_hz"),
+        "{text}"
+    );
+}
+
+#[test]
+fn rf04_v3_full_band_low_must_exceed_fake_max_cutoff() {
+    let mut p = params();
+    p.full_band.as_mut().expect("full_band").low_hz = 20_300.0; // equal to fake_max_cutoff_hz
+    let text = rejection(&p);
+    assert!(
+        text.contains("fake_max_cutoff_hz < full_band.low_hz"),
+        "{text}"
+    );
+}
+
+#[test]
+fn rf04_v3_gap_suspicious_must_not_exceed_gap_fake() {
+    let mut p = params();
+    p.verdict.gap_suspicious_db = 6.5;
+    let text = rejection(&p);
+    assert!(text.contains("gap_suspicious_db ≤ gap_fake_db"), "{text}");
+}
+
+#[test]
+fn rf04_v3_step_suspicious_must_not_exceed_step_fake() {
+    let mut p = params();
+    p.verdict.step_suspicious_db = 10.5;
+    let text = rejection(&p);
+    assert!(text.contains("step_suspicious_db ≤ step_fake_db"), "{text}");
+}
+
+// The threshold checks also apply without a [full_band] section (the full-band inequalities are
+// skipped then).
+#[test]
+fn rf04_v3_validation_without_full_band_checks_the_thresholds_only() {
+    let mut p = v2_params();
+    p.verdict.gap_suspicious_db = 6.5;
+    assert!(rejection(&p).contains("gap_suspicious_db ≤ gap_fake_db"));
+}
+
+// ---- Detection v4: the lossy-step condition (ADR-0039) --------------------------------------------
+
+// Scenario Outline: A cutoff step in the lossy range removes the guard (H = -20, fe = 22050,
+// U = -40 dB, B = 8 dB: only D and fs decide).
+#[test]
+fn rf04_v4_a_lossy_step_removes_the_guard() {
+    let p = params();
+    #[allow(clippy::type_complexity)]
+    let rows: Vec<(
+        &str,
+        f64,
+        f64,
+        Option<f64>,
+        bool,
+        Verdict,
+        Vec<SuspicionReason>,
+    )> = vec![
+        (
+            "gap, no cutoff step",
+            10.0,
+            0.0,
+            None,
+            true,
+            Verdict::Suspicious,
+            vec![HighBandGaps],
+        ),
+        (
+            "gap, lossy step at max_lossy_step_db",
+            10.0,
+            3.0,
+            Some(18_050.0),
+            false,
+            Verdict::Fake,
+            vec![],
+        ),
+        (
+            "gap, lossy step just below max_lossy_step_db",
+            10.0,
+            2.99,
+            Some(18_050.0),
+            true,
+            Verdict::Suspicious,
+            vec![HighBandGaps],
+        ),
+        (
+            "gap, step at the lower edge of the lossy range",
+            10.0,
+            5.0,
+            Some(14_500.0),
+            false,
+            Verdict::Fake,
+            vec![],
+        ),
+        (
+            "gap, step just below the lossy range",
+            10.0,
+            5.0,
+            Some(14_450.0),
+            true,
+            Verdict::Suspicious,
+            vec![HighBandGaps],
+        ),
+        (
+            "gap, step just inside the upper edge of the range",
+            10.0,
+            5.0,
+            Some(20_250.0),
+            false,
+            Verdict::Fake,
+            vec![],
+        ),
+        (
+            "gap, step at the upper edge of the range",
+            10.0,
+            5.0,
+            Some(20_300.0),
+            true,
+            Verdict::Suspicious,
+            vec![HighBandGaps],
+        ),
+        (
+            "FP1 pattern: deepest step 150 Hz above the range",
+            18.39,
+            8.93,
+            Some(20_450.0),
+            true,
+            Verdict::Suspicious,
+            vec![HighBandGaps],
+        ),
+        (
+            "gap and a deep lossy step",
+            12.0,
+            20.0,
+            Some(19_450.0),
+            false,
+            Verdict::Fake,
+            vec![],
+        ),
+        (
+            "confirmed fake with the smallest lossy step",
+            8.0,
+            5.63,
+            Some(17_050.0),
+            false,
+            Verdict::Fake,
+            vec![],
+        ),
+        (
+            "deep lossy step, no gap: V4 is never guarded",
+            -0.25,
+            14.22,
+            Some(19_450.0),
+            false,
+            Verdict::Fake,
+            vec![],
+        ),
+        (
+            "small lossy step, no gap: nothing fires",
+            1.0,
+            5.0,
+            Some(18_050.0),
+            false,
+            Verdict::Real,
+            vec![],
+        ),
+    ];
+    for (case, g, d, fs, full_band, verdict, reasons) in rows {
+        let m = tab(-20.0, g, d, fs, 22_050.0, -40.0, 8.0);
+        assert_eq!(is_full_band(&m, &p), full_band, "{case}: full band");
+        assert_eq!(decide(&m, &p), (verdict, reasons), "{case}");
+    }
+}
+
+// Rules.md section 2 ("LossyStep"): with max_lossy_step_db = 0 any defined fs in the lossy range
+// removes the guard (D > 0 whenever fs is defined); no step at all (fs undefined) does not.
+#[test]
+fn rf04_v4_a_zero_threshold_means_any_lossy_range_step() {
+    let mut p = params();
+    p.full_band.as_mut().expect("full_band").max_lossy_step_db = Some(0.0);
+    p.validate().expect("0 is a valid max_lossy_step_db");
+    let m = tab(-20.0, 10.0, 0.01, Some(18_050.0), 22_050.0, -40.0, 8.0);
+    assert!(!is_full_band(&m, &p));
+    let m = tab(-20.0, 10.0, 0.0, None, 22_050.0, -40.0, 8.0);
+    assert!(is_full_band(&m, &p), "no step at all: still full band");
+}
+
+// Scenario Outline: A v3 params file still gives the v3 verdicts. The params of v3 have no
+// max_lossy_step_db, so the guard has no step condition and also covers V4.
+#[test]
+fn rf04_v4_a_v3_params_file_still_gives_the_v3_verdicts() {
+    let v3 = v3_params();
+    let v4 = params();
+    type Outcome = (Verdict, Vec<SuspicionReason>);
+    // (case, (G, D, fs, fe, U, B), v3 outcome, v4 outcome)
+    let rows: Vec<(&str, (f64, f64, f64, f64, f64, f64), Outcome, Outcome)> = vec![
+        (
+            "FP4 pattern with bursty content",
+            (-0.25, 14.22, 19_450.0, 22_050.0, -45.0, 8.0),
+            (Verdict::Suspicious, vec![AmbiguousCutoff]),
+            (Verdict::Fake, vec![]),
+        ),
+        (
+            "gap and a deep lossy step",
+            (12.0, 20.0, 19_450.0, 22_050.0, -40.0, 8.0),
+            (Verdict::Suspicious, vec![HighBandGaps]),
+            (Verdict::Fake, vec![]),
+        ),
+        (
+            "gap and a small lossy step",
+            (10.0, 5.0, 16_050.0, 22_050.0, -6.0, 13.0),
+            (Verdict::Suspicious, vec![HighBandGaps]),
+            (Verdict::Fake, vec![]),
+        ),
+        (
+            "FP1",
+            (18.39, 8.93, 20_450.0, 20_900.0, -56.64, 9.53),
+            (Verdict::Suspicious, vec![HighBandGaps]),
+            (Verdict::Suspicious, vec![HighBandGaps]),
+        ),
+        (
+            "FP1 gap over a floor",
+            (18.39, 8.93, 20_450.0, 22_050.0, -50.0, 0.3),
+            (Verdict::Fake, vec![]),
+            (Verdict::Fake, vec![]),
+        ),
+    ];
+    for (case, (g, d, fs, fe, u, b), want3, want4) in rows {
+        let m = tab(-20.0, g, d, Some(fs), fe, u, b);
+        assert_eq!(decide(&m, &v3), want3, "{case}: v3");
+        assert_eq!(decide(&m, &v4), want4, "{case}: v4");
+    }
+}
+
+// Scenario Outline: The bounds of max_lossy_step_db are inclusive (the validation half).
+#[test]
+fn rf04_v4_max_lossy_step_bounds_are_inclusive() {
+    for value in [0.0, 10.0] {
+        let mut p = params();
+        p.full_band.as_mut().expect("full_band").max_lossy_step_db = Some(value);
+        p.validate()
+            .unwrap_or_else(|e| panic!("{value} must be accepted: {e}"));
+    }
+}
+
+// Scenario Outline: An invalid max_lossy_step_db is rejected by validation.
+#[test]
+fn rf04_v4_a_negative_max_lossy_step_is_rejected() {
+    let mut p = params();
+    p.full_band.as_mut().expect("full_band").max_lossy_step_db = Some(-0.5);
+    let text = rejection(&p);
+    assert!(text.contains("full_band.max_lossy_step_db ≥ 0"), "{text}");
+}
+
+#[test]
+fn rf04_v4_max_lossy_step_above_step_fake_is_rejected() {
+    let mut p = params();
+    p.full_band.as_mut().expect("full_band").max_lossy_step_db = Some(10.5);
+    let text = rejection(&p);
+    assert!(
+        text.contains("full_band.max_lossy_step_db ≤ step_fake_db"),
+        "{text}"
+    );
+}
+
+#[test]
+fn rf04_v4_lowering_step_fake_below_max_lossy_step_is_rejected() {
+    let mut p = params();
+    p.verdict.step_fake_db = 2.5;
+    p.verdict.step_suspicious_db = 2.5;
+    let text = rejection(&p);
+    assert!(
+        text.contains("full_band.max_lossy_step_db ≤ step_fake_db"),
+        "{text}"
+    );
+}
+
+#[test]
+fn rf04_v4_a_nan_max_lossy_step_is_rejected() {
+    let mut p = params();
+    p.full_band.as_mut().expect("full_band").max_lossy_step_db = Some(f64::NAN);
+    let text = rejection(&p);
+    assert!(text.contains("full_band.max_lossy_step_db"), "{text}");
+}
+
+// Without the field (a v3 file) the step_fake_db bound does not apply (rules.md section 4).
+#[test]
+fn rf04_v4_without_max_lossy_step_the_bounds_are_not_checked() {
+    let mut p = v3_params();
+    p.verdict.step_fake_db = 2.5;
+    p.verdict.step_suspicious_db = 2.5;
+    p.validate()
+        .expect("no max_lossy_step_db, nothing to bound");
 }

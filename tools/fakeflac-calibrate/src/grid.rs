@@ -1,6 +1,6 @@
 //! Grid search over rule parameters (evaluation.md section 7).
 //!
-//! Only rule parameters (`[bands]`, `[extent]`, `[step]`, `[gaps]`, `[verdict]`) can be searched: they
+//! Only rule parameters (`[bands]`, `[extent]`, `[step]`, `[gaps]`, `[full_band]`, `[verdict]`) can be searched: they
 //! are re-applied to cached spectra without decoding. Measurements are computed once per distinct
 //! non-verdict parameter set. The search reads `tune` rows only (the caller selects them).
 
@@ -153,7 +153,7 @@ enum Kind {
 }
 
 /// Every searchable field (rule parameters) and its type.
-const RULE_FIELDS: [(&str, Kind); 25] = [
+const RULE_FIELDS: [(&str, Kind); 30] = [
     ("bands.ref_band_low_hz", Kind::Float),
     ("bands.ref_band_high_hz", Kind::Float),
     ("bands.hf_band_low_hz", Kind::Float),
@@ -168,6 +168,11 @@ const RULE_FIELDS: [(&str, Kind); 25] = [
     ("step.rebound_db", Kind::Float),
     ("gaps.edge_hz", Kind::Float),
     ("gaps.band_hz", Kind::Float),
+    ("full_band.low_hz", Kind::Float),
+    ("full_band.high_hz", Kind::Float),
+    ("full_band.min_level_db", Kind::Float),
+    ("full_band.min_burst_db", Kind::Float),
+    ("full_band.max_lossy_step_db", Kind::Float),
     ("verdict.low_hf_threshold_db", Kind::Float),
     ("verdict.gap_fake_db", Kind::Float),
     ("verdict.gap_suspicious_db", Kind::Float),
@@ -203,6 +208,11 @@ fn field_ref<'a>(p: &'a mut DetectionParams, key: &str) -> Option<FieldRef<'a>> 
         "step.rebound_db" => F(&mut p.step.rebound_db),
         "gaps.edge_hz" => F(&mut p.gaps.edge_hz),
         "gaps.band_hz" => F(&mut p.gaps.band_hz),
+        "full_band.low_hz" => F(&mut p.full_band.as_mut()?.low_hz),
+        "full_band.high_hz" => F(&mut p.full_band.as_mut()?.high_hz),
+        "full_band.min_level_db" => F(&mut p.full_band.as_mut()?.min_level_db),
+        "full_band.min_burst_db" => F(&mut p.full_band.as_mut()?.min_burst_db),
+        "full_band.max_lossy_step_db" => F(p.full_band.as_mut()?.max_lossy_step_db.as_mut()?),
         "verdict.low_hf_threshold_db" => F(&mut p.verdict.low_hf_threshold_db),
         "verdict.gap_fake_db" => F(&mut p.verdict.gap_fake_db),
         "verdict.gap_suspicious_db" => F(&mut p.verdict.gap_suspicious_db),
@@ -261,6 +271,16 @@ pub fn invariant_violations(p: &DetectionParams) -> Vec<&'static str> {
     }
     if p.bands.hf_band_low_hz >= p.bands.hf_band_high_hz {
         out.push("hf_band_low_hz must be below hf_band_high_hz");
+    }
+    if let Some(fb) = &p.full_band {
+        if !(v.fake_max_cutoff_hz < fb.low_hz && fb.low_hz < fb.high_hz) {
+            out.push("fake_max_cutoff_hz < full_band.low_hz < full_band.high_hz must hold");
+        }
+        if let Some(max) = fb.max_lossy_step_db {
+            if !(0.0 <= max && max <= v.step_fake_db) {
+                out.push("0 <= full_band.max_lossy_step_db <= step_fake_db must hold");
+            }
+        }
     }
     out
 }
@@ -321,9 +341,9 @@ pub fn parse_grid(text: &str, settings: &[String]) -> Result<GridFile, ToolError
     let raw: RawGrid = toml::from_str(text)
         .map_err(|e| ToolError::input_lines(e.to_string().lines().map(str::to_string).collect()))?;
     let mut errors: Vec<String> = Vec::new();
-    if raw.grid_version != 1 {
+    if !matches!(raw.grid_version, 1 | 2) {
         errors.push(format!(
-            "grid_version {} is not supported (expected 1)",
+            "grid_version {} is not supported (expected 1 or 2)",
             raw.grid_version
         ));
     }
@@ -502,7 +522,7 @@ fn score(
                 let (verdict, _) = decide(m, params);
                 if row.kind == RowKind::Negative && !row.constraint_only && verdict != Verdict::Fake
                 {
-                    min_margin = min_margin.min(nearest_margin(m, &params.verdict));
+                    min_margin = min_margin.min(nearest_margin(m, params));
                 }
                 verdict
             }
@@ -612,7 +632,13 @@ pub fn search(baseline: &DetectionParams, rows: &[SearchRow<'_>], grid: &GridFil
             .keys
             .iter()
             .zip(spec.values.iter())
-            .filter(|(k, _)| !k.key.starts_with("verdict."))
+            .filter(|(k, _)| {
+                // Decide-only keys do not change the measurements.
+                !(k.key.starts_with("verdict.")
+                    || k.key == "full_band.min_level_db"
+                    || k.key == "full_band.min_burst_db"
+                    || k.key == "full_band.max_lossy_step_db")
+            })
             .map(|(_, v)| v.to_bits())
             .collect();
         groups.entry(key).or_default().push(i);
@@ -747,8 +773,8 @@ pub fn build_proposal(
     grid: &GridFile,
     best: &[f64],
     run_id: &str,
+    version: u32,
 ) -> Result<Proposal, ToolError> {
-    let version = baseline.algorithm_version + 1;
     let mut expected = baseline.clone();
     expected.algorithm_version = version;
     let mut text = baseline_text.to_string();

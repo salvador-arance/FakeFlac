@@ -51,13 +51,14 @@ fn rp11_grid_search_proposes_new_parameters_from_tune_data() {
     assert!(point.feasible && result.baseline.feasible);
 
     let report_dir = o.report_dir.as_ref().expect("report folder");
-    let proposal = report_dir.join("detection-params.v3.toml");
+    let proposal = report_dir.join(format!("detection-params.v{}.toml", next_free_version()));
     assert_eq!(result.proposal.as_deref(), Some(proposal.as_path()));
     let text = read(&proposal);
 
-    // It parses to v2 with algorithm_version 3 and gap_fake_db 4.0.
+    // It parses to v2 with algorithm_version 5 (the next free version, evaluation.md section 7)
+    // and gap_fake_db 4.0.
     let mut expected: DetectionParams = toml::from_str(&read(&v2_params())).unwrap();
-    expected.algorithm_version = 3;
+    expected.algorithm_version = next_free_version();
     expected.verdict.gap_fake_db = 4.0;
     let parsed: DetectionParams = toml::from_str(&text).unwrap();
     assert_eq!(parsed, expected);
@@ -72,7 +73,10 @@ fn rp11_grid_search_proposes_new_parameters_from_tune_data() {
     );
     assert_eq!(lines[1], "# Changed: verdict.gap_fake_db 6.0 -> 4.0");
     let baseline = read(&v2_params())
-        .replace("algorithm_version = 2", "algorithm_version = 3")
+        .replace(
+            "algorithm_version = 2",
+            &format!("algorithm_version = {}", next_free_version()),
+        )
         .replace("gap_fake_db = 6.0", "gap_fake_db = 4.0");
     assert_eq!(lines[2..], baseline.lines().collect::<Vec<_>>()[..]);
 

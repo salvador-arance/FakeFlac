@@ -38,8 +38,38 @@ pub fn v2_params() -> PathBuf {
     repo_root().join("specs/detection/detection-params.v2.toml")
 }
 
+/// Detection v3: v2 plus the optional `[full_band]` section (rules.md, ADR-0038).
+pub fn v3_params() -> PathBuf {
+    repo_root().join("specs/detection/detection-params.v3.toml")
+}
+
+/// Detection v4: v3 plus the optional `full_band.max_lossy_step_db` (rules.md, ADR-0039).
+pub fn v4_params() -> PathBuf {
+    repo_root().join("specs/detection/detection-params.v4.toml")
+}
+
 pub fn v1_params() -> PathBuf {
     repo_root().join("specs/detection/detection-params.v1.toml")
+}
+
+/// The next free `algorithm_version` as sample-corpus.md section 4 and evaluation.md section 7
+/// define it: 1 + the largest `algorithm_version` of `specs/detection/detection-params.v*.toml`.
+pub fn next_free_version() -> u32 {
+    let dir = repo_root().join("specs/detection");
+    let highest = std::fs::read_dir(&dir)
+        .unwrap()
+        .flatten()
+        .filter(|e| {
+            let name = e.file_name().to_string_lossy().to_string();
+            name.starts_with("detection-params.v") && name.ends_with(".toml")
+        })
+        .map(|e| {
+            let table: toml::Table = toml::from_str(&read(&e.path())).unwrap();
+            table["algorithm_version"].as_integer().unwrap()
+        })
+        .max()
+        .expect("specs/detection has params files");
+    u32::try_from(highest).unwrap() + 1
 }
 
 pub fn spec_config() -> PathBuf {
@@ -812,11 +842,14 @@ impl Sample {
         path
     }
 
-    /// `candidate.toml` of sample-corpus.md section 4: v2 with `algorithm_version = 3` and
-    /// `verdict.gap_fake_db = 4.0`.
+    /// `candidate.toml` of sample-corpus.md section 4: v2 with `algorithm_version` set to the next
+    /// free version (never 3 or 4, which are detection v3 and v4; 5 today) and `verdict.gap_fake_db = 4.0`.
     pub fn candidate_params(&self) -> PathBuf {
         let text = read(&v2_params())
-            .replace("algorithm_version = 2", "algorithm_version = 3")
+            .replace(
+                "algorithm_version = 2",
+                &format!("algorithm_version = {}", next_free_version()),
+            )
             .replace("gap_fake_db = 6.0", "gap_fake_db = 4.0");
         self.write_scratch("candidate.toml", &text)
     }
@@ -978,6 +1011,26 @@ pub fn shared_v2_and_candidate() -> &'static SharedRun {
         let sample = Sample::new_shared("shared-two");
         let candidate = sample.candidate_params();
         let outcome = sample.accept(&[v2_params(), candidate]);
+        SharedRun { sample, outcome }
+    })
+}
+
+/// Cold run with v2 and v3 in one invocation (sample-corpus.md section 4, "v3 side by side").
+pub fn shared_v2_and_v3() -> &'static SharedRun {
+    static CELL: OnceLock<SharedRun> = OnceLock::new();
+    CELL.get_or_init(|| {
+        let sample = Sample::new_shared("shared-v2-v3");
+        let outcome = sample.accept(&[v2_params(), v3_params()]);
+        SharedRun { sample, outcome }
+    })
+}
+
+/// Cold run with v2, v3 and v4 in one invocation (sample-corpus.md section 4, "v4 side by side").
+pub fn shared_v2_v3_and_v4() -> &'static SharedRun {
+    static CELL: OnceLock<SharedRun> = OnceLock::new();
+    CELL.get_or_init(|| {
+        let sample = Sample::new_shared("shared-v2-v3-v4");
+        let outcome = sample.accept(&[v2_params(), v3_params(), v4_params()]);
         SharedRun { sample, outcome }
     })
 }
