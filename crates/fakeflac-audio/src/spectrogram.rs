@@ -74,6 +74,10 @@ pub fn compute(path: &Path, params: &SpectrogramParams) -> Result<Spectrogram, T
     };
     let mut buf: Vec<f32> = Vec::with_capacity(n * 2);
     stream.for_each_chunk(|_, samples| {
+        if acc.frame_index >= n_frames {
+            // Every frame is done: a file longer than it declared adds nothing.
+            return;
+        }
         buf.extend_from_slice(samples);
         let mut start = 0;
         while buf.len() >= start + n && acc.frame_index < n_frames {
@@ -151,7 +155,10 @@ impl Accumulator<'_> {
         for ((x, s), w) in self.input.iter_mut().zip(frame).zip(&self.window) {
             *x = f64::from(*s) * w;
         }
-        if self.fft.process(&mut self.input, &mut self.output).is_err() {
+        // Input and output are made by the plan itself, so their lengths always match.
+        let done = self.fft.process(&mut self.input, &mut self.output);
+        debug_assert!(done.is_ok(), "FFT buffer lengths come from the plan");
+        if done.is_err() {
             return;
         }
         for (acc, (lo, hi)) in self.col_power.iter_mut().zip(&self.ranges) {
