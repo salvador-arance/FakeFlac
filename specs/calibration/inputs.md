@@ -92,9 +92,9 @@ Same grammar as `trusted.txt` (1.1 to 1.4 and 1.6, with `confirmed.txt` in the m
 `fake` lines may also cover lossy files, with the attributes of `lossy.md` section 1.2. Unknown kind: `unknown kind 'x' (expected fake, real or false-positive)`. If the file is missing, there are no confirmed fakes and no watch list.
 
 Known truth for `confirmed.txt` (to be populated by the user once this spec is approved):
-- `fake`: tracks 03, 04, 11, 13, 15 and 16 of *Center of Attention* and the 9 tracks of *Hitler Wears Hermes 5* (track 01 excluded because it was never certain).
+- `fake`: tracks 03, 04, 11, 13, 15 and 16 of album F1 and the 9 tracks of album F2 (track 01 excluded because it was never certain).
 - `false-positive`: the 4 tracks of purchased discs A–D (watch list `W1`–`W4`).
-- In `trusted.txt`, origin `revisado`: the 9 confirmed lossless tracks of *Center of Attention*.
+- In `trusted.txt`, origin `revisado`: the 9 confirmed lossless tracks of album F1.
 
 ## 3. `labels.csv`
 
