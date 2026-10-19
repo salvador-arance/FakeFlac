@@ -11,7 +11,12 @@ Feature: Inspect a track's spectrogram
     When I select the row "lp16k.flac"
     Then the detail panel shows the spectrogram of "lp16k.flac" within 2 seconds
     And a horizontal line marks the estimated cutoff at 16.0 kHz
-    And the panel shows "Cutoff 16.0 kHz · Fake" and the reason in plain words
+    And the panel shows "Cutoff 16.0 kHz · Fake"
+
+  Scenario: A Suspicious track shows its reason in plain words
+    Given an analysis has finished with a track whose verdict is "Suspicious" with reason "highBandGaps" and cutoff 17.0 kHz
+    When I select that row
+    Then the panel shows "Cutoff 17.0 kHz · Suspicious · Frequent gaps above 16 kHz, as in an MP3"
 
   Scenario: Spectrogram shape
     Given the synthetic file "lp16k.flac" of 30 s at 44.1 kHz
