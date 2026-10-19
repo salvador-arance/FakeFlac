@@ -2,6 +2,23 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-19 - RF-07 spectrogram implemented (PRs #39, #40)
+
+**Done**
+- PR #39 `spec(RF-07)` (G1): owner decisions taken while implementing. The Fake detail line has no reason ("Cutoff 16.0 kHz · Fake"; " · <reason>" only when the track has reasons); `Spectrogram.data` documented as a JSON array of numbers; detail-panel i18n keys listed; new state/scenario "The spectrogram cannot be read" (`spectrogram.unavailable`).
+- PR #40 `feat(RF-07)` (G2, based on #39, merge #39 first): `fakeflac-audio::spectrogram` (STFT from `[spectrogram]` params, dBFS → u8, bounded memory), `get_spectrogram` command, `SpectrogramView` and `DetailPanel` with stories, `AnalysisPage` wiring (stale responses discarded, Error rows request nothing, failed request shows `spectrogram.unavailable`). `just ci` green (213 frontend tests), two review rounds, blocking findings fixed.
+- `gh auth setup-git` done: `git push` over HTTPS works now.
+
+**Pending**
+- G1 on #39, then G2 on #40.
+- RF-07 known deviations (in the #40 description): 60-minute file takes 2.37 s (budget 2 s; owner accepted, mostly decode); `DISPLAY_KAISER_BETA = 10.0` constant until `SpectrogramParams` gets a beta field (next params version); no `spectrogram` method on the `SpectrumAnalyzer` port; superseded requests not cancelled/debounced; re-clicking the selected row does not retry; MainLayout splitter still pending (H1 UI).
+- RF-04: unchanged, see the next block.
+
+**Blockers / questions for the human**
+- RF-04 G1 decision (next block).
+
+**Next step:** review and merge #39, then #40; after that `just prune-branches` (also deletes the local `feat/RF-07-backup`).
+
 ## 2026-10-19 - RF-04 Detection v3 implemented; acceptance fails (back to G1)
 
 **Done**
@@ -21,9 +38,8 @@
 
 **Blockers / questions for the human**
 - G1 on RF-04: new v3 values (e.g. a much stricter `min_level_db`, measured on this run's `tracks.csv`) or another discriminator; accept FP4 staying Fake (Q7)?; why T2/T3 already fail with v2.
-- `git push` over HTTPS has no credential helper (`gh auth setup-git`).
 
-**Next step:** `/feature RF-07` (spectrogram), independent of RF-04.
+**Next step:** owner G1 decision on the v3 values (RF-04).
 
 ## 2026-10-18 - RF-04 Detection v3 spec approved (G1)
 
