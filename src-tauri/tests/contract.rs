@@ -16,10 +16,12 @@ fn info(path: &str, format: core::AudioFormat) -> core::TrackInfo {
         folder: p.parent().map(PathBuf::from).unwrap_or_default(),
         path: p,
         format,
+        codec: Some(core::AudioCodec::Flac),
         sample_rate: 44100,
         bit_depth: Some(16),
         channels: 2,
         declared_bitrate_kbps: None,
+        bitrate_mode: None,
         duration_ms: 6000,
         size_bytes: 1234,
         modified_unix: 1_700_000_000,
@@ -82,10 +84,12 @@ fn track_analysis_json_matches_the_contract() {
             "path": UNICODE_PATH,
             "folder": "Álbum ″Ñandú″",
             "format": "flac",
+            "codec": "flac",
             "sampleRate": 44100,
             "bitDepth": 16,
             "channels": 2,
             "declaredBitrateKbps": null,
+            "bitrateMode": null,
             "durationMs": 6000,
             "sizeBytes": 1234,
             "modifiedUnix": 1_700_000_000
@@ -152,6 +156,48 @@ fn formats_map_for_every_variant() {
         let mut t = track(core::Verdict::Real, None);
         t.info.format = f;
         assert_eq!(track_json(&t)["info"]["format"], s);
+    }
+}
+
+// @RF-14 Contract version 3: `TrackInfo.codec` for every codec, `null` when an M4A was not probed.
+#[test]
+fn codecs_map_for_every_variant() {
+    use core::AudioCodec as C;
+    for (c, s) in [
+        (C::Pcm, "pcm"),
+        (C::Flac, "flac"),
+        (C::Alac, "alac"),
+        (C::Mp3, "mp3"),
+        (C::Aac, "aac"),
+        (C::Opus, "opus"),
+    ] {
+        let mut t = track(core::Verdict::Real, None);
+        t.info.codec = Some(c);
+        assert_eq!(track_json(&t)["info"]["codec"], s);
+    }
+    let mut t = track(
+        core::Verdict::Error,
+        Some(core::TrackError::CorruptStream("x".into())),
+    );
+    t.info.format = core::AudioFormat::M4a;
+    t.info.codec = None;
+    assert_eq!(track_json(&t)["info"]["codec"], Value::Null);
+}
+
+// @RF-14 Contract version 3: `TrackInfo.bitrateMode` (MP3 only) next to `declaredBitrateKbps`.
+#[test]
+fn bitrate_modes_map_for_every_variant() {
+    use core::BitrateMode as M;
+    for (m, s) in [(M::Cbr, "cbr"), (M::Vbr, "vbr"), (M::Abr, "abr")] {
+        let mut t = track(core::Verdict::Real, None);
+        t.info.format = core::AudioFormat::Mp3;
+        t.info.codec = Some(core::AudioCodec::Mp3);
+        t.info.declared_bitrate_kbps = Some(240);
+        t.info.bitrate_mode = Some(m);
+        let info = &track_json(&t)["info"];
+        assert_eq!(info["bitrateMode"], s);
+        assert_eq!(info["declaredBitrateKbps"], 240);
+        assert_eq!(info["format"], "mp3");
     }
 }
 

@@ -2,7 +2,8 @@
 //! Spec: `specs/detection/album-summary.md`. Protected after the `test(RF-10)` commit.
 
 use fakeflac_core::{
-    summarize_album, AlbumSummary, AudioFormat, TrackAnalysis, TrackError, TrackInfo, Verdict,
+    summarize_album, AlbumSummary, AudioCodec, AudioFormat, TrackAnalysis, TrackError, TrackInfo,
+    Verdict,
 };
 use std::path::{Path, PathBuf};
 
@@ -13,10 +14,12 @@ fn track(folder: &str, name: &str, verdict: Verdict) -> TrackAnalysis {
             path: folder.join(name),
             folder,
             format: AudioFormat::Flac,
+            codec: Some(AudioCodec::Flac),
             sample_rate: 44_100,
             bit_depth: Some(16),
             channels: 2,
             declared_bitrate_kbps: None,
+            bitrate_mode: None,
             duration_ms: 180_000,
             size_bytes: 30_000_000,
             modified_unix: 0,

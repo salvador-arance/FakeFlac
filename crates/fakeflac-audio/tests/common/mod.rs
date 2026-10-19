@@ -18,6 +18,8 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
+pub mod lossy;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Container {
     Flac,
@@ -70,6 +72,53 @@ pub fn fixture(name: &str, container: Container) -> PathBuf {
         path
     })
     .clone()
+}
+
+/// Path to the lossy fixture `name` (ids of `specs/detection/lossy-fixtures.md`, section 2), written
+/// once per test binary by the bitstream writers of `lossy.rs`. The extension is `.mp3` or `.m4a`.
+pub fn lossy_fixture(name: &str) -> PathBuf {
+    type Cells = Mutex<HashMap<String, Arc<OnceLock<PathBuf>>>>;
+    static CACHE: OnceLock<Cells> = OnceLock::new();
+    let cell = {
+        let mut map = CACHE
+            .get_or_init(|| Mutex::new(HashMap::new()))
+            .lock()
+            .unwrap();
+        map.entry(name.to_string()).or_default().clone()
+    };
+    cell.get_or_init(|| {
+        let ext = if name.starts_with("mp3_") {
+            "mp3"
+        } else {
+            "m4a"
+        };
+        let dir = fixture_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(format!("{name}.{ext}"));
+        if !path.exists() {
+            let tmp = dir.join(format!("{name}.{}.{ext}.tmp", std::process::id()));
+            std::fs::write(&tmp, lossy_bytes(name)).unwrap();
+            let _ = std::fs::hard_link(&tmp, &path);
+            let _ = std::fs::remove_file(&tmp);
+            assert!(path.exists(), "fixture {} missing", path.display());
+        }
+        path
+    })
+    .clone()
+}
+
+/// The bytes of a lossy fixture. ALAC fixtures hold the samples of a lossless fixture
+/// (`m4a_alac_full_band`: `full_band`, `m4a_alac_lp16k`: `lp16k`, 16-bit).
+pub fn lossy_bytes(name: &str) -> Vec<u8> {
+    if let Some(signal_name) = name.strip_prefix("m4a_alac_") {
+        let spec = signal(signal_name);
+        let samples: Vec<i16> = quantize(&spec.samples, 16, None)
+            .into_iter()
+            .map(|s| s as i16)
+            .collect();
+        return lossy::write_m4a_alac(&samples, spec.sample_rate);
+    }
+    lossy::fixture_bytes(name).unwrap_or_else(|| panic!("unknown lossy fixture {name}"))
 }
 
 /// Fixture folder of this build of the test binary: all its processes share it, and a rebuild
