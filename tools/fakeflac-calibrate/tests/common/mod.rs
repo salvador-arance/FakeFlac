@@ -43,6 +43,11 @@ pub fn v3_params() -> PathBuf {
     repo_root().join("specs/detection/detection-params.v3.toml")
 }
 
+/// Detection v4: v3 plus the optional `full_band.max_lossy_step_db` (rules.md, ADR-0039).
+pub fn v4_params() -> PathBuf {
+    repo_root().join("specs/detection/detection-params.v4.toml")
+}
+
 pub fn v1_params() -> PathBuf {
     repo_root().join("specs/detection/detection-params.v1.toml")
 }
@@ -838,7 +843,7 @@ impl Sample {
     }
 
     /// `candidate.toml` of sample-corpus.md section 4: v2 with `algorithm_version` set to the next
-    /// free version (never 3, which is detection v3) and `verdict.gap_fake_db = 4.0`.
+    /// free version (never 3 or 4, which are detection v3 and v4; 5 today) and `verdict.gap_fake_db = 4.0`.
     pub fn candidate_params(&self) -> PathBuf {
         let text = read(&v2_params())
             .replace(
@@ -1016,6 +1021,16 @@ pub fn shared_v2_and_v3() -> &'static SharedRun {
     CELL.get_or_init(|| {
         let sample = Sample::new_shared("shared-v2-v3");
         let outcome = sample.accept(&[v2_params(), v3_params()]);
+        SharedRun { sample, outcome }
+    })
+}
+
+/// Cold run with v2, v3 and v4 in one invocation (sample-corpus.md section 4, "v4 side by side").
+pub fn shared_v2_v3_and_v4() -> &'static SharedRun {
+    static CELL: OnceLock<SharedRun> = OnceLock::new();
+    CELL.get_or_init(|| {
+        let sample = Sample::new_shared("shared-v2-v3-v4");
+        let outcome = sample.accept(&[v2_params(), v3_params(), v4_params()]);
         SharedRun { sample, outcome }
     })
 }

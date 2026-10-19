@@ -1,7 +1,10 @@
 //! Tests derived from the @RF-04 scenarios of `specs/features/calibration.feature` (detection v3
-//! in the calibration tool): v2 and v3 side by side, the full-band columns of `tracks.csv`,
-//! params files that fail `DetectionParams::validate`, and the search of `[full_band]` keys.
-//! Spec: `specs/calibration/{calibration,evaluation,sample-corpus}.md`, ADR-0038. Synthetic
+//! and v4 in the calibration tool): v2, v3 and v4 side by side, the full-band columns of
+//! `tracks.csv` (v4: `m_full_band_step_db`), params files that fail `DetectionParams::validate`,
+//! and the search of `[full_band]` keys (v4: `full_band.max_lossy_step_db`). The v3 tests (the
+//! first half of the file) stay as written for v3, which remains loadable; the v4 tests are in the
+//! section "Detection v4" at the end.
+//! Spec: `specs/calibration/{calibration,evaluation,sample-corpus}.md`, ADR-0038, ADR-0039. Synthetic
 //! fixtures and the fixture transcoder only (no ffmpeg, no real audio).
 //!
 //! Figures that the tool reports only as Markdown (the per-setting change table and the
@@ -13,11 +16,12 @@ mod common;
 
 use common::*;
 use fakeflac_calibrate::cache::Extracted;
-use fakeflac_calibrate::evaluate::{is_near, Margins, RowEval};
+use fakeflac_calibrate::evaluate::{is_near, margins, nearest_margin, Margins, RowEval};
 use fakeflac_calibrate::model::{LabelRow, RowRoot, Truth};
 use fakeflac_calibrate::report::{Counts, SplitSel};
 use fakeflac_calibrate::split::Split;
 use fakeflac_calibrate::{run, CalibrateArgs, Command, Config, Env};
+use fakeflac_core::detect::Measurements;
 use fakeflac_core::{DetectionParams, TrackError, Verdict};
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -34,6 +38,7 @@ fn counts(real: u32, suspicious: u32, fake: u32, error: u32) -> Counts {
 
 const V2: &str = "detection-params.v2.toml";
 const V3: &str = "detection-params.v3.toml";
+const V4: &str = "detection-params.v4.toml";
 
 /// The rows of `tracks.csv` of one params file.
 fn rows_of<'a>(t: &'a Table, params_file: &str) -> Vec<&'a Vec<String>> {
@@ -584,6 +589,7 @@ fn near_eval(a: f64, full_band_margin_db: Option<f64>) -> RowEval {
             m_full_band_level_db: full_band_margin_db,
             m_full_band_burst_db: full_band_margin_db,
             full_band_margin_db,
+            m_full_band_step_db: None,
             nearest_fake_margin_db: nearest,
         }),
     }
@@ -616,4 +622,413 @@ fn rf04_a_negative_kept_from_fake_only_by_the_guard_at_its_threshold_is_near() {
     assert!(!is_near(&negative, &near_eval(-2.0, Some(-0.5)), &config));
     // a > 0 (not Fake by itself) at margin 0 is not the guard case: nearest = a = 3 dB, not near.
     assert!(!is_near(&negative, &near_eval(3.0, Some(0.0)), &config));
+}
+
+// =============================================================================================
+// Detection v4 (ADR-0039): the lossy-step condition in the calibration tool
+// =============================================================================================
+
+// Scenario: v2, v3 and v4 side by side in one run (@RP-11 @RF-04)
+#[test]
+fn rf04_v2_v3_and_v4_side_by_side() {
+    let o = &shared_v2_v3_and_v4().outcome;
+    assert_ok(o);
+    assert_eq!(decoded(o), 33);
+    assert_eq!(transcoded(o), 24);
+    assert_eq!(o.evaluations.len(), 3);
+    let (v2, v3, v4) = (&o.evaluations[0], &o.evaluations[1], &o.evaluations[2]);
+    assert_eq!(
+        (
+            v2.params_name.as_str(),
+            v3.params_name.as_str(),
+            v4.params_name.as_str()
+        ),
+        (V2, V3, V4)
+    );
+    assert_eq!(
+        (
+            v2.algorithm_version,
+            v3.algorithm_version,
+            v4.algorithm_version
+        ),
+        (2, 3, 4)
+    );
+    assert_eq!(
+        v2.fingerprint_id, v4.fingerprint_id,
+        "max_lossy_step_db is a rule parameter: no extra decode"
+    );
+
+    let all = SplitSel::All;
+    assert_eq!(v4.matrix[&all].fake_row, counts(0, 6, 19, 0));
+    assert_eq!(v4.matrix[&all].fake_row, v2.matrix[&all].fake_row);
+    assert_eq!(v4.matrix[&all].real_row, v2.matrix[&all].real_row);
+    assert_eq!(v3.matrix[&all].real_row, v2.matrix[&all].real_row);
+
+    // v4 against v2: no change at all. v3 against v2 keeps its 6 fake -> suspicious.
+    let changes = v4.changes.as_ref().expect("verdict changes of v4");
+    assert_eq!(changes.against, V2);
+    let moved: Vec<_> = changes
+        .counts
+        .iter()
+        .filter(|((from, to), n)| from != to && **n > 0)
+        .collect();
+    assert!(moved.is_empty(), "v4 against v2: {moved:?}");
+    let changes3 = v3.changes.as_ref().expect("verdict changes of v3");
+    assert_eq!(changes3.against, V2);
+    assert_eq!(
+        changes3
+            .counts
+            .get(&("fake".to_string(), "suspicious".to_string())),
+        Some(&6)
+    );
+    assert_eq!(
+        changes3
+            .counts
+            .iter()
+            .filter(|((from, to), n)| from != to && **n > 0)
+            .count(),
+        1
+    );
+    assert!(v4.setting_changes.iter().all(|r| r.counts.is_empty()));
+
+    // The caught rate of every setting is the same for the three files.
+    for ((a, b), c) in v2.by_setting.iter().zip(&v3.by_setting).zip(&v4.by_setting) {
+        assert_eq!((&a.setting, &a.setting), (&b.setting, &c.setting));
+        let caught =
+            |s: &fakeflac_calibrate::report::SettingRow| s.counts.fake + s.counts.suspicious;
+        assert_eq!(caught(a), caught(b), "caught rate of {}", a.setting);
+        assert_eq!(caught(a), caught(c), "caught rate of {}", a.setting);
+    }
+
+    // Per-setting full-band table of v4: a FullBand count of 0 on every setting, and the median,
+    // p95 and maximum of B (the sample's tracks all have B defined).
+    assert_eq!(
+        v4.full_band_by_setting.len(),
+        v4.by_setting.len(),
+        "a row per setting"
+    );
+    for row in &v4.full_band_by_setting {
+        assert_eq!(row.full_band, 0, "full_band count of {}", row.setting);
+        assert!(
+            row.burst_median.is_some() && row.burst_p95.is_some() && row.burst_max.is_some(),
+            "{row:?}"
+        );
+    }
+
+    // Watch W1 (hf_bursts): U, B and full_band true with v3 and with v4, Real with all three.
+    let w1 = |e: &fakeflac_calibrate::report::Evaluation| {
+        e.watch
+            .iter()
+            .find(|w| w.watch_id == "W1")
+            .expect("W1 entry")
+            .clone()
+    };
+    for (name, e) in [(V3, v3), (V4, v4)] {
+        let w = w1(e);
+        assert!(
+            w.upper_level_db.is_some() && w.upper_burst_db.is_some(),
+            "{name}"
+        );
+        assert_eq!(w.full_band, Some(true), "{name}");
+    }
+    for e in [v2, v3, v4] {
+        assert_eq!(w1(e).verdict, Verdict::Real, "{}", e.params_name);
+    }
+    assert!(report_text(o, "summary.md").contains(V4));
+}
+
+// Scenario: Full-band columns in tracks.csv with detection v4 (@RP-11 @RF-04)
+#[test]
+fn rf04_v4_full_band_step_column_in_tracks_csv() {
+    let o = &shared_v2_v3_and_v4().outcome;
+    assert_ok(o);
+    let t = tracks(o);
+    assert!(
+        t.has_column("m_full_band_step_db"),
+        "tracks.csv lacks m_full_band_step_db"
+    );
+    for file in [V2, V3] {
+        for r in rows_of(&t, file) {
+            assert_eq!(
+                t.get(r, "m_full_band_step_db"),
+                "",
+                "empty on the rows of {file}"
+            );
+        }
+    }
+
+    let mut with_spectra = 0;
+    let mut fxv0_rows = 0;
+    for r in rows_of(&t, V4) {
+        if t.get(r, "G").is_empty() {
+            continue; // Error row: no spectra
+        }
+        with_spectra += 1;
+        let step_margin = t.get(r, "m_full_band_step_db");
+        let fs = t.get(r, "fs");
+        let in_range = !fs.is_empty() && (14_500.0..20_300.0).contains(&num(fs));
+        assert_eq!(
+            !step_margin.is_empty(),
+            in_range,
+            "m_full_band_step_db is filled exactly when fs is in the lossy range (fs '{fs}')"
+        );
+        if in_range {
+            let expected = 3.0 - num(t.get(r, "D"));
+            assert!(
+                (num(step_margin) - expected).abs() <= 0.011,
+                "m_full_band_step_db {step_margin}, expected {expected}"
+            );
+        }
+        let step_margin = (!step_margin.is_empty()).then(|| num(step_margin));
+        let fb_margin = t.get(r, "full_band_margin_db");
+        let fb_margin = (!fb_margin.is_empty()).then(|| num(fb_margin));
+        // full_band is true exactly when full_band_margin_db >= 0 and the step margin is empty or > 0
+        let full_band = fb_margin.is_some_and(|m| m >= 0.0) && step_margin.is_none_or(|s| s > 0.0);
+        assert_eq!(
+            t.get(r, "full_band"),
+            if full_band { "true" } else { "false" },
+            "full_band of a v4 row"
+        );
+        // nearest_fake_margin_db = max(a, min(full_band_margin_db, m_full_band_step_db)) when full
+        // band (an empty term is ignored), else a
+        let a = ["m_gap_fake_db", "m_step_fake_db"]
+            .iter()
+            .map(|c| t.get(r, c))
+            .filter(|v| !v.is_empty())
+            .map(num)
+            .fold(f64::INFINITY, f64::min);
+        let g = [fb_margin, step_margin]
+            .into_iter()
+            .flatten()
+            .fold(f64::INFINITY, f64::min);
+        let expected = if full_band { a.max(g) } else { a };
+        let got = num(t.get(r, "nearest_fake_margin_db"));
+        assert!(
+            (got - expected).abs() <= 0.02,
+            "nearest_fake_margin_db {got}, expected {expected}"
+        );
+        if t.get(r, "setting") == "fxv0" {
+            fxv0_rows += 1;
+            assert!(
+                step_margin.is_some_and(|s| s <= 0.0),
+                "fxv0 rows have m_full_band_step_db at most 0"
+            );
+        }
+    }
+    assert_eq!(with_spectra, 31, "rows with spectra");
+    assert_eq!(fxv0_rows, 6, "fxv0 rows");
+}
+
+// The margin formulas of evaluation.md section 8 on given measurements (rule level, the same
+// numbers as the feature's tables): H = -20, U = -40 dB (margin 30) and B = 8 dB (margin 5).
+fn measured(g: f64, d: f64, fs: Option<f64>) -> Measurements {
+    Measurements {
+        noise_floor_db: -80.0,
+        high_frequency_db: -20.0,
+        extent_hz: 22_050.0,
+        step_db: d,
+        step_hz: fs,
+        gap_db: g,
+        upper_level_db: Some(-40.0),
+        upper_burst_db: Some(8.0),
+    }
+}
+
+fn params_file(path: &std::path::Path) -> DetectionParams {
+    toml::from_str(&read(path)).unwrap()
+}
+
+// Scenario: Full-band columns in tracks.csv with detection v4 (the margin formulas)
+#[test]
+fn rf04_v4_margins_include_the_lossy_step() {
+    let v4 = DetectionParams::default();
+    assert_eq!(v4, params_file(&v4_params()));
+    // (case, G, D, fs, m_full_band_step_db, nearest_fake_margin_db)
+    let rows: [(&str, f64, f64, Option<f64>, Option<f64>, f64); 5] = [
+        // a = min(6 - 10, 10 - 2) = -4; g = min(5, 3 - 2) = 1; full band, so max(a, g) = 1
+        (
+            "small lossy step",
+            10.0,
+            2.0,
+            Some(18_050.0),
+            Some(1.0),
+            1.0,
+        ),
+        // m_full_band_step_db = -2 <= 0: not full band, nearest = a = min(-4, 5) = -4
+        ("lossy step", 10.0, 5.0, Some(18_050.0), Some(-2.0), -4.0),
+        // no step: the term is undefined and ignored: g = 5, max(-4, 5) = 5
+        ("no step", 10.0, 0.0, None, None, 5.0),
+        // fs above the lossy range: undefined too; a is the gap alone
+        (
+            "step above the range",
+            10.0,
+            8.93,
+            Some(20_450.0),
+            None,
+            5.0,
+        ),
+        // at max_lossy_step_db: margin 0, not full band (the guard needs > 0)
+        (
+            "step at the threshold",
+            10.0,
+            3.0,
+            Some(18_050.0),
+            Some(0.0),
+            -4.0,
+        ),
+    ];
+    for (case, g, d, fs, step_margin, nearest) in rows {
+        let m = measured(g, d, fs);
+        let got = margins(&m, &v4);
+        assert_eq!(got.m_full_band_step_db, step_margin, "{case}");
+        assert!(
+            (got.nearest_fake_margin_db - nearest).abs() < 1e-9,
+            "{case}: nearest {} expected {nearest}",
+            got.nearest_fake_margin_db
+        );
+        assert!(
+            (nearest_margin(&m, &v4) - nearest).abs() < 1e-9,
+            "{case}: nearest_margin"
+        );
+    }
+}
+
+// Without max_lossy_step_db (a v3 file) the step margin is undefined and g = full_band_margin_db;
+// without [full_band] (a v2 file) nothing changes: v2's min(m_gap_fake_db, m_step_fake_db).
+#[test]
+fn rf04_v4_margins_of_v3_and_v2_files_are_unchanged() {
+    let m = measured(10.0, 5.0, Some(18_050.0));
+    let v3 = margins(&m, &params_file(&v3_params()));
+    assert_eq!(v3.m_full_band_step_db, None);
+    assert_eq!(v3.full_band_margin_db, Some(5.0));
+    assert!(
+        (v3.nearest_fake_margin_db - 5.0).abs() < 1e-9,
+        "full band as in v3"
+    );
+    let v2 = margins(&m, &params_file(&v2_params()));
+    assert_eq!(v2.m_full_band_step_db, None);
+    assert_eq!(v2.full_band_margin_db, None);
+    assert!((v2.nearest_fake_margin_db - (-4.0)).abs() < 1e-9);
+}
+
+// Scenario Outline: A v4 params file with an invalid max_lossy_step_db is rejected (@RP-11 @RF-04)
+fn assert_v4_rejected(name: &str, to: &str, inequality: &str) {
+    let sample = Sample::new(&format!("validate-v4-{name}"));
+    let text = read(&v4_params()).replace("\r\n", "\n");
+    let from = "\nmax_lossy_step_db = 3.0";
+    assert!(text.contains(from), "{from} not found in v4");
+    let params = sample.write_scratch("invalid-v4.toml", &text.replacen(from, to, 1));
+    let o = sample.accept(&[params]);
+    assert_eq!(o.exit_code, 2, "stderr: {}", o.stderr);
+    assert!(
+        o.stderr.contains("invalid-v4.toml"),
+        "names the file: {}",
+        o.stderr
+    );
+    assert!(
+        o.stderr.contains(inequality),
+        "names '{inequality}': {}",
+        o.stderr
+    );
+}
+
+#[test]
+fn rf04_v4_negative_max_lossy_step_is_rejected() {
+    assert_v4_rejected(
+        "negative",
+        "\nmax_lossy_step_db = -0.5",
+        "full_band.max_lossy_step_db ≥ 0",
+    );
+}
+
+#[test]
+fn rf04_v4_max_lossy_step_above_step_fake_is_rejected() {
+    assert_v4_rejected(
+        "above",
+        "\nmax_lossy_step_db = 10.5",
+        "full_band.max_lossy_step_db ≤ step_fake_db",
+    );
+}
+
+// Scenario: The lossy-step condition can be searched from a v4 baseline (@RP-11 @RF-04)
+// With everything in tune: the baseline costs 1.1 (1 Suspicious negative, 6 Suspicious positives:
+// fxweak; fxv0 is Fake). With max_lossy_step_db = 10.0 the 16 kHz step of fxv0 (about 6 dB) no
+// longer removes the guard: its 6 entries are Suspicious (+0.6), so the point costs 1.7. 12.0
+// breaks max_lossy_step_db <= step_fake_db and is skipped.
+#[test]
+fn rf04_the_lossy_step_condition_can_be_searched_from_a_v4_baseline() {
+    let sample = Sample::new("grid-lossy-step-v4-baseline");
+    sample.write_config(Some(0.0));
+    let grid = grid_with_baseline(
+        3,
+        &sample,
+        &v4_params(),
+        "\"full_band.max_lossy_step_db\" = [3.0, 10.0, 12.0]",
+    );
+    let o = sample.calibrate(&grid);
+    assert_eq!(o.exit_code, 0, "stderr: {}", o.stderr);
+    let result = o.grid.as_ref().expect("grid outcome");
+    assert_eq!(
+        result.skipped, 1,
+        "12.0 breaks max_lossy_step_db <= step_fake_db"
+    );
+    assert!(
+        (result.baseline.cost - 1.1).abs() < 1e-9,
+        "baseline cost {}",
+        result.baseline.cost
+    );
+    let point = result
+        .points
+        .iter()
+        .find(|p| {
+            p.values
+                .iter()
+                .any(|(k, v)| k == "full_band.max_lossy_step_db" && *v == 10.0)
+        })
+        .expect("point full_band.max_lossy_step_db = 10.0");
+    assert!((point.cost - 1.7).abs() < 1e-9, "cost {}", point.cost);
+    assert!(
+        o.stdout.contains("no change proposed"),
+        "stdout: {}",
+        o.stdout
+    );
+    assert!(result.proposal.is_none());
+    let report_dir = o.report_dir.as_ref().expect("report folder");
+    let proposals: Vec<_> = files_under(report_dir)
+        .into_iter()
+        .filter(|p| {
+            p.file_name()
+                .is_some_and(|n| n.to_string_lossy().starts_with("detection-params"))
+        })
+        .collect();
+    assert!(proposals.is_empty(), "{proposals:?}");
+}
+
+// Scenario: A max_lossy_step_db key needs a baseline that has the field (@RP-11 @RF-04)
+#[test]
+fn rf04_a_max_lossy_step_key_needs_a_baseline_that_has_the_field() {
+    let sample = Sample::new("grid-lossy-step-v3-baseline");
+    let grid = grid_with_baseline(
+        2,
+        &sample,
+        &v3_params(),
+        "\"full_band.max_lossy_step_db\" = [3.0, 10.0]",
+    );
+    let o = sample.calibrate(&grid);
+    assert_eq!(o.exit_code, 2, "stderr: {}", o.stderr);
+    assert!(
+        o.stderr.contains(
+            "full_band.max_lossy_step_db: the baseline's [full_band] section has no max_lossy_step_db"
+        ),
+        "{}",
+        o.stderr
+    );
+}
+
+// Scenario: The full-band guard can be searched from a v3 baseline (@RP-11 @RF-04), version
+// numbering: with detection-params.v4.toml in the repository the next free version is 5, whatever
+// the baseline (evaluation.md section 7).
+#[test]
+fn rf04_the_next_free_algorithm_version_is_5() {
+    assert_eq!(next_free_version(), 5);
 }

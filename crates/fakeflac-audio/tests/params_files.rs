@@ -2,7 +2,9 @@
 //! `DetectionParams` is checked when a file is deserialised (serde), the order of the thresholds by
 //! `DetectionParams::validate` (rules.md section 4). Lives in this crate because `toml` is a
 //! dev-dependency here, not in `fakeflac-core` (the core has no file loader).
-//! Spec: `specs/detection/rules.md` (algorithm_version 3), ADR-0038.
+//! Spec: `specs/detection/rules.md` (algorithm_version 4), ADR-0038 and ADR-0039. The tests that
+//! edit the text of v3 are the v3 scenarios and stay as they are; the ones that edit the text of
+//! v4 cover `full_band.max_lossy_step_db`.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use fakeflac_core::DetectionParams;
@@ -19,10 +21,14 @@ fn spec_text(name: &str) -> String {
 /// `None` removes it. The line is found by section and key, so `low_hz` of `[full_band]` is not
 /// confused with `search_low_hz` or `ref_band_low_hz`.
 fn edited(section: &str, key: &str, new_line: Option<&str>) -> String {
+    edited_file("detection-params.v3.toml", section, key, new_line)
+}
+
+fn edited_file(file: &str, section: &str, key: &str, new_line: Option<&str>) -> String {
     let mut current = String::new();
     let mut found = false;
     let mut out = Vec::new();
-    for line in spec_text("detection-params.v3.toml").lines() {
+    for line in spec_text(file).lines() {
         let t = line.trim();
         if let Some(name) = t.strip_prefix('[').and_then(|r| r.split(']').next()) {
             current = name.to_string();
@@ -36,7 +42,7 @@ fn edited(section: &str, key: &str, new_line: Option<&str>) -> String {
         }
         out.push(line.to_string());
     }
-    assert!(found, "{section}.{key} not found in v3");
+    assert!(found, "{section}.{key} not found in {file}");
     out.join("\n")
 }
 
@@ -58,6 +64,16 @@ fn v3_file_is_accepted_and_has_a_full_band_section() {
     p.validate().expect("v3 is valid");
     assert!(p.full_band.is_some());
     assert_eq!(p.algorithm_version, 3);
+    // v4 (ADR-0039): a v3 file has no max_lossy_step_db.
+    assert_eq!(p.full_band.unwrap().max_lossy_step_db, None);
+}
+
+#[test]
+fn v4_file_is_accepted_and_has_max_lossy_step_db() {
+    let p: DetectionParams = toml::from_str(&spec_text("detection-params.v4.toml")).unwrap();
+    p.validate().expect("v4 is valid");
+    assert_eq!(p.algorithm_version, 4);
+    assert_eq!(p.full_band.unwrap().max_lossy_step_db, Some(3.0));
 }
 
 #[test]
@@ -73,6 +89,69 @@ fn default_params_are_accepted_and_have_a_full_band_section() {
     let p = DetectionParams::default();
     p.validate().expect("the defaults are valid");
     assert!(p.full_band.is_some());
+    assert_eq!(p.full_band.unwrap().max_lossy_step_db, Some(3.0));
+}
+
+// Scenario Outline: The bounds of max_lossy_step_db are inclusive (v4 text, value set).
+fn v4_with_lossy_step(value: &str) -> String {
+    edited_file(
+        "detection-params.v4.toml",
+        "full_band",
+        "max_lossy_step_db",
+        Some(&format!("max_lossy_step_db = {value}")),
+    )
+}
+
+#[test]
+fn max_lossy_step_db_lower_bound_is_accepted() {
+    let p: DetectionParams = toml::from_str(&v4_with_lossy_step("0.0")).unwrap();
+    p.validate().expect("0.0 is the lower bound");
+}
+#[test]
+fn max_lossy_step_db_equal_to_step_fake_db_is_accepted() {
+    let p: DetectionParams = toml::from_str(&v4_with_lossy_step("10.0")).unwrap();
+    p.validate().expect("10.0 equals step_fake_db");
+}
+
+// Scenario Outline: An invalid max_lossy_step_db is rejected by validation.
+#[test]
+fn negative_max_lossy_step_db_is_rejected() {
+    assert_rejected_by_validation(
+        &v4_with_lossy_step("-0.5"),
+        "full_band.max_lossy_step_db ≥ 0",
+    );
+}
+#[test]
+fn max_lossy_step_db_above_step_fake_db_is_rejected() {
+    assert_rejected_by_validation(
+        &v4_with_lossy_step("10.5"),
+        "full_band.max_lossy_step_db ≤ step_fake_db",
+    );
+}
+#[test]
+fn step_fake_db_below_max_lossy_step_db_is_rejected() {
+    let text = edited_file(
+        "detection-params.v4.toml",
+        "verdict",
+        "step_fake_db",
+        Some("step_fake_db = 2.5"),
+    );
+    let text = text
+        .lines()
+        .map(|l| {
+            if l.trim_start().starts_with("step_suspicious_db ") {
+                "step_suspicious_db = 2.5".to_string()
+            } else {
+                l.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert_rejected_by_validation(&text, "full_band.max_lossy_step_db ≤ step_fake_db");
+}
+#[test]
+fn nan_max_lossy_step_db_is_rejected() {
+    assert_rejected_by_validation(&v4_with_lossy_step("nan"), "full_band.max_lossy_step_db");
 }
 
 // Scenario Outline: Invalid parameter files are rejected: shape, at deserialisation.

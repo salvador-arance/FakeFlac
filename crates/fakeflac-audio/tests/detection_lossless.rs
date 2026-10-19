@@ -1,8 +1,9 @@
 //! Tests derived from `specs/features/detection-lossless.feature` (@RF-03 @RF-04 @RF-14 @RNF-04).
-//! Spec: `specs/detection/rules.md` (algorithm_version 3), parameters v3, fixtures of
+//! Spec: `specs/detection/rules.md` (algorithm_version 4), parameters v4, fixtures of
 //! `specs/detection/fixtures.md`. One test per example row of each Scenario Outline.
 //! Protected after the `test(RF-03,RF-04)` commit; updated for detection v3 in the `test(RF-04)`
-//! commit that follows ADR-0038. The rule-level scenarios of the full-band guard are in
+//! commit that follows ADR-0038 and for v4 in the one that follows ADR-0039. The rule-level
+//! scenarios of the full-band guard are in
 //! `crates/fakeflac-core/tests/detect_rules.rs`, the parameter files in `params_files.rs`.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -11,7 +12,7 @@ mod common;
 use common::{entry, fixture, Container};
 use fakeflac_audio::SymphoniaAnalyzer;
 use fakeflac_core::analysis::analyze_track;
-use fakeflac_core::detect::measure;
+use fakeflac_core::detect::{measure, Measurements};
 use fakeflac_core::ports::SpectrumAnalyzer;
 use fakeflac_core::{DetectionParams, SuspicionReason, TrackAnalysis, TrackError, Verdict};
 
@@ -31,15 +32,26 @@ fn v2_params() -> DetectionParams {
     toml::from_str(&std::fs::read_to_string(file).unwrap()).unwrap()
 }
 
-/// "The track is full band": `FullBand` of the measurements of the FLAC fixture with the default
-/// (v3) parameters.
-fn is_full_band(name: &str) -> bool {
-    let params = DetectionParams::default();
+/// The parameters of `specs/detection/detection-params.v3.toml` (a `[full_band]` section without
+/// `max_lossy_step_db`).
+fn v3_params() -> DetectionParams {
+    let file = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../specs/detection/detection-params.v3.toml");
+    toml::from_str(&std::fs::read_to_string(file).unwrap()).unwrap()
+}
+
+/// The measurements of the FLAC fixture with `params`.
+fn measurements(name: &str, params: &DetectionParams) -> Measurements {
     let path = fixture(name, Container::Flac);
-    let probe = SymphoniaAnalyzer.analyze(&path, &params).unwrap();
+    let probe = SymphoniaAnalyzer.analyze(&path, params).unwrap();
     let spectra = probe.spectrum.expect("the fixture has spectra");
-    let m = measure(&spectra, &params);
-    fakeflac_core::detect::is_full_band(&m, &params)
+    measure(&spectra, params)
+}
+
+/// "The track is full band": `FullBand` of the measurements of the FLAC fixture with `params`.
+fn is_full_band(name: &str, params: &DetectionParams) -> bool {
+    let m = measurements(name, params);
+    fakeflac_core::detect::is_full_band(&m, params)
 }
 
 fn assert_verdict(name: &str, container: Container, verdict: Verdict, reasons: &[SuspicionReason]) {
@@ -137,8 +149,8 @@ fn verdict_lp20k_floor_flac() {
 }
 #[test]
 fn verdict_sfb21_gaps_flac() {
-    // v3: the gated content reaches the upper window, so the track is full band (ADR-0038).
-    assert_verdict("sfb21_gaps", Flac, Verdict::Suspicious, &[HighBandGaps]);
+    // v4: its 6 dB mean step at 16 kHz is in the lossy range, so it is not full band (ADR-0039).
+    assert_verdict("sfb21_gaps", Flac, Verdict::Fake, &[]);
 }
 #[test]
 fn verdict_sfb21_gaps_weak_flac() {
@@ -173,12 +185,8 @@ fn verdict_shelf19k5_flac() {
 }
 #[test]
 fn verdict_shelf19k5_bursts_flac() {
-    assert_verdict(
-        "shelf19k5_bursts",
-        Flac,
-        Verdict::Suspicious,
-        &[AmbiguousCutoff],
-    );
+    // v4: its 21 dB step at 19.5 kHz is in the lossy range, so it is not full band (ADR-0039).
+    assert_verdict("shelf19k5_bursts", Flac, Verdict::Fake, &[]);
 }
 
 // ---- Scenario Outline: Cutoff estimate (@RF-03) ------------------------------------------------
@@ -256,9 +264,12 @@ fn v1_regression_sfb21_gaps_is_not_real() {
     assert_not_real("sfb21_gaps");
 }
 
-// ---- Scenario Outline: A stationary floor above the low-pass is not full band (v3 guard, @RF-04)
+// ---- Scenario Outline: A stationary floor above the low-pass is not full band (guard, @RF-04)
 fn assert_floor_is_not_full_band(name: &str) {
-    assert!(!is_full_band(name), "{name}: not full band");
+    assert!(
+        !is_full_band(name, &DetectionParams::default()),
+        "{name}: not full band"
+    );
     assert_verdict(name, Flac, Verdict::Fake, &[]);
 }
 #[test]
@@ -278,22 +289,75 @@ fn guard_floor_shelf19k5_is_not_full_band() {
     assert_floor_is_not_full_band("shelf19k5");
 }
 
-// ---- Scenario Outline: Intermittent content above the lossy range is full band (v3 guard) ------
-fn assert_bursts_are_full_band(name: &str) {
-    assert!(is_full_band(name), "{name}: full band");
-    assert_eq!(analyze(name, Flac).verdict, Verdict::Suspicious, "{name}");
-}
-#[test]
-fn guard_bursts_sfb21_gaps_is_full_band() {
-    assert_bursts_are_full_band("sfb21_gaps");
+// ---- Scenario Outline: Intermittent content above the lossy range, with no step of
+// max_lossy_step_db or more inside it, is full band (@RF-04) -------------------------------------
+fn assert_bursts_are_full_band(name: &str, verdict: Verdict) {
+    assert!(
+        is_full_band(name, &DetectionParams::default()),
+        "{name}: full band"
+    );
+    assert_eq!(analyze(name, Flac).verdict, verdict, "{name}");
 }
 #[test]
 fn guard_bursts_sfb21_gaps_aa21k_is_full_band() {
-    assert_bursts_are_full_band("sfb21_gaps_aa21k");
+    assert_bursts_are_full_band("sfb21_gaps_aa21k", Verdict::Suspicious);
 }
 #[test]
-fn guard_bursts_shelf19k5_bursts_is_full_band() {
-    assert_bursts_are_full_band("shelf19k5_bursts");
+fn guard_bursts_hf_bursts_is_full_band() {
+    assert_bursts_are_full_band("hf_bursts", Verdict::Real);
+}
+
+// ---- Scenario Outline: Intermittent content above a cutoff step in the lossy range is not full
+// band (v4, @RF-04). Also confirms the measured step of fixtures.md, "Verdicts with v4". ---------
+fn assert_lossy_step_removes_the_guard(name: &str) {
+    let v3 = v3_params();
+    assert!(
+        is_full_band(name, &v3),
+        "{name}: full band with the v3 parameters"
+    );
+    let v4 = DetectionParams::default();
+    let m = measurements(name, &v4);
+    let fs = m.step_hz.expect("the fixture has a cutoff step");
+    assert!(
+        (v4.verdict.lossy_min_cutoff_hz..v4.verdict.fake_max_cutoff_hz).contains(&fs),
+        "{name}: fs {fs} Hz is in the lossy range"
+    );
+    assert!(
+        m.step_db >= 3.0,
+        "{name}: D {} dB is at least 3 dB",
+        m.step_db
+    );
+    assert!(
+        !fakeflac_core::detect::is_full_band(&m, &v4),
+        "{name}: not full band with v4 (D {} dB at {fs} Hz)",
+        m.step_db
+    );
+    assert_verdict(name, Flac, Verdict::Fake, &[]);
+}
+#[test]
+fn lossy_step_sfb21_gaps_is_not_full_band() {
+    assert_lossy_step_removes_the_guard("sfb21_gaps");
+}
+#[test]
+fn lossy_step_shelf19k5_bursts_is_not_full_band() {
+    assert_lossy_step_removes_the_guard("shelf19k5_bursts");
+}
+
+// hf_bursts has no step of 3 dB or more in the lossy range (its gate starts at 8 kHz, below the
+// step search range): the precondition of the full-band row above (fixtures.md, "Verdicts with v4").
+#[test]
+fn hf_bursts_has_no_lossy_range_step_of_max_lossy_step_db() {
+    let v4 = DetectionParams::default();
+    let m = measurements("hf_bursts", &v4);
+    let in_range = m.step_hz.is_some_and(|fs| {
+        (v4.verdict.lossy_min_cutoff_hz..v4.verdict.fake_max_cutoff_hz).contains(&fs)
+    });
+    assert!(
+        !(in_range && m.step_db >= 3.0),
+        "hf_bursts: D {} dB at {:?} Hz",
+        m.step_db,
+        m.step_hz
+    );
 }
 
 // ---- Scenario Outline: A v2 params file still gives the v2 verdicts (@RF-04) ------------------
@@ -319,44 +383,91 @@ fn v2_params_lp16k_dither_is_fake() {
     assert_v2_is_fake("lp16k_dither");
 }
 
+// ---- Scenario Outline: A v3 params file still gives the v3 verdicts (@RF-04) -------------------
+fn assert_v3_verdict(name: &str, verdict: Verdict, reasons: &[SuspicionReason]) {
+    let a = analyze_with(name, Flac, &v3_params());
+    assert_eq!(a.verdict, verdict, "{name}: {a:#?}");
+    assert_eq!(a.reasons, reasons, "{name}: reasons");
+    assert_eq!(a.algorithm_version, 3, "{name}");
+}
+#[test]
+fn v3_params_sfb21_gaps_is_suspicious() {
+    assert_v3_verdict("sfb21_gaps", Verdict::Suspicious, &[HighBandGaps]);
+}
+#[test]
+fn v3_params_sfb21_gaps_aa21k_is_suspicious() {
+    assert_v3_verdict("sfb21_gaps_aa21k", Verdict::Suspicious, &[HighBandGaps]);
+}
+#[test]
+fn v3_params_shelf19k5_bursts_is_suspicious() {
+    assert_v3_verdict("shelf19k5_bursts", Verdict::Suspicious, &[AmbiguousCutoff]);
+}
+#[test]
+fn v3_params_lp16k_dither_is_fake() {
+    assert_v3_verdict("lp16k_dither", Verdict::Fake, &[]);
+}
+
+// ---- Scenario: A v3 params file differs only where a lossy-range step removes the guard --------
+#[test]
+fn v3_params_change_only_where_a_lossy_step_removes_the_guard() {
+    let (v3, v4) = (v3_params(), DetectionParams::default());
+    for name in ALL_FIXTURES {
+        let (a3, a4) = (analyze_with(name, Flac, &v3), analyze_with(name, Flac, &v4));
+        assert_eq!(a3.cutoff, a4.cutoff, "{name}: cutoff");
+        assert_eq!(a3.error, a4.error, "{name}: error");
+        if ["sfb21_gaps", "shelf19k5_bursts"].contains(&name) {
+            assert_eq!(a3.verdict, Verdict::Suspicious, "{name}: v3");
+            assert_eq!(a4.verdict, Verdict::Fake, "{name}: v4");
+            assert!(a4.reasons.is_empty(), "{name}: v4 reasons");
+        } else {
+            assert_eq!(a3.verdict, a4.verdict, "{name}: verdict");
+            assert_eq!(a3.reasons, a4.reasons, "{name}: reasons");
+        }
+    }
+}
+
+const ALL_FIXTURES: [&str; 21] = [
+    "full_band",
+    "lp16k",
+    "lp19k",
+    "lp20k",
+    "lp16k_96k",
+    "gradual",
+    "low_hf",
+    "bass_tone_lp16k",
+    "silence",
+    "short",
+    "corrupt",
+    "lp16k_unknown_length",
+    "lp16k_dither",
+    "lp20k_floor",
+    "sfb21_gaps",
+    "sfb21_gaps_weak",
+    "hf_bursts",
+    "sfb21_gaps_lp20k5",
+    "sfb21_gaps_aa21k",
+    "shelf19k5",
+    "shelf19k5_bursts",
+];
+
 // ---- Scenario: A v2 params file changes only the guarded verdicts (@RF-04) ---------------------
+// With v4 only sfb21_gaps_aa21k is guarded: sfb21_gaps and shelf19k5_bursts are Fake with both.
 #[test]
 fn v2_params_change_only_the_guarded_verdicts() {
-    const GUARDED: [&str; 3] = ["sfb21_gaps", "sfb21_gaps_aa21k", "shelf19k5_bursts"];
-    let (v2, v3) = (v2_params(), DetectionParams::default());
-    for name in [
-        "full_band",
-        "lp16k",
-        "lp19k",
-        "lp20k",
-        "lp16k_96k",
-        "gradual",
-        "low_hf",
-        "bass_tone_lp16k",
-        "silence",
-        "short",
-        "corrupt",
-        "lp16k_unknown_length",
-        "lp16k_dither",
-        "lp20k_floor",
-        "sfb21_gaps",
-        "sfb21_gaps_weak",
-        "hf_bursts",
-        "sfb21_gaps_lp20k5",
-        "sfb21_gaps_aa21k",
-        "shelf19k5",
-        "shelf19k5_bursts",
-    ] {
-        let (a2, a3) = (analyze_with(name, Flac, &v2), analyze_with(name, Flac, &v3));
-        assert_eq!(a2.cutoff, a3.cutoff, "{name}: cutoff");
-        assert_eq!(a2.error, a3.error, "{name}: error");
+    const GUARDED: [&str; 1] = ["sfb21_gaps_aa21k"];
+    let (v2, v4) = (v2_params(), DetectionParams::default());
+    for name in ALL_FIXTURES {
+        let (a2, a4) = (analyze_with(name, Flac, &v2), analyze_with(name, Flac, &v4));
+        assert_eq!(a2.cutoff, a4.cutoff, "{name}: cutoff");
+        assert_eq!(a2.error, a4.error, "{name}: error");
         if GUARDED.contains(&name) {
             assert_eq!(a2.verdict, Verdict::Fake, "{name}: v2");
             assert!(a2.reasons.is_empty(), "{name}: v2 reasons");
-            assert_ne!(a3.verdict, Verdict::Fake, "{name}: v3");
+            assert_eq!(a4.verdict, Verdict::Suspicious, "{name}: v4");
+            assert_eq!(a4.reasons, [HighBandGaps], "{name}: v4 reasons");
         } else {
-            assert_eq!(a2.verdict, a3.verdict, "{name}: verdict");
-            assert_eq!(a2.reasons, a3.reasons, "{name}: reasons");
+            assert_eq!(a2.verdict, a4.verdict, "{name}: verdict");
+            assert_eq!(a2.reasons, a4.reasons, "{name}: reasons");
         }
     }
 }
@@ -419,18 +530,18 @@ fn deterministic() {
 #[test]
 fn default_params_equal_versioned_file() {
     let file = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../specs/detection/detection-params.v3.toml");
+        .join("../../specs/detection/detection-params.v4.toml");
     let text = std::fs::read_to_string(file).unwrap();
     let from_file: DetectionParams = toml::from_str(&text).unwrap();
     assert_eq!(DetectionParams::default(), from_file);
-    assert_eq!(from_file.algorithm_version, 3);
+    assert_eq!(from_file.algorithm_version, 4);
 }
 
 #[test]
-fn every_analysis_carries_algorithm_version_3() {
+fn every_analysis_carries_algorithm_version_4() {
     // Analysed, too short and corrupt tracks alike.
     for name in ["lp16k", "silence", "short", "corrupt"] {
-        assert_eq!(analyze(name, Flac).algorithm_version, 3, "{name}");
+        assert_eq!(analyze(name, Flac).algorithm_version, 4, "{name}");
     }
 }
 
