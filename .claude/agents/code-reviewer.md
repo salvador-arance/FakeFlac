@@ -13,4 +13,6 @@ Check, in this order:
 4. ADR compliance (and a missing ADR for a new dependency or decision).
 5. Correctness and robustness: error handling per track (RNF-04), read-only audio (RNF-05), Unicode paths (RNF-09), no hard-coded thresholds.
 
+When the diff fixes findings of an earlier review, run a mutation check: in a copy outside the repo (`git archive HEAD`), revert each fix and confirm that the tests covering it fail. A test that still passes without its fix is a finding.
+
 Output: a list of findings, each `blocking` or `improvement`, with file:line and the reason. Run `just test` and `just lint-arch` if useful. You are independent from the author: do not assume the code is right because the tests pass.
