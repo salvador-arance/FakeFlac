@@ -1,6 +1,6 @@
 # ADR-0041: Detection v5: source-bitrate rules for lossy files (RF-15) as an optional `[lossy]` section of `DetectionParams`; v5 becomes the default; contract version 3
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-19
 
 ## Context and rationale

@@ -2,6 +2,32 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-19 - RF-15 spec approved (G1, #49)
+
+**Done**
+- `/new-spec RF-15`, PR #49 merged at G1 (56bfb1a), `spec/RF-15` pruned. Owner scope: RF-15 plus RF-14 H2 decoding of MP3 and M4A (AAC; ALAC is lossless). Opus scenarios are parked in `specs/pending/opus.feature`, which neither `just trace` nor the test stage reads, until the ADR-0030 spike.
+  - Detection v5 (`specs/detection/lossy-source.md`, `detection-params.v5.toml`): shortfall `s = c_exp − fc`, rules L0–L6, acceptance B1–B11. The v4 lossless values are unchanged; the next free `algorithm_version` is 6.
+  - Calibration (`specs/calibration/lossy.md`, `calibration.v2.toml`), contract v3, UI (`specs/ui/lossy-formats.md`).
+  - ADR-0040 and ADR-0041 set to `accepted` in this handoff.
+- The readiness review had 4 blocking findings and 18 improvements, all applied before the PR.
+- No comments at G1, so every default applies (`lossy-source.md` Q1–Q15, `lossy.md` C1–C12).
+- PR #50 (`docs/inputs-privacy`, awaiting merge): `specs/calibration/inputs.md` named two corpus albums (ADR-0022); they are now `album F1` / `album F2`. The names stay in git history.
+
+**Pending**
+- `/feature RF-14` (H2 decoding, `decode-lossy.feature`), then `/feature RF-15` (`detection-lossy.feature`, `calibration-lossy.feature`). `/feature` takes one requirement and RF-15 depends on the decoders.
+  - The test stage first confirms the fixture byte arithmetic (`lossy-fixtures.md` section 3) and the symphonia 0.6.1 feature names (ADR-0040). If either fails, go back to G1.
+  - Protected tests that change are listed in ADR-0041 "Consequences".
+- After implementation: real-corpus `just accept` for B1–B11. The MP3 and AAC cutoff tables are indicative (Q2): the MP3 rows were written from memory and differ from `calibration.v1.toml` (cbr128 17000 vs 16000).
+- Uncomment the 20 RF-15 `fake` lines in `confirmed.txt` only after `/feature RF-15` lands the new label grammar.
+- The splitter and v3 review leftovers from the block below, unchanged.
+
+**Blockers / questions for the human**
+- Dependabot alert #1 (open, medium): `glib` < 0.20.0 (`VariantStrIter` unsoundness) in `Cargo.lock`. It is a transitive Tauri/GTK dependency, probably Linux-only; not looked at.
+- Optional, from RF-15 Q9: a line in `specs/CLAUDE.md` saying `specs/pending/` holds parked features (agents do not edit CLAUDE.md).
+- Accessibility gap of the splitter and Q9–Q11 in `rules.md`, unchanged.
+
+**Next step:** `/feature RF-14` (H2 decoding of MP3 and M4A).
+
 ## 2026-10-19 - H1 UI: MainLayout splitter merged (#46)
 
 **Done**
