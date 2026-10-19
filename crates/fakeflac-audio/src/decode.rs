@@ -71,8 +71,10 @@ impl Seek for FromOffset {
 }
 
 impl MediaSource for FromOffset {
+    /// The adapter never seeks an MP3. On a seekable source symphonia trims an untagged MP3 to a
+    /// length estimated from its first frames, which cuts a VBR file without a Xing frame short.
     fn is_seekable(&self) -> bool {
-        true
+        false
     }
 
     fn byte_len(&self) -> Option<u64> {
@@ -394,7 +396,16 @@ mod tests {
     fn consistent_layer_iii_frames_inside_the_tag_are_skipped() {
         let mut bytes = id3v2(run_of_frames([0xFF, 0xFB, 0x90, 0x00], 417, 4));
         bytes.extend(untagged_mp3(40));
-        assert!(decode("l3intag", &bytes).is_ok());
+        assert_eq!(decode("l3intag", &bytes), Ok(40 * 1152));
+    }
+
+    #[test]
+    fn untagged_vbr_mp3_without_a_xing_frame_decodes_fully() {
+        // MPEG-1 Layer III, 44.1 kHz: 20 frames at 320 kbps (1044 bytes), then 2000 at 64 kbps
+        // (208 bytes). An estimate from the first frames would stop the decoder early.
+        let mut bytes = run_of_frames([0xFF, 0xFB, 0xE0, 0x00], 1044, 20);
+        bytes.extend(run_of_frames([0xFF, 0xFB, 0x50, 0x00], 208, 2000));
+        assert_eq!(decode("vbrnoxing", &bytes), Ok(2020 * 1152));
     }
 
     #[test]
