@@ -1,6 +1,6 @@
 # ADR-0040: H2 decoding of MP3 and M4A with symphonia (features `mp3`, `aac`, `isomp4`, `alac`); stream information read by the adapter; lossy test files written by bitstream writers in test support
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-19
 
 ## Context and rationale
