@@ -16,7 +16,7 @@
 - **Licensing (owner):** the AAC tables copied from symphonia live in the MPL-2.0 file `crates/fakeflac-audio/tests/common/aac_tables.rs`.
 
 **Pending**
-- G2 of #52. **Stack RF-15 on `feat/RF-14`** and merge both together: until v5 lands, MP3/M4A are judged by the lossless rules.
+- G2 of #52 (owner merges it alone, squash). Until RF-15 lands, `main` judges MP3/M4A by the lossless rules: do not release from `main` in between.
 - **Spec follow-ups for G1** (one `spec/` PR):
   - `lossy-source.md` line 82: the MP3 shortfall is `enc_delay + enc_padding` (up to about 2.5 frames), not "up to two frames". The code uses delay + padding + 2 frames, or 3 frames without a LAME/Lavf/Lavc tag.
   - Should a tag frame count of 0 count as absent?
@@ -34,7 +34,7 @@
 - The harness gap in `lessons.md` (compile-only stubs inside `test(` commits break `guard-tests`) needs a decision on `test-author.md` or `guard-tests.mjs`.
 - Dependabot alert #1 (`glib`), the `specs/CLAUDE.md` line about `specs/pending/`, and the splitter accessibility gap: unchanged.
 
-**Next step:** after #52 passes G2 review (do not merge yet), run `/feature RF-15` on a branch from `feat/RF-14`.
+**Next step:** after #52 is merged, `just prune-branches`, then `/feature RF-15` on a branch from `main`.
 
 ## 2026-10-19 - RF-15 spec approved (G1, #49)
 
