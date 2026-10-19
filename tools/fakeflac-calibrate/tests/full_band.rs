@@ -331,9 +331,8 @@ fn rf04_full_band_key_needs_a_baseline_with_a_full_band_section() {
 }
 
 // Scenario: The full-band guard can be searched from a v3 baseline (@RP-11 @RF-04)
-// With everything in tune, the v3 baseline costs 0.5 (1 Suspicious negative) + 0.1 * 12 (6 fxv0 and
-// 6 fxweak Suspicious positives) = 1.7. With min_burst_db = 100 the guard never fires: the 6 fxv0
-// entries are Fake instead of Suspicious (0.6 less), so the point costs 1.1.
+// The spec pins only that the point costs less than the baseline. A point keeps no verdicts, so the
+// fxv0 Suspicious -> Fake flip is checked by rf04_v2_and_v3_side_by_side (v2 has no guard).
 #[test]
 fn rf04_the_full_band_guard_can_be_searched_from_a_v3_baseline() {
     let sample = Sample::new("grid-full-band-v3-baseline");
@@ -347,11 +346,6 @@ fn rf04_the_full_band_guard_can_be_searched_from_a_v3_baseline() {
     let o = sample.calibrate(&grid);
     assert_eq!(o.exit_code, 0, "stderr: {}", o.stderr);
     let result = o.grid.as_ref().expect("grid outcome");
-    assert!(
-        (result.baseline.cost - 1.7).abs() < 1e-9,
-        "baseline cost {}",
-        result.baseline.cost
-    );
     let point = result
         .points
         .iter()
@@ -361,8 +355,12 @@ fn rf04_the_full_band_guard_can_be_searched_from_a_v3_baseline() {
                 .any(|(k, v)| k == "full_band.min_burst_db" && *v == 100.0)
         })
         .expect("point full_band.min_burst_db = 100.0");
-    assert!((point.cost - 1.1).abs() < 1e-9, "cost {}", point.cost);
-    assert!(point.cost < result.baseline.cost);
+    assert!(
+        point.cost < result.baseline.cost,
+        "point cost {} baseline cost {}",
+        point.cost,
+        result.baseline.cost
+    );
     assert!(point.feasible && result.baseline.feasible);
 
     let report_dir = o.report_dir.as_ref().expect("report folder");
