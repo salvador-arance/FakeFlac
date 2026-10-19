@@ -9,10 +9,10 @@ Feature: Verdict for lossless files (WAV, FLAC)
   sfb21_gaps_aa21k stays guarded; a v3 params file still gives the v3 verdicts;
   the defaults are compared with detection-params.v4.toml and carry
   algorithmVersion 4.
-  Derived, not measured: sfb21_gaps has D of at least 3 dB with fs in the lossy
-  range, and hf_bursts has no such step (fixtures.md, "Verdicts with v4"). The
-  test stage confirms them first; if either does not hold, it stops and returns
-  to G1.
+  sfb21_gaps has D of at least 3 dB with fs in the lossy range, and hf_bursts
+  has no such step (fixtures.md, "Verdicts with v4": derived, and measured once
+  before G1 at D 6.15 dB / 16050 Hz and D 0.48 dB / 20950 Hz). The test stage
+  confirms them first; if either does not hold, it stops and returns to G1.
 
   @RF-04
   Scenario Outline: Verdict by signal
