@@ -3,6 +3,7 @@ import type {
   AnalysisSummary,
   AudioFormat,
   ResultRow,
+  Spectrogram,
   SuspicionReason,
   TrackAnalysis,
   TrackError,
@@ -74,4 +75,23 @@ export function makeManyRows(count: number): ResultRow[] {
   return Array.from({ length: count }, (_, i) =>
     makeRow(i, { path: `C:/Music/Big/file-${String(i).padStart(4, '0')}.flac` }),
   )
+}
+
+/**
+ * A 44.1 kHz spectrogram of music-like noise low-passed at `cutoffHz` (row-major by time:
+ * `data[t * height + f]`): level falls with frequency and varies over time, and rows above
+ * the cutoff sit near the floor.
+ */
+export function makeLowPassSpectrogram(cutoffHz: number, width = 600, height = 256): Spectrogram {
+  const maxFrequencyHz = 22050
+  const data = new Array<number>(width * height)
+  for (let t = 0; t < width; t++) {
+    const loud = 0.75 + 0.25 * Math.sin(t / 23) * Math.cos(t / 7)
+    for (let f = 0; f < height; f++) {
+      const hz = ((f + 0.5) / height) * maxFrequencyHz
+      const level = hz < cutoffHz ? loud * (230 - (hz / cutoffHz) * 90) : 12 + ((t * 7 + f * 13) % 9)
+      data[t * height + f] = Math.max(0, Math.min(255, Math.round(level)))
+    }
+  }
+  return { width, height, sampleRate: 44100, maxFrequencyHz, dbRange: [-120, 0], data }
 }

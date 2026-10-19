@@ -22,7 +22,9 @@ const spectrogram = {
   data: [0, 1, 2, 253, 254, 255],
 }
 
-beforeEach(() => invoke.mockReset())
+beforeEach(() => {
+  invoke.mockReset()
+})
 
 describe('getSpectrogram', () => {
   // @RF-07 Selecting a row shows its spectrogram: the client asks for the track's path
