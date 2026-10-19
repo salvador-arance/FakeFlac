@@ -35,7 +35,7 @@ status: proposed
 | `Toolbar` | `canOpen: boolean`, `canCancel: boolean` | `open`, `cancel` | idle · running | Groups and separators like the reference; H2 adds remove, export, filters and search |
 | `ResultsTable` | `rows: ResultRow[]` (`{ index: number; analysis: TrackAnalysis }`, `index` from the progress events), `selectedIndex: number \| null`, `sort: SortState` | `select(index)`, `sort(column)` | empty · rows · many rows (virtualised) | Columns of `main-screen.md`; virtualised rows (row height token); keyboard navigation |
 | `SpectrogramView` | `spectrogram: Spectrogram \| null`, `cutoffHz: number \| null`, `loading: boolean` | — | loading · image · none | `<canvas>`; colour map from tokens; frequency axis in kHz; cutoff line |
-| `DetailPanel` | `track: TrackAnalysis \| null`, `spectrogram`, `loading` | — | nothing selected · loading · spectrogram · error | Text line: "Cutoff 16.0 kHz · Fake"; " · <reason>" (`reason.*` text) is appended only when the track has reasons (a `Fake` verdict has none); for errors shows the error text |
+| `DetailPanel` | `track: TrackAnalysis \| null`, `spectrogram`, `loading` | — | nothing selected · loading · spectrogram · unavailable (request failed: verdict line + `spectrogram.unavailable`) · error | Text line: "Cutoff 16.0 kHz · Fake"; " · <reason>" (`reason.*` text) is appended only when the track has reasons (a `Fake` verdict has none); for errors shows the error text |
 | `StatusBar` | `phase: 'ready' \| 'scanning' \| 'analysing' \| 'finished' \| 'cancelled' \| 'error'`, `summary`, `message?` | — | one per phase | Uses `ProgressBar` |
 | `FolderDropZone` | `active: boolean` (drag over), `empty: boolean` | — | hint · drag-over | Overlay; the drop itself is handled by the page |
 

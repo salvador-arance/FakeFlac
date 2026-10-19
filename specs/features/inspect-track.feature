@@ -36,6 +36,13 @@ Feature: Inspect a track's spectrogram
     When I select it
     Then the detail panel shows the error reason instead of a spectrogram
 
+  Scenario: The spectrogram cannot be read
+    Given an analysis has finished with "lp16k.flac" in the table
+    And "lp16k.flac" was deleted after the analysis
+    When I select the row "lp16k.flac"
+    Then the panel shows "Cutoff 16.0 kHz · Fake"
+    And the panel shows "Cannot show the spectrogram of this file" instead of a spectrogram
+
   Scenario: Keyboard navigation
     Given the table has focus and a row is selected
     When I press the down arrow

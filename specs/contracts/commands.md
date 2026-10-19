@@ -91,7 +91,7 @@ type Spectrogram = {
   sampleRate: number
   maxFrequencyHz: number   // = sampleRate / 2
   dbRange: [number, number] // u8 0 → dbRange[0], 255 → dbRange[1]
-  data: number[]           // width*height bytes, row-major by time (ADR-0009); sent as raw bytes
+  data: number[]           // width*height bytes (0–255), row-major by time (ADR-0009); sent as a JSON array of numbers
 }
 
 type AppError = {
