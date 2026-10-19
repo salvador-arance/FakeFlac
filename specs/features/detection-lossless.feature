@@ -9,6 +9,10 @@ Feature: Verdict for lossless files (WAV, FLAC)
   sfb21_gaps_aa21k stays guarded; a v3 params file still gives the v3 verdicts;
   the defaults are compared with detection-params.v4.toml and carry
   algorithmVersion 4.
+  Derived, not measured: sfb21_gaps has D of at least 3 dB with fs in the lossy
+  range, and hf_bursts has no such step (fixtures.md, "Verdicts with v4"). The
+  test stage confirms them first; if either does not hold, it stops and returns
+  to G1.
 
   @RF-04
   Scenario Outline: Verdict by signal
@@ -60,7 +64,7 @@ Feature: Verdict for lossless files (WAV, FLAC)
       | shelf19k5_bursts  | 19500  |
 
   @RF-03
-  Scenario Outline: Signal without a cutoff step reports the Nyquist frequency as cutoff
+  Scenario Outline: Signal whose deepest step is below step_suspicious_db reports the Nyquist frequency as cutoff
     Given the synthetic signal "<signal>" saved as FLAC
     When it is analysed with DetectionParams v4
     Then the estimated cutoff is 22050 Hz
@@ -103,7 +107,7 @@ Feature: Verdict for lossless files (WAV, FLAC)
       | shelf19k5         |
 
   @RF-04
-  Scenario Outline: Intermittent content above the lossy range, with no cutoff step inside it, is full band
+  Scenario Outline: Intermittent content above the lossy range, with no step of max_lossy_step_db or more inside it, is full band
     sfb21_gaps_aa21k has its deepest step at 21 kHz, above the lossy range;
     hf_bursts has no step of 3 dB or more in the lossy range (its gate starts
     at 8 kHz, below the step search range).

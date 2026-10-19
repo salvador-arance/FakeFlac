@@ -5,6 +5,9 @@ Feature: Calibration and acceptance against a labelled corpus
   fixture transcoder, no ffmpeg) in two fresh temporary folders used as
   FAKEFLAC_CORPUS and FAKEFLAC_CALIBRATION. Unless a scenario says otherwise,
   the params file is specs/detection/detection-params.v2.toml.
+  The v4 expectations on fxv0 (sfb21_gaps) rest on a derived, not measured,
+  step of 3 to 10 dB in the lossy range (fixtures.md, "Verdicts with v4"); the
+  test stage confirms it first and stops for G1 if it does not hold.
 
   # --- Environment -------------------------------------------------------
 
@@ -277,7 +280,7 @@ Feature: Calibration and acceptance against a labelled corpus
     And it is empty on every row of detection-params.v2.toml and of detection-params.v3.toml
     And on every row of detection-params.v4.toml with spectra, m_full_band_step_db is filled exactly when fs is in [14500, 20300), and then equals 3.0 minus D
     And on those rows full_band is "true" exactly when full_band_margin_db is at least 0 and m_full_band_step_db is empty or greater than 0
-    And on those rows nearest_fake_margin_db equals the larger of min(m_gap_fake_db, m_step_fake_db) and min(full_band_margin_db, m_full_band_step_db) when full_band is "true", and min(m_gap_fake_db, m_step_fake_db) otherwise
+    And on those rows nearest_fake_margin_db equals the larger of min(m_gap_fake_db, m_step_fake_db) and min(full_band_margin_db, m_full_band_step_db), ignoring an empty term, when full_band is "true", and min(m_gap_fake_db, m_step_fake_db) otherwise
     And the fxv0 rows of detection-params.v4.toml have m_full_band_step_db at most 0
 
   @RP-11 @RF-04

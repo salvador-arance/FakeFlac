@@ -1,6 +1,6 @@
 # ADR-0038: Detection v3: a full-band guard (level and burstiness above 20.7 kHz) on the gap and step rules; v3 becomes the default
 
-- Status: accepted; amended by ADR-0039 (detection v4: no full-band guard with a cutoff step in the lossy range)
+- Status: accepted; to be amended by ADR-0039 (proposed: detection v4, no full-band guard with a cutoff step in the lossy range)
 - Date: 2026-10-18
 
 ## Context and rationale
@@ -24,7 +24,7 @@ What a lossy origin does not have above its low-pass is **coded audio**. The flo
 6. **Version numbers belong to `specs/detection/`.** Parameter files produced elsewhere (a `/calibrate` proposal, the sample corpus's `candidate.toml`) take the next free `algorithm_version` (1 + the highest in `specs/detection/` and the baseline), never 3 again.
 7. **No new rule for LAME V0 (18.2 % detected) or AAC 256 (0.6 %).** They are recorded as known limitations (rules.md section 6): no measurement of the band spectra separates them from full-band or band-limited lossless tracks without new false positives. They need new measurements (a new extraction), probably together with RF-15.
 
-Exact rules: `specs/detection/rules.md` (v3). Acceptance criteria A1–A8: rules.md section 7, measured with `just accept --params …v2.toml --params …v3.toml`. Owner decisions at G1: approve without pre-measuring `U` and `B` (A1/A5 decide, A8 reports them); A5 gates the caught rate against the v2 column of the same run and reports the `Fake`-rate drop as information.
+Exact rules: `specs/detection/rules.md` (v3). Acceptance criteria A1–A8 (v3; rules.md section 7 now holds the v4 criteria and keeps the v3 ones as "v3 acceptance criteria (superseded)"), measured with `just accept --params …v2.toml --params …v3.toml`. Owner decisions at G1: approve without pre-measuring `U` and `B` (A1/A5 decide, A8 reports them); A5 gates the caught rate against the v2 column of the same run and reports the `Fake`-rate drop as information.
 
 ## Alternatives considered
 
