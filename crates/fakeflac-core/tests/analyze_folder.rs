@@ -5,7 +5,7 @@
 
 use fakeflac_core::ports::{AudioProbe, FileEntry, FileScanner, SpectrumAnalyzer};
 use fakeflac_core::{
-    analyze_folder, AnalysisSlot, AnalysisSummary, AppError, AppErrorCode, AudioFormat,
+    analyze_folder, AnalysisSlot, AnalysisSummary, AppError, AppErrorCode, AudioCodec, AudioFormat,
     BandSpectra, CancelToken, DetectionParams, ProgressEvent, TrackError, Verdict,
 };
 use std::path::{Path, PathBuf};
@@ -98,6 +98,11 @@ impl SpectrumAnalyzer for FakeAnalyzer {
             bit_depth: Some(16),
             channels: 2,
             duration_ms: 180_000,
+            codec: Some(AudioCodec::Flac),
+            declared_bitrate_kbps: None,
+            bitrate_mode: None,
+            encoder: None,
+            encoder_lowpass_hz: None,
             spectrum: Some(s),
         })
     }

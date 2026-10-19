@@ -2,6 +2,8 @@
 //! See `docs/architecture/backend.md` (pipeline, FFT window, formats) and `specs/detection/rules.md`.
 
 mod decode;
+mod mp3;
+mod mp4;
 mod spectrogram;
 mod spectrum;
 pub mod window;
@@ -15,7 +17,7 @@ use std::path::Path;
 /// produced for the same file and parameters, and whenever `symphonia` is upgraded (ADR-0036, OQ-3).
 pub const EXTRACTION_VERSION: u32 = 2;
 
-/// `SpectrumAnalyzer` for WAV and FLAC based on symphonia.
+/// `SpectrumAnalyzer` for WAV, FLAC, MP3 and M4A (AAC-LC, ALAC) based on symphonia.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct SymphoniaAnalyzer;
 
@@ -23,6 +25,7 @@ impl SpectrumAnalyzer for SymphoniaAnalyzer {
     fn analyze(&self, path: &Path, params: &DetectionParams) -> Result<AudioProbe, TrackError> {
         let mut stream = decode::MonoStream::open(path)?;
         let mut info = stream.info;
+        let declared = stream.declared.clone();
         // rules.md 1.2: a stream that does not declare its length (FLAC STREAMINFO with
         // total_samples = 0) is decoded once to count its frames, then sampled as usual.
         if matches!(info.total_frames, None | Some(0)) {
@@ -40,7 +43,14 @@ impl SpectrumAnalyzer for SymphoniaAnalyzer {
             sample_rate: info.sample_rate,
             bit_depth: info.bit_depth,
             channels: info.channels,
-            duration_ms: frames * 1000 / u64::from(info.sample_rate.max(1)),
+            duration_ms: declared
+                .duration_ms
+                .unwrap_or(frames * 1000 / u64::from(info.sample_rate.max(1))),
+            codec: declared.codec,
+            declared_bitrate_kbps: declared.declared_bitrate_kbps,
+            bitrate_mode: declared.bitrate_mode,
+            encoder: declared.encoder,
+            encoder_lowpass_hz: declared.encoder_lowpass_hz,
             spectrum: collector.finish(info.sample_rate, params),
         })
     }

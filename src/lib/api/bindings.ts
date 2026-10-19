@@ -34,7 +34,11 @@ export type AppError = {
 
 export type AppErrorCode = "NO_AUDIO_FOUND" | "NOT_A_FOLDER" | "FOLDER_UNREADABLE" | "ANALYSIS_RUNNING" | "NOT_ANALYZED" | "EXPORT_FAILED" | "INTERNAL";
 
+export type AudioCodec = "pcm" | "flac" | "alac" | "mp3" | "aac" | "opus";
+
 export type AudioFormat = "wav" | "flac" | "mp3" | "m4a" | "opus";
+
+export type BitrateMode = "cbr" | "vbr" | "abr";
 
 /**
  *  Exported as plain `number` (specta would add `| null` for floats, because JSON has no NaN):
@@ -76,10 +80,12 @@ export type TrackInfo = {
 	path: string,
 	folder: string,
 	format: AudioFormat,
+	codec: AudioCodec | null,
 	sampleRate: number,
 	bitDepth: number | null,
 	channels: number,
 	declaredBitrateKbps: number | null,
+	bitrateMode: BitrateMode | null,
 	durationMs: number,
 	sizeBytes: number,
 	modifiedUnix: number,

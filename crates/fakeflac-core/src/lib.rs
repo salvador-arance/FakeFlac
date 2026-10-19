@@ -18,8 +18,8 @@ pub use analyze_folder::{
     analyze_folder, ActiveRun, AnalysisSlot, AnalysisSummary, CancelToken, ProgressEvent,
 };
 pub use domain::{
-    AlbumSummary, AudioFormat, CutoffEstimate, SuspicionReason, TrackAnalysis, TrackError,
-    TrackInfo, Verdict,
+    AlbumSummary, AudioCodec, AudioFormat, BitrateMode, CutoffEstimate, SuspicionReason,
+    TrackAnalysis, TrackError, TrackInfo, Verdict,
 };
 pub use error::{AppError, AppErrorCode};
 pub use params::{DetectionParams, WindowKind};

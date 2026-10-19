@@ -1,7 +1,7 @@
 //! Ports (traits) implemented by the adapter crates (`docs/architecture/backend.md`).
 //! Only the ports listed in the architecture document exist; adding one requires an ADR (D3).
 
-use crate::domain::{AudioFormat, TrackError};
+use crate::domain::{AudioCodec, AudioFormat, BitrateMode, TrackError};
 use crate::error::AppError;
 use crate::params::DetectionParams;
 use crate::spectrum::BandSpectra;
@@ -24,6 +24,15 @@ pub struct AudioProbe {
     pub bit_depth: Option<u8>,
     pub channels: u8,
     pub duration_ms: u64,
+    /// The codec inside the container (`specs/detection/lossy-source.md` section 2).
+    pub codec: Option<AudioCodec>,
+    /// Declared bitrate in kbps (lossy codecs only, section 2.1 and 2.2).
+    pub declared_bitrate_kbps: Option<u32>,
+    pub bitrate_mode: Option<BitrateMode>,
+    /// Encoder string of the LAME tag (backend only, not in the contract).
+    pub encoder: Option<String>,
+    /// Low-pass of the LAME tag in Hz; absent when the byte is 0 (backend only).
+    pub encoder_lowpass_hz: Option<u32>,
     /// `None` when every analysed frame was silent.
     pub spectrum: Option<BandSpectra>,
 }

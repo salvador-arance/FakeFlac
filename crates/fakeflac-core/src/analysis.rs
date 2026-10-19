@@ -2,7 +2,7 @@
 //! the analyzer port and the pure detection rules into a `TrackAnalysis`.
 
 use crate::detect::detect;
-use crate::domain::{TrackAnalysis, TrackError, TrackInfo, Verdict};
+use crate::domain::{AudioCodec, TrackAnalysis, TrackError, TrackInfo, Verdict};
 use crate::params::DetectionParams;
 use crate::ports::{FileEntry, SpectrumAnalyzer};
 
@@ -15,10 +15,12 @@ pub fn analyze_track(
         path: entry.path.clone(),
         folder: entry.folder.clone(),
         format: entry.format,
+        codec: AudioCodec::from_format(entry.format),
         sample_rate: 0,
         bit_depth: None,
         channels: 0,
         declared_bitrate_kbps: None,
+        bitrate_mode: None,
         duration_ms: 0,
         size_bytes: entry.size_bytes,
         modified_unix: entry.modified_unix,
@@ -41,9 +43,16 @@ pub fn analyze_track(
     info.bit_depth = probe.bit_depth;
     info.channels = probe.channels;
     info.duration_ms = probe.duration_ms;
+    info.codec = probe.codec.or(info.codec);
+    info.declared_bitrate_kbps = probe.declared_bitrate_kbps;
+    info.bitrate_mode = probe.bitrate_mode;
 
     if (probe.duration_ms as f64) < params.input.min_duration_s * 1000.0 {
         return error(info, TrackError::TooShort);
+    }
+    // lossy-source.md 2.3: a long-enough lossy stream with no declared bitrate is a guard failure.
+    if info.codec.is_some_and(AudioCodec::is_lossy) && info.declared_bitrate_kbps.is_none() {
+        return error(info, TrackError::CorruptStream("no bitrate".into()));
     }
 
     let detection = detect(probe.spectrum.as_ref(), params);

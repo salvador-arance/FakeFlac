@@ -27,14 +27,55 @@ pub enum AudioFormat {
 }
 
 impl AudioFormat {
-    /// Format for a file extension (case-insensitive, without the dot). H1 supports WAV and FLAC (RF-14).
+    /// Format for a file extension (case-insensitive, without the dot). WAV and FLAC (H1), MP3 and
+    /// M4A (H2, ADR-0040); Opus is still skipped (RF-14).
     pub fn from_extension(ext: &str) -> Option<AudioFormat> {
         match ext.to_ascii_lowercase().as_str() {
             "wav" => Some(AudioFormat::Wav),
             "flac" => Some(AudioFormat::Flac),
+            "mp3" => Some(AudioFormat::Mp3),
+            "m4a" => Some(AudioFormat::M4a),
             _ => None,
         }
     }
+}
+
+impl AudioCodec {
+    /// Codec implied by the container alone, for files that were not probed (WAV, FLAC, MP3).
+    pub fn from_format(format: AudioFormat) -> Option<AudioCodec> {
+        match format {
+            AudioFormat::Wav => Some(AudioCodec::Pcm),
+            AudioFormat::Flac => Some(AudioCodec::Flac),
+            AudioFormat::Mp3 => Some(AudioCodec::Mp3),
+            AudioFormat::M4a | AudioFormat::Opus => None,
+        }
+    }
+
+    /// Lossy codecs have a declared bitrate (`specs/detection/lossy-source.md` section 2.3).
+    pub fn is_lossy(self) -> bool {
+        matches!(self, AudioCodec::Mp3 | AudioCodec::Aac | AudioCodec::Opus)
+    }
+}
+
+/// The codec inside the container (contract version 3, `specs/detection/lossy-source.md` section 2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AudioCodec {
+    Pcm,
+    Flac,
+    Alac,
+    Mp3,
+    Aac,
+    Opus,
+}
+
+/// Bitrate mode of an MP3 stream (contract version 3, `specs/detection/lossy-source.md` section 2.1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum BitrateMode {
+    Cbr,
+    Vbr,
+    Abr,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -64,11 +105,15 @@ pub struct TrackInfo {
     pub path: PathBuf,
     pub folder: PathBuf,
     pub format: AudioFormat,
+    /// The codec inside the container; `None` only when an M4A could not be probed.
+    pub codec: Option<AudioCodec>,
     pub sample_rate: u32,
     pub bit_depth: Option<u8>,
     pub channels: u8,
     /// Declared bitrate in kbps (lossy formats only).
     pub declared_bitrate_kbps: Option<u32>,
+    /// MP3 only (AAC does not signal it).
+    pub bitrate_mode: Option<BitrateMode>,
     pub duration_ms: u64,
     pub size_bytes: u64,
     pub modified_unix: i64,

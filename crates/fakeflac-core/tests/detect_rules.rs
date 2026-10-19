@@ -864,14 +864,22 @@ fn rf04_no_kept_frames_is_suspicious_low_hf() {
     assert_eq!(d.reasons, vec![LowHighFrequencyContent]);
 }
 
-// RF-14: supported extensions in H1
+// RF-14: supported extensions (H1: WAV and FLAC; H2, ADR-0040: MP3 and M4A; Opus is still skipped).
+// Scenario "MP3 and M4A files are found; Opus files are not yet" (decode-lossy.feature, @RF-02 @RF-14).
 #[test]
 fn supported_extensions() {
     assert_eq!(AudioFormat::from_extension("flac"), Some(AudioFormat::Flac));
     assert_eq!(AudioFormat::from_extension("FLAC"), Some(AudioFormat::Flac));
     assert_eq!(AudioFormat::from_extension("wav"), Some(AudioFormat::Wav));
     assert_eq!(AudioFormat::from_extension("Wav"), Some(AudioFormat::Wav));
-    assert_eq!(AudioFormat::from_extension("mp3"), None);
+    assert_eq!(AudioFormat::from_extension("mp3"), Some(AudioFormat::Mp3));
+    assert_eq!(AudioFormat::from_extension("MP3"), Some(AudioFormat::Mp3));
+    assert_eq!(AudioFormat::from_extension("m4a"), Some(AudioFormat::M4a));
+    assert_eq!(AudioFormat::from_extension("M4A"), Some(AudioFormat::M4a));
+    assert_eq!(AudioFormat::from_extension("opus"), None);
+    assert_eq!(AudioFormat::from_extension("ogg"), None);
+    assert_eq!(AudioFormat::from_extension("mp4"), None);
+    assert_eq!(AudioFormat::from_extension("aac"), None);
     assert_eq!(AudioFormat::from_extension("txt"), None);
     assert_eq!(AudioFormat::from_extension(""), None);
 }

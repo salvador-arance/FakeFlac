@@ -27,6 +27,25 @@ pub enum AudioFormat {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
+pub enum AudioCodec {
+    Pcm,
+    Flac,
+    Alac,
+    Mp3,
+    Aac,
+    Opus,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub enum BitrateMode {
+    Cbr,
+    Vbr,
+    Abr,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
 pub enum SuspicionReason {
     LowHighFrequencyContent,
     GradualRolloff,
@@ -40,10 +59,12 @@ pub struct TrackInfo {
     pub path: String,
     pub folder: String,
     pub format: AudioFormat,
+    pub codec: Option<AudioCodec>,
     pub sample_rate: u32,
     pub bit_depth: Option<u8>,
     pub channels: u8,
     pub declared_bitrate_kbps: Option<u32>,
+    pub bitrate_mode: Option<BitrateMode>,
     pub duration_ms: u64,
     pub size_bytes: u64,
     pub modified_unix: i64,
@@ -167,6 +188,29 @@ impl From<core::AudioFormat> for AudioFormat {
     }
 }
 
+impl From<core::AudioCodec> for AudioCodec {
+    fn from(c: core::AudioCodec) -> Self {
+        match c {
+            core::AudioCodec::Pcm => AudioCodec::Pcm,
+            core::AudioCodec::Flac => AudioCodec::Flac,
+            core::AudioCodec::Alac => AudioCodec::Alac,
+            core::AudioCodec::Mp3 => AudioCodec::Mp3,
+            core::AudioCodec::Aac => AudioCodec::Aac,
+            core::AudioCodec::Opus => AudioCodec::Opus,
+        }
+    }
+}
+
+impl From<core::BitrateMode> for BitrateMode {
+    fn from(m: core::BitrateMode) -> Self {
+        match m {
+            core::BitrateMode::Cbr => BitrateMode::Cbr,
+            core::BitrateMode::Vbr => BitrateMode::Vbr,
+            core::BitrateMode::Abr => BitrateMode::Abr,
+        }
+    }
+}
+
 impl From<core::SuspicionReason> for SuspicionReason {
     fn from(r: core::SuspicionReason) -> Self {
         match r {
@@ -186,10 +230,12 @@ impl From<&core::TrackInfo> for TrackInfo {
             path: path_string(&i.path),
             folder: path_string(&i.folder),
             format: i.format.into(),
+            codec: i.codec.map(Into::into),
             sample_rate: i.sample_rate,
             bit_depth: i.bit_depth,
             channels: i.channels,
             declared_bitrate_kbps: i.declared_bitrate_kbps,
+            bitrate_mode: i.bitrate_mode.map(Into::into),
             duration_ms: i.duration_ms,
             size_bytes: i.size_bytes,
             modified_unix: i.modified_unix,
