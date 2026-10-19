@@ -2,6 +2,39 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-19 - H1 UI: MainLayout splitter (PR #46, awaiting G2)
+
+**Done**
+- #44 merged at G2 (ca69bb0). `prune-branches` had nothing left to delete, and `feat/RF-04-v3-backup` is gone.
+- `/feature RF-07` (splitter, already in the approved UI specs, so no G1 was needed), branch `feat/RF-07-splitter`, PR #46:
+  - test: 33fcabc, 19 tests plus `Splitter.stories.ts`;
+  - implement: 5f43050;
+  - review fix: 2b6ee69. The blocking finding was that sub-pixel deltas were rounded away at each step. The same commit adds primary button only, ending the drag on blur, and re-clamping after the window shrinks;
+  - traceability row: a94a81c.
+- Test contract:
+  - `role="separator"` with `data-state` `idle` or `dragging`;
+  - the delta is incremental per event, positive downward;
+  - localStorage key `fakeflac.layout.detailHeight`;
+  - a saved value below 160 is raised to 160.
+- `just ci` is green (232 frontend tests), and `privacy-check` finds 0 matches.
+
+**Pending**
+- G2 on #46. Before merging, drag slowly at 150 % / 200 % display scaling, which was not checked in the app. After the merge, run `just prune-branches`.
+- Splitter improvements listed in #46:
+  - the minimum heights and the bar height are written both as TS constants and in CSS;
+  - the height is saved on every pointer move;
+  - there is no test for a saved value below 160;
+  - the hover state is not in the spec;
+  - the story is minimal.
+- Review improvements left over from v3 and the RF-07 known deviations, both unchanged (see the blocks below).
+
+**Blockers / questions for the human**
+- Accessibility spec gap, needs G1: a focusable separator should have `aria-valuenow` and an accessible name (prop and i18n key in `components.md`).
+- Q9–Q11 in `rules.md`, unchanged.
+- Bash tool: `cd /c/Workspaces/FakeFlac` makes vitest fail with "failed to find the runner"; use `cd "C:/Workspaces/FakeFlac"`. Every Bash call ends with exit 1 because of a missing harness cwd file. Read the command's own result, not the exit code.
+
+**Next step:** G2 on #46. After that, `/new-spec RF-15` (input in the 2026-10-18 block). The H1 UI is complete once #46 is merged.
+
 ## 2026-10-19 - RF-04 detection v4 implemented (PR #44, awaiting G2)
 
 **Done**
