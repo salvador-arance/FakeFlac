@@ -38,7 +38,7 @@ The 17 open questions for Gate G1 have been reviewed and decided by the owner. T
 
 ## 1. Scope
 
-In: WAV and FLAC negatives, transcodes to FLAC, the v2 rule family (`specs/detection/rules.md`: v2 files and v3 files, which add the optional `[full_band]` section), confusion matrices, margins, parameter comparison, grid search over rule parameters.
+In: WAV and FLAC negatives, transcodes to FLAC, the v2 rule family (`specs/detection/rules.md`: v2 files, v3 files, which add the optional `[full_band]` section, and v4 files, which add the optional `full_band.max_lossy_step_db`), confusion matrices, margins, parameter comparison, grid search over rule parameters.
 
 Out (the design must allow adding them later without changing the file formats): lossy-format detection (RF-15: positives would be the lossy files themselves instead of FLAC transcodes; `labels.csv` already has `encoder` and `setting`), upsamples (RF-12: a new `setting` kind), file integrity, and any change to the thresholds. New parameters go in their own spec PR.
 
@@ -55,7 +55,7 @@ Every command goes through `just` (ADR-0019). The recipes run the release build 
 | `just privacy-check` | `fakeflac-calibrate privacy-check [--base REF]` | Section 6. Default `REF` is `main`. |
 
 - `--params` may be repeated. The default is `specs/detection/detection-params.v2.toml`. The first file is the **baseline** that the others are compared against. A params file may live outside the repository (for example a proposal in `FAKEFLAC_CALIBRATION/reports/…`).
-- `--config` defaults to `specs/calibration/calibration.v1.toml` and `--grid` to `specs/calibration/calibrate-grid.v1.toml` (baseline v2). The v3 parameters, including `[full_band]`, are searched with `--grid specs/calibration/calibrate-grid.v2.toml` (baseline v3). The defaults stay on v2 so that the sample corpus expectations ([sample-corpus.md](sample-corpus.md)) do not change; the acceptance run of detection v3 passes both params files explicitly (rules.md section 7).
+- `--config` defaults to `specs/calibration/calibration.v1.toml` and `--grid` to `specs/calibration/calibrate-grid.v1.toml` (baseline v2). The v3 parameters, including `[full_band]`, are searched with `--grid specs/calibration/calibrate-grid.v2.toml` (baseline v3). The defaults stay on v2 so that the sample corpus expectations ([sample-corpus.md](sample-corpus.md)) do not change; the acceptance run of detection v4 passes the v2 and v4 params files explicitly (rules.md section 7). No grid file has a v4 baseline yet (rules.md, Q10).
 - `--no-generate` evaluates the labelled tracks that already have cached spectra and skips missing generated entries. It leaves `labels.csv` untouched. The report counts them as "not generated".
 - None of these recipes is part of `just ci`. The CI-runnable acceptance is a `cargo test` of the tool on the sample corpus ([sample-corpus.md](sample-corpus.md)).
 

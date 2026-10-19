@@ -1,6 +1,6 @@
 # ADR-0038: Detection v3: a full-band guard (level and burstiness above 20.7 kHz) on the gap and step rules; v3 becomes the default
 
-- Status: accepted
+- Status: accepted; amended by ADR-0039 (detection v4: no full-band guard with a cutoff step in the lossy range)
 - Date: 2026-10-18
 
 ## Context and rationale
