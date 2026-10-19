@@ -10,11 +10,22 @@ use std::path::Path;
 /// Bytes scanned for the first frame sync before giving up.
 const SYNC_SEARCH_LIMIT: u64 = 1 << 20;
 
-/// Bitrates (kbps) of Layer III by bitrate index 1..=14.
+/// Bitrates (kbps) by bitrate index 1..=14. Layer III: `BITRATES_V1` (MPEG-1) and `BITRATES_V2`
+/// (MPEG-2 and 2.5); Layer II MPEG-2 shares the latter. Layers I and II are only recognised, to
+/// report them as unsupported.
 const BITRATES_V1: [u32; 14] = [
     32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320,
 ];
 const BITRATES_V2: [u32; 14] = [8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160];
+const BITRATES_L1_V1: [u32; 14] = [
+    32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448,
+];
+const BITRATES_L1_V2: [u32; 14] = [
+    32, 48, 56, 64, 80, 96, 112, 128, 144, 160, 176, 192, 224, 256,
+];
+const BITRATES_L2_V1: [u32; 14] = [
+    32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384,
+];
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Mp3Info {
@@ -76,10 +87,12 @@ impl Header {
             _ => [11_025, 12_000, 8_000],
         };
         let sample_rate = *rates.get(usize::from((b[2] >> 2) & 3))?;
-        let table = if version == 1 {
-            &BITRATES_V1
-        } else {
-            &BITRATES_V2
+        let table = match (layer, version) {
+            (1, 1) => &BITRATES_L1_V1,
+            (1, _) => &BITRATES_L1_V2,
+            (2, 1) => &BITRATES_L2_V1,
+            (3, 1) => &BITRATES_V1,
+            _ => &BITRATES_V2,
         };
         let bitrate_kbps = match bitrate_index {
             0 => 0,
@@ -98,23 +111,25 @@ impl Header {
     }
 
     fn samples_per_frame(&self) -> u32 {
-        if self.version == 1 {
-            1152
-        } else {
-            576
+        match (self.layer, self.version) {
+            (1, _) => 384,
+            (3, v) if v != 1 => 576,
+            _ => 1152,
         }
     }
 
-    /// Frame length in bytes (Layer III); `None` for a free-format stream.
+    /// Frame length in bytes; `None` for a free-format stream.
     fn frame_len(&self) -> Option<u64> {
         if self.bitrate_kbps == 0 {
             return None;
         }
         let coefficient = u64::from(self.samples_per_frame() / 8);
-        Some(
-            coefficient * u64::from(self.bitrate_kbps) * 1000 / u64::from(self.sample_rate)
-                + u64::from(self.padding),
-        )
+        let base = coefficient * u64::from(self.bitrate_kbps) * 1000 / u64::from(self.sample_rate);
+        Some(if self.layer == 1 {
+            (base + u64::from(self.padding)) * 4
+        } else {
+            base + u64::from(self.padding)
+        })
     }
 
     /// Offset of the Xing/Info field inside the tag frame.
@@ -259,18 +274,23 @@ fn read_header(r: &mut BufReader<File>) -> Result<Option<[u8; 4]>, TrackError> {
     }
 }
 
-/// Position after an ID3v2 tag at the start of the file (0 when there is none).
-fn skip_id3v2(r: &mut BufReader<File>) -> Result<u64, TrackError> {
-    r.seek(SeekFrom::Start(0)).map_err(io_error)?;
-    let mut b = [0u8; 10];
-    if r.read_exact(&mut b).is_err() || &b[..3] != b"ID3" {
-        return Ok(0);
+/// Position after the ID3v2 tags at the start of the file (0 when there is none); stacked tags are
+/// all skipped.
+fn skip_id3v2(r: &mut BufReader<File>, file_len: u64) -> Result<u64, TrackError> {
+    let mut pos = 0u64;
+    while pos.saturating_add(10) <= file_len {
+        r.seek(SeekFrom::Start(pos)).map_err(io_error)?;
+        let mut b = [0u8; 10];
+        if r.read_exact(&mut b).is_err() || &b[..3] != b"ID3" {
+            break;
+        }
+        let size = b[6..10]
+            .iter()
+            .fold(0u64, |acc, v| (acc << 7) | u64::from(v & 0x7F));
+        let footer = if b[5] & 0x10 != 0 { 10 } else { 0 };
+        pos += 10 + size + footer;
     }
-    let size = b[6..10]
-        .iter()
-        .fold(0u64, |acc, v| (acc << 7) | u64::from(v & 0x7F));
-    let footer = if b[5] & 0x10 != 0 { 10 } else { 0 };
-    Ok(10 + size + footer)
+    Ok(pos)
 }
 
 pub fn read(path: &Path) -> Result<Mp3Info, TrackError> {
@@ -282,7 +302,7 @@ pub fn read(path: &Path) -> Result<Mp3Info, TrackError> {
     let mut r = BufReader::new(file);
 
     // First frame: scan for a sync after the ID3v2 tag.
-    let start = skip_id3v2(&mut r)?;
+    let start = skip_id3v2(&mut r, file_len)?;
     let (first_pos, first) = find_first_frame(&mut r, start, file_len)?
         .ok_or_else(|| TrackError::CorruptStream("no MP3 frame found".into()))?;
     if first.layer != 3 {
@@ -381,34 +401,43 @@ pub fn read(path: &Path) -> Result<Mp3Info, TrackError> {
 }
 
 /// The first valid frame header at or after `start`, confirmed by a sync at the next frame when
-/// the file is long enough to have one.
+/// the file is long enough to have one. The scan runs over an in-memory window.
 fn find_first_frame(
     r: &mut BufReader<File>,
     start: u64,
     file_len: u64,
 ) -> Result<Option<(u64, Header)>, TrackError> {
-    let mut pos = start;
-    let limit = start + SYNC_SEARCH_LIMIT;
-    r.seek(SeekFrom::Start(pos)).map_err(io_error)?;
-    while pos < limit.min(file_len) {
-        let Some(bytes) = read_header(r)? else {
-            return Ok(None);
+    // The window reaches past the scan limit by more than the longest frame, for the confirmation.
+    r.seek(SeekFrom::Start(start)).map_err(io_error)?;
+    let mut window = Vec::new();
+    r.by_ref()
+        .take(SYNC_SEARCH_LIMIT + 8192)
+        .read_to_end(&mut window)
+        .map_err(io_error)?;
+    let scan_end = window.len().min(SYNC_SEARCH_LIMIT as usize);
+    for i in 0..scan_end {
+        let Some(h) = window
+            .get(i..i + 4)
+            .and_then(|b| <[u8; 4]>::try_from(b).ok())
+            .and_then(Header::parse)
+        else {
+            continue;
         };
-        if let Some(h) = Header::parse(bytes) {
-            let confirmed = match h.frame_len() {
-                Some(len) if pos + len + 4 <= file_len => {
-                    r.seek(SeekFrom::Start(pos + len)).map_err(io_error)?;
-                    let next = read_header(r)?.and_then(Header::parse);
-                    next.is_some_and(|n| n.same_stream(&h))
-                }
-                _ => true,
-            };
-            if confirmed {
-                return Ok(Some((pos, h)));
+        let pos = start + i as u64;
+        let confirmed = match h.frame_len() {
+            Some(len) if pos + len + 4 <= file_len => {
+                let at = i + len as usize;
+                window
+                    .get(at..at + 4)
+                    .and_then(|b| <[u8; 4]>::try_from(b).ok())
+                    .and_then(Header::parse)
+                    .is_some_and(|n| n.same_stream(&h))
             }
+            _ => true,
+        };
+        if confirmed {
+            return Ok(Some((pos, h)));
         }
-        pos += 1;
-        r.seek(SeekFrom::Start(pos)).map_err(io_error)?;
     }
     Ok(None)
 }
@@ -454,4 +483,54 @@ fn walk_frames(
         r.seek_relative(len as i64 - 4).map_err(io_error)?;
     }
     Ok(walk)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn write(name: &str, bytes: &[u8]) -> std::path::PathBuf {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/unit-tmp");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(format!("mp3-{}-{name}.mp3", std::process::id()));
+        std::fs::write(&path, bytes).unwrap();
+        path
+    }
+
+    fn frames(header: [u8; 4], len: usize, count: usize) -> Vec<u8> {
+        let mut out = Vec::new();
+        for _ in 0..count {
+            out.extend_from_slice(&header);
+            out.resize(out.len() + len - 4, 0);
+        }
+        out
+    }
+
+    #[test]
+    fn layer_ii_is_unsupported_not_corrupt() {
+        // MPEG-1 Layer II, 192 kbps, 44.1 kHz: 144 * 192000 / 44100 = 626 bytes.
+        let path = write("l2", &frames([0xFF, 0xFD, 0xA0, 0x00], 626, 12));
+        assert!(matches!(read(&path), Err(TrackError::UnsupportedFormat(_))));
+    }
+
+    #[test]
+    fn layer_i_is_unsupported_not_corrupt() {
+        // MPEG-1 Layer I, 256 kbps, 44.1 kHz: (12 * 256000 / 44100) * 4 = 276 bytes.
+        let path = write("l1", &frames([0xFF, 0xFF, 0x80, 0x00], 276, 12));
+        assert!(matches!(read(&path), Err(TrackError::UnsupportedFormat(_))));
+    }
+
+    #[test]
+    fn stacked_id3v2_tags_are_skipped() {
+        let mut bytes = Vec::new();
+        for _ in 0..2 {
+            bytes.extend_from_slice(b"ID3\x04\0\0\0\0\0\x04");
+            bytes.extend_from_slice(&[0u8; 4]);
+        }
+        bytes.extend_from_slice(&frames([0xFF, 0xFB, 0x90, 0x00], 417, 6));
+        let path = write("id3", &bytes);
+        let info = read(&path).unwrap();
+        assert_eq!(info.frames, 6);
+        assert_eq!(info.declared_bitrate_kbps, Some(128));
+    }
 }

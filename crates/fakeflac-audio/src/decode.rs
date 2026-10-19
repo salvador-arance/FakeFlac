@@ -35,9 +35,10 @@ pub struct Declared {
 pub struct MonoStream {
     pub info: StreamInfo,
     pub declared: Declared,
-    /// Whether `info.total_frames` is the exact number of frames the decoder will return.
-    /// MP3 lengths come from the frame count, and the decoder trims the encoder delay.
-    exact_length: bool,
+    /// Frames fewer than `info.total_frames` the decoder may legitimately return. MP3 lengths
+    /// come from the frame count of the tag and the decoder trims the encoder delay and padding
+    /// (up to two frames); every other format is exact.
+    length_tolerance: u64,
     format: Box<dyn FormatReader>,
     decoder: Box<dyn AudioDecoder>,
     track_id: u32,
@@ -109,12 +110,12 @@ impl MonoStream {
             Some(AudioCodec::Alac) => alac_depth.or(codec.bits_per_sample.map(|b| b as u8)),
             _ => codec.bits_per_sample.map(|b| b as u8),
         };
-        let mut exact_length = true;
+        let mut length_tolerance = 0;
         if let Some(info) = &mp3_info {
             // symphonia estimates the length of an MP3 and trims the encoder delay: use the frame
-            // count of the stream and do not hold the decoder to it.
+            // count of the stream and allow the decoder two frames less.
             total_frames = Some(info.frames * u64::from(info.samples_per_frame));
-            exact_length = false;
+            length_tolerance = 2 * u64::from(info.samples_per_frame);
         }
         let decoder = symphonia::default::get_codecs()
             .make_audio_decoder(&codec, &AudioDecoderOptions::default())
@@ -127,7 +128,7 @@ impl MonoStream {
                 total_frames,
             },
             declared,
-            exact_length,
+            length_tolerance,
             format,
             decoder,
             track_id,
@@ -135,8 +136,8 @@ impl MonoStream {
     }
 
     /// Decodes the whole stream, calling `sink(frame_offset, mono_samples)` per packet.
-    /// Returns the number of decoded frames. A stream that ends before the declared length,
-    /// or a packet that fails to decode, is a `CorruptStream` (RNF-04).
+    /// Returns the number of decoded frames. A stream that ends before the declared length
+    /// (MP3: by more than two frames), or a packet that fails to decode, is a `CorruptStream` (RNF-04).
     pub fn for_each_chunk(&mut self, mut sink: impl FnMut(u64, &[f32])) -> Result<u64, TrackError> {
         let mut interleaved: Vec<f32> = Vec::new();
         let mut mono: Vec<f32> = Vec::new();
@@ -168,13 +169,71 @@ impl MonoStream {
             sink(offset, &mono[..frames.min(mono.len())]);
             offset += frames as u64;
         }
-        if let Some(total) = self.info.total_frames.filter(|_| self.exact_length) {
-            if offset < total {
+        if let Some(total) = self.info.total_frames {
+            if ended_short(offset, total, self.length_tolerance) {
                 return Err(TrackError::CorruptStream(format!(
                     "stream ended after {offset} of {total} frames"
                 )));
             }
         }
         Ok(offset)
+    }
+}
+
+/// Whether a stream that decoded `decoded` frames ended before the `declared` length.
+fn ended_short(decoded: u64, declared: u64, tolerance: u64) -> bool {
+    decoded.saturating_add(tolerance) < declared
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tolerance_applies_to_the_shortfall() {
+        assert!(!ended_short(1000, 1000, 0));
+        assert!(ended_short(999, 1000, 0));
+        assert!(!ended_short(1000, 1000 + 2304, 2304));
+        assert!(ended_short(0, 2305, 2304));
+    }
+
+    /// MPEG-1 Layer III, 128 kbps, 44.1 kHz, stereo: 417-byte frames of silence, behind an Info
+    /// tag frame that declares `declared` frames.
+    fn tagged_mp3(declared: u32, audio_frames: usize) -> Vec<u8> {
+        let header = [0xFF, 0xFB, 0x90, 0x00];
+        let mut tag = header.to_vec();
+        tag.resize(417, 0);
+        tag[36..40].copy_from_slice(b"Info");
+        tag[40..44].copy_from_slice(&1u32.to_be_bytes());
+        tag[44..48].copy_from_slice(&declared.to_be_bytes());
+        let mut out = tag;
+        for _ in 0..audio_frames {
+            out.extend_from_slice(&header);
+            out.resize(out.len() + 413, 0);
+        }
+        out
+    }
+
+    fn decode(name: &str, bytes: &[u8]) -> Result<u64, TrackError> {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/unit-tmp");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(format!("decode-{}-{name}.mp3", std::process::id()));
+        std::fs::write(&path, bytes).unwrap();
+        MonoStream::open(&path)?.for_each_chunk(|_, _| {})
+    }
+
+    #[test]
+    fn intact_tagged_mp3_passes() {
+        assert!(decode("intact", &tagged_mp3(40, 40)).is_ok());
+    }
+
+    #[test]
+    fn truncated_tagged_mp3_is_corrupt() {
+        let bytes = tagged_mp3(40, 40);
+        let half = &bytes[..bytes.len() / 2];
+        assert!(matches!(
+            decode("half", half),
+            Err(TrackError::CorruptStream(_))
+        ));
     }
 }

@@ -79,7 +79,7 @@ pub fn read(path: &Path) -> Result<Mp4Info, TrackError> {
         .map_err(|e| TrackError::Unreadable(e.to_string()))?
         .len();
     let mut pos = 0u64;
-    while pos + 8 <= file_len {
+    while pos.saturating_add(8) <= file_len {
         file.seek(SeekFrom::Start(pos)).map_err(io_error)?;
         let mut head = [0u8; 16];
         let got = file.read(&mut head).map_err(io_error)?;
@@ -96,10 +96,11 @@ pub fn read(path: &Path) -> Result<Mp4Info, TrackError> {
         if size < header {
             return Err(corrupt("invalid box size"));
         }
+        let end = pos
+            .checked_add(size)
+            .filter(|e| *e <= file_len)
+            .ok_or_else(|| corrupt("box larger than the file"))?;
         if kind == b"moov" {
-            if pos + size > file_len {
-                return Err(corrupt("truncated moov box"));
-            }
             if size > MAX_MOOV_BYTES {
                 return Err(corrupt("moov box too large"));
             }
@@ -108,7 +109,7 @@ pub fn read(path: &Path) -> Result<Mp4Info, TrackError> {
             file.read_exact(&mut moov).map_err(io_error)?;
             return parse_moov(&moov);
         }
-        pos += size;
+        pos = end;
     }
     Err(corrupt("no moov box"))
 }
@@ -174,11 +175,23 @@ fn parse_audio_track(mdia: &[BoxEntry<'_>]) -> Result<Mp4Info, TrackError> {
         b"alac" => {
             // The cookie is the payload of the inner `alac` full box: 4 bytes of version and flags,
             // then frame length (4), compatible version (1), bit depth (1), ...
-            let cookie = find(&children, b"alac").ok_or_else(|| corrupt("no ALAC cookie"))?;
-            let bit_depth = *cookie.get(9).ok_or_else(|| corrupt("short ALAC cookie"))?;
+            // QuickTime files wrap it in a `wave` box. Without a cookie the depth is the sample
+            // entry's sample size, or unknown (the decoder's own value is used then).
+            let cookie = find(&children, b"alac").or_else(|| {
+                let wave = boxes(find(&children, b"wave")?).ok()?;
+                find(&wave, b"alac")
+            });
+            let bit_depth = match cookie {
+                Some(cookie) => Some(*cookie.get(9).ok_or_else(|| corrupt("short ALAC cookie"))?),
+                None => entry
+                    .get(18..20)
+                    .map(|v| u16::from_be_bytes([v[0], v[1]]))
+                    .filter(|d| (1..=32).contains(d))
+                    .map(|d| d as u8),
+            };
             Ok(Mp4Info {
                 codec: AudioCodec::Alac,
-                bit_depth: Some(bit_depth),
+                bit_depth,
                 declared_bitrate_kbps: None,
             })
         }
@@ -266,6 +279,15 @@ fn check_aac_lc(esds: &[u8]) -> Result<(), TrackError> {
         return Err(bad());
     }
     // object type, stream type, buffer size (3), max and average bitrate, then the specific info.
+    match config.first() {
+        Some(0x40) => {}
+        Some(other) => {
+            return Err(TrackError::UnsupportedFormat(format!(
+                "audio object type indication {other:#04x} is not MPEG-4 AAC"
+            )))
+        }
+        None => return Err(bad()),
+    }
     let (tag, asc, _) = descriptor(config.get(13..).ok_or_else(bad)?).ok_or_else(bad)?;
     if tag != 0x05 {
         return Err(bad());
@@ -284,5 +306,80 @@ fn check_aac_lc(esds: &[u8]) -> Result<(), TrackError> {
         n => Err(TrackError::UnsupportedFormat(format!(
             "AAC object type {n} is not supported"
         ))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn write(name: &str, bytes: &[u8]) -> std::path::PathBuf {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/unit-tmp");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(format!("mp4-{}-{name}.m4a", std::process::id()));
+        std::fs::write(&path, bytes).unwrap();
+        path
+    }
+
+    fn ftyp() -> Vec<u8> {
+        let mut v = 16u32.to_be_bytes().to_vec();
+        v.extend_from_slice(b"ftyp");
+        v.extend_from_slice(b"M4A     ");
+        v
+    }
+
+    fn with_large_box(largesize: u64) -> Vec<u8> {
+        let mut v = ftyp();
+        v.extend_from_slice(&1u32.to_be_bytes());
+        v.extend_from_slice(b"free");
+        v.extend_from_slice(&largesize.to_be_bytes());
+        v
+    }
+
+    #[test]
+    fn wrapping_largesize_is_corrupt_not_a_loop() {
+        // pos (16) + largesize wraps to 0.
+        let path = write("wrap", &with_large_box(u64::MAX - 15));
+        assert!(matches!(read(&path), Err(TrackError::CorruptStream(_))));
+    }
+
+    #[test]
+    fn maximal_largesize_is_corrupt_not_a_panic() {
+        let path = write("max", &with_large_box(u64::MAX));
+        assert!(matches!(read(&path), Err(TrackError::CorruptStream(_))));
+    }
+
+    #[test]
+    fn box_larger_than_the_file_is_corrupt() {
+        let path = write("big", &with_large_box(1 << 40));
+        assert!(matches!(read(&path), Err(TrackError::CorruptStream(_))));
+    }
+
+    #[test]
+    fn zero_size_box_runs_to_the_end_of_the_file() {
+        let mut v = ftyp();
+        v.extend_from_slice(&0u32.to_be_bytes());
+        v.extend_from_slice(b"mdat");
+        v.extend_from_slice(&[0u8; 32]);
+        let path = write("zero", &v);
+        assert!(matches!(read(&path), Err(TrackError::CorruptStream(_))));
+    }
+
+    #[test]
+    fn esds_with_a_non_mpeg4_object_type_is_unsupported() {
+        // esds: version/flags, ES descriptor, DecoderConfig (object type 0x6B), ASC descriptor.
+        let asc = [0x05, 0x02, 0x12, 0x10];
+        let mut config = vec![0x6B, 0x15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        config.extend_from_slice(&asc);
+        let mut es = vec![0, 1, 0];
+        es.push(0x04);
+        es.push(config.len() as u8);
+        es.extend_from_slice(&config);
+        let mut esds = vec![0, 0, 0, 0, 0x03, es.len() as u8];
+        esds.extend_from_slice(&es);
+        assert!(matches!(
+            check_aac_lc(&esds),
+            Err(TrackError::UnsupportedFormat(_))
+        ));
     }
 }
