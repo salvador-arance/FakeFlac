@@ -10,6 +10,7 @@ pub mod domain;
 pub mod error;
 pub mod params;
 pub mod ports;
+pub mod spectrogram;
 pub mod spectrum;
 pub mod summary;
 
@@ -22,5 +23,6 @@ pub use domain::{
 };
 pub use error::{AppError, AppErrorCode};
 pub use params::{DetectionParams, WindowKind};
+pub use spectrogram::Spectrogram;
 pub use spectrum::BandSpectra;
 pub use summary::summarize_album;

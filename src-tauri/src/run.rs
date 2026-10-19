@@ -42,3 +42,9 @@ pub fn worker_count() -> usize {
         .map_or(1, |n| n.get().saturating_sub(1))
         .max(1)
 }
+
+/// RF-07: spectrogram of `path` with the default `SpectrogramParams`. A file that cannot be
+/// decoded fails with `INTERNAL` (`specs/contracts/commands.md`).
+pub fn get_spectrogram(_path: &Path) -> Result<dto::Spectrogram, dto::AppError> {
+    todo!("RF-07")
+}

@@ -5,8 +5,9 @@ mod decode;
 mod spectrum;
 pub mod window;
 
+use fakeflac_core::params::SpectrogramParams;
 use fakeflac_core::ports::{AudioProbe, SpectrumAnalyzer};
-use fakeflac_core::{DetectionParams, TrackError};
+use fakeflac_core::{DetectionParams, Spectrogram, TrackError};
 use std::path::Path;
 
 /// Version of the extraction: bump it in the same PR as any adapter change that alters the `AudioProbe`
@@ -53,5 +54,18 @@ pub fn fft_size(sample_rate: u32, target_bin_hz: f64) -> usize {
         lower
     } else {
         upper
+    }
+}
+
+impl SymphoniaAnalyzer {
+    /// Spectrogram of the whole file for display (RF-07): mono, `params.window`/`fft_size`/`overlap`,
+    /// `params.height` frequency rows, at most `params.max_width` time columns, dB clamped to
+    /// `[db_floor, db_ceiling]` and mapped to u8. Not cached (backend.md, GetSpectrogram).
+    pub fn spectrogram(
+        &self,
+        _path: &Path,
+        _params: &SpectrogramParams,
+    ) -> Result<Spectrogram, TrackError> {
+        todo!("RF-07")
     }
 }
