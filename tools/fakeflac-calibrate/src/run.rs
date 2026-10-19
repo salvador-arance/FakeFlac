@@ -279,6 +279,8 @@ fn load_params_text(name: &str, text: &str) -> Result<DetectionParams, ToolError
                     "{name}: fft.overlap must be in [0, 1)"
                 )));
             }
+            p.validate()
+                .map_err(|e| ToolError::input(format!("{name}: {e}")))?;
             Ok(p)
         }
         Err(e) => Err(ToolError::input_lines(
@@ -449,6 +451,41 @@ fn create_report_dir(calibration: &Path, run_id: &str) -> std::io::Result<(Strin
     }
 }
 
+/// The next free `algorithm_version` (evaluation.md section 7): 1 + the largest of the baseline's and
+/// that of every `specs/detection/detection-params.v*.toml` of the repository (read-only).
+fn next_free_version(env: &Env, baseline_version: u32) -> Result<u32, ToolError> {
+    let cannot = |why: &str| {
+        ToolError::input(format!(
+            "error: cannot allocate the proposal's algorithm_version: {why}"
+        ))
+    };
+    let root = env
+        .repo_root
+        .as_ref()
+        .ok_or_else(|| cannot("the repository was not found"))?;
+    let dir = root.join("specs").join("detection");
+    let entries = std::fs::read_dir(&dir).map_err(|_| cannot("specs/detection/ cannot be read"))?;
+    let mut highest = baseline_version;
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if !(name.starts_with("detection-params.v") && name.ends_with(".toml")) {
+            continue;
+        }
+        let Ok(bytes) = std::fs::read(entry.path()) else {
+            continue;
+        };
+        let text = String::from_utf8_lossy(&bytes);
+        if let Some(v) = toml::from_str::<toml::Table>(&text)
+            .ok()
+            .and_then(|t| t.get("algorithm_version").and_then(toml::Value::as_integer))
+            .and_then(|v| u32::try_from(v).ok())
+        {
+            highest = highest.max(v);
+        }
+    }
+    Ok(highest + 1)
+}
+
 fn tool_commit(env: &Env) -> String {
     let mut cmd = std::process::Command::new("git");
     cmd.args(["rev-parse", "HEAD"])
@@ -508,6 +545,25 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
         None => job.params.to_vec(),
     };
     let loaded = load_params(&param_paths)?;
+    if let (Some(g), Some(path), Some(base)) = (&grid_file, job.grid, loaded.first()) {
+        if base.params.full_band.is_none() {
+            let errors: Vec<String> = g
+                .keys
+                .iter()
+                .filter(|k| k.key.starts_with("full_band."))
+                .map(|k| {
+                    format!(
+                        "{}: {}: the baseline has no [full_band] section",
+                        file_name(path),
+                        k.key
+                    )
+                })
+                .collect();
+            if !errors.is_empty() {
+                return Err(ToolError::input_lines(errors));
+            }
+        }
+    }
     let lists = lists::load(&roots.calibration, &roots.corpus)?;
     let items = build_items(&lists, &config);
 
@@ -581,12 +637,14 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
             let result = grid::search(&base.params, &search_rows, file);
             if let Some(i) = result.proposal {
                 let values = &result.points[i].values;
+                let version = next_free_version(env, base.params.algorithm_version)?;
                 proposal = Some(grid::build_proposal(
                     &loaded[0].text,
                     &base.params,
                     file,
                     values,
                     &run_id,
+                    version,
                 )?);
             }
             search_result = Some(result);

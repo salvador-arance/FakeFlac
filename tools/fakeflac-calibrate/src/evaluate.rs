@@ -7,12 +7,11 @@ use crate::fmt;
 use crate::lists::ORIGINS;
 use crate::model::{LabelRow, Truth, CLASSES};
 use crate::report::{
-    ConfusionMatrix, Counts, Evaluation, FpRow, SettingRow, SplitSel, TargetResult, VerdictChanges,
-    WatchEntry,
+    ConfusionMatrix, Counts, Evaluation, FpRow, FullBandRow, SettingChange, SettingRow, SplitSel,
+    TargetResult, VerdictChanges, WatchEntry,
 };
 use crate::split::Split;
-use fakeflac_core::detect::{decide, detect, measure, Measurements};
-use fakeflac_core::params::VerdictParams;
+use fakeflac_core::detect::{decide, detect, is_full_band, measure, Measurements};
 use fakeflac_core::{DetectionParams, SuspicionReason, TrackError, Verdict};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -66,10 +65,17 @@ pub struct Margins {
     pub m_step_high_db: Option<f64>,
     pub m_gradual_hz: Option<f64>,
     pub fs_fake_range_hz: Option<f64>,
+    /// `U - full_band.min_level_db` (v3).
+    pub m_full_band_level_db: Option<f64>,
+    /// `B - full_band.min_burst_db` (v3).
+    pub m_full_band_burst_db: Option<f64>,
+    /// `min` of the two above; `FullBand` when `>= 0`.
+    pub full_band_margin_db: Option<f64>,
     pub nearest_fake_margin_db: f64,
 }
 
-pub fn margins(m: &Measurements, v: &VerdictParams) -> Margins {
+pub fn margins(m: &Measurements, params: &DetectionParams) -> Margins {
+    let v = &params.verdict;
     let fs = m.step_hz;
     let d = m.step_db;
     let in_range = fs.filter(|f| *f >= v.lossy_min_cutoff_hz && *f < v.fake_max_cutoff_hz);
@@ -84,6 +90,13 @@ pub fn margins(m: &Measurements, v: &VerdictParams) -> Margins {
             -(f - v.lossy_min_cutoff_hz).min(v.fake_max_cutoff_hz - f)
         }
     });
+    let fb = params.full_band.as_ref();
+    let m_full_band_level_db = fb.zip(m.upper_level_db).map(|(f, u)| u - f.min_level_db);
+    let m_full_band_burst_db = fb.zip(m.upper_burst_db).map(|(f, b)| b - f.min_burst_db);
+    let full_band_margin_db = m_full_band_level_db
+        .zip(m_full_band_burst_db)
+        .map(|(l, b)| l.min(b));
+    let a = m_step_fake_db.map_or(m_gap_fake_db, |s| s.min(m_gap_fake_db));
     Margins {
         m_low_hf_db: m.high_frequency_db - v.low_hf_threshold_db,
         m_gap_fake_db,
@@ -98,19 +111,37 @@ pub fn margins(m: &Measurements, v: &VerdictParams) -> Margins {
             .map(|_| v.step_high_suspicious_db - d),
         m_gradual_hz: (d < v.step_suspicious_db).then_some(m.extent_hz - v.gradual_min_cutoff_hz),
         fs_fake_range_hz,
-        nearest_fake_margin_db: m_step_fake_db.map_or(m_gap_fake_db, |s| s.min(m_gap_fake_db)),
+        m_full_band_level_db,
+        m_full_band_burst_db,
+        full_band_margin_db,
+        nearest_fake_margin_db: guarded(a, full_band_margin_db),
+    }
+}
+
+/// `max(a, full_band_margin_db)` when the guard holds, otherwise `a` (evaluation.md section 8).
+fn guarded(a: f64, full_band_margin_db: Option<f64>) -> f64 {
+    match full_band_margin_db {
+        Some(f) if f >= 0.0 => a.max(f),
+        _ => a,
     }
 }
 
 /// `nearest_fake_margin_db` alone (the grid search ranks by it).
-pub fn nearest_margin(m: &Measurements, v: &VerdictParams) -> f64 {
+pub fn nearest_margin(m: &Measurements, params: &DetectionParams) -> f64 {
+    let v = &params.verdict;
     let gap = v.gap_fake_db - m.gap_db;
-    match m.step_hz {
+    let a = match m.step_hz {
         Some(f) if f >= v.lossy_min_cutoff_hz && f < v.fake_max_cutoff_hz => {
             gap.min(v.step_fake_db - m.step_db)
         }
         _ => gap,
-    }
+    };
+    let fb = params.full_band.as_ref();
+    let margin = fb
+        .zip(m.upper_level_db)
+        .zip(m.upper_burst_db)
+        .map(|((f, u), b)| (u - f.min_level_db).min(b - f.min_burst_db));
+    guarded(a, margin)
 }
 
 /// The verdict of one labelled row under one params file.
@@ -151,7 +182,7 @@ pub fn evaluate_row(extracted: &Extracted, params: &DetectionParams) -> RowEval 
                 Some(s) => {
                     let m = measure(s, params);
                     let (verdict, reasons) = decide(&m, params);
-                    let margins = margins(&m, &params.verdict);
+                    let margins = margins(&m, params);
                     RowEval {
                         verdict,
                         reasons,
@@ -362,6 +393,15 @@ pub fn evaluation(
             extent_hz: e.m.as_ref().map(|m| m.extent_hz),
             high_frequency_db: e.m.as_ref().map(|m| m.high_frequency_db),
             nearest_fake_margin_db: e.margins.as_ref().map(|m| m.nearest_fake_margin_db),
+            upper_level_db: e.m.as_ref().and_then(|m| m.upper_level_db),
+            upper_burst_db: e.m.as_ref().and_then(|m| m.upper_burst_db),
+            full_band: e.m.as_ref().and_then(|m| {
+                run.params
+                    .full_band
+                    .as_ref()
+                    .and(m.upper_level_db.zip(m.upper_burst_db))
+                    .map(|_| is_full_band(m, &run.params))
+            }),
         })
         .collect();
     watch.sort_by_key(|w| {
@@ -413,8 +453,122 @@ pub fn evaluation(
         primary_figure,
         watch,
         targets,
+        full_band_by_setting: full_band_rows(run, rows, config),
+        setting_changes: baseline
+            .map(|(base, base_rows)| setting_changes(run, rows, base, base_rows, config))
+            .unwrap_or_default(),
         changes,
     }
+}
+
+/// The setting a positive row is reported under (`confirmed_fake` for the confirmed fakes).
+fn setting_id(row: &LabelRow) -> &str {
+    if row.origin == "confirmed_fake" {
+        "confirmed_fake"
+    } else {
+        row.setting.as_str()
+    }
+}
+
+fn setting_ids(config: &Config) -> Vec<String> {
+    config
+        .generate
+        .settings
+        .iter()
+        .map(|s| s.id.clone())
+        .chain(std::iter::once("confirmed_fake".to_string()))
+        .collect()
+}
+
+/// Nearest-index percentile of a non-empty, sorted slice.
+fn percentile_sorted(sorted: &[f64], pct: f64) -> f64 {
+    let rank = ((pct / 100.0) * (sorted.len() - 1) as f64).round() as usize;
+    sorted[rank.min(sorted.len() - 1)]
+}
+
+/// Evaluation.md section 4: `FullBand` count and `B` distribution of the detectable positives of
+/// each setting. Empty for a params file without a `[full_band]` section.
+fn full_band_rows(run: &ParamsRun, rows: &[LabelRow], config: &Config) -> Vec<FullBandRow> {
+    if run.params.full_band.is_none() {
+        return Vec::new();
+    }
+    setting_ids(config)
+        .into_iter()
+        .map(|setting| {
+            let mut count = 0_u32;
+            let mut bursts: Vec<f64> = Vec::new();
+            for (row, eval) in rows.iter().zip(run.evals.iter()) {
+                if row.truth != Truth::Fake || row.undetectable || setting_id(row) != setting {
+                    continue;
+                }
+                let Some(m) = &eval.m else { continue };
+                count += u32::from(is_full_band(m, &run.params));
+                if let Some(b) = m.upper_burst_db {
+                    bursts.push(b);
+                }
+            }
+            bursts.sort_by(f64::total_cmp);
+            let has = !bursts.is_empty();
+            FullBandRow {
+                setting,
+                full_band: count,
+                burst_median: has.then(|| percentile_sorted(&bursts, 50.0)),
+                burst_p95: has.then(|| percentile_sorted(&bursts, 95.0)),
+                burst_max: bursts.last().copied(),
+            }
+        })
+        .collect()
+}
+
+/// Detection rate (`Fake` over detectable, non-error positives) of one setting, in percent.
+fn detection_rate(rows: &[LabelRow], evals: &[RowEval], setting: &str) -> Option<f64> {
+    let mut c = Counts::default();
+    for (row, eval) in rows.iter().zip(evals.iter()) {
+        if row.truth == Truth::Fake && !row.undetectable && setting_id(row) == setting {
+            bump(&mut c, eval.verdict);
+        }
+    }
+    let n = c.real + c.suspicious + c.fake;
+    (n > 0).then(|| f64::from(c.fake) / f64::from(n) * 100.0)
+}
+
+/// Evaluation.md section 9: the verdict changes of the positives, per setting.
+fn setting_changes(
+    run: &ParamsRun,
+    rows: &[LabelRow],
+    base: &ParamsRun,
+    base_rows: &[LabelRow],
+    config: &Config,
+) -> Vec<SettingChange> {
+    let paired = paired(rows, base, base_rows);
+    setting_ids(config)
+        .into_iter()
+        .map(|setting| {
+            let mut counts: BTreeMap<(String, String), u32> = BTreeMap::new();
+            for (i, from) in &paired {
+                let row = &rows[*i];
+                if row.truth != Truth::Fake || row.undetectable || setting_id(row) != setting {
+                    continue;
+                }
+                let to = run.evals[*i].verdict;
+                if *from != to {
+                    let key = (
+                        verdict_name(*from).to_string(),
+                        verdict_name(to).to_string(),
+                    );
+                    *counts.entry(key).or_default() += 1;
+                }
+            }
+            let detection_rate_change_pp = detection_rate(rows, &run.evals, &setting)
+                .zip(detection_rate(base_rows, &base.evals, &setting))
+                .map(|(a, b)| a - b);
+            SettingChange {
+                setting,
+                counts,
+                detection_rate_change_pp,
+            }
+        })
+        .collect()
 }
 
 const VERDICT_NAMES: [&str; 4] = ["real", "suspicious", "fake", "error"];
@@ -512,10 +666,16 @@ pub fn is_near(row: &LabelRow, eval: &RowEval, config: &Config) -> bool {
         Truth::Real => nearest > 0.0 && nearest <= near_db,
         Truth::Fake => nearest > -near_db && nearest <= 0.0,
     };
+    // A negative kept from `Fake` only by the guard, at its threshold (v3 files only).
+    let by_guard = row.truth == Truth::Real
+        && m.full_band_margin_db == Some(0.0)
+        && m.m_step_fake_db
+            .map_or(m.m_gap_fake_db, |s| s.min(m.m_gap_fake_db))
+            <= 0.0;
     let by_step = m
         .fs_fake_range_hz
         .is_some_and(|r| r.abs() <= config.report.near_hz);
-    by_margin || by_step
+    by_margin || by_step || by_guard
 }
 
 pub fn margin_summary(run: &ParamsRun, rows: &[LabelRow], config: &Config) -> Vec<MarginSummary> {

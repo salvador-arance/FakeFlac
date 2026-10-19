@@ -1,4 +1,4 @@
-//! Detection rules v2 for lossless files (RF-03, RF-04). Spec: `specs/detection/rules.md`.
+//! Detection rules v3 for lossless files (RF-03, RF-04). Spec: `specs/detection/rules.md`.
 //! Pure functions: no I/O, every number comes from `DetectionParams`.
 
 use crate::domain::{CutoffEstimate, SuspicionReason, Verdict};
@@ -24,6 +24,10 @@ pub struct Measurements {
     pub step_hz: Option<f64>,
     /// `G`: gap step at `gaps.edge_hz`.
     pub gap_db: f64,
+    /// `U`: upper level (median of `M - L_ref` in the upper window); `None` when undefined.
+    pub upper_level_db: Option<f64>,
+    /// `B`: upper burstiness (median of `M - Q` in the upper window); `None` when undefined.
+    pub upper_burst_db: Option<f64>,
 }
 
 /// Outcome of the rules for one analysed (decodable, long enough) track.
@@ -144,6 +148,26 @@ pub fn measure(spectra: &BandSpectra, params: &DetectionParams) -> Measurements 
         (q(e - g, e) - q(e, e + g)) - (q(e - 2.0 * g, e - g) - q(e - g, e)).max(0.0)
     };
 
+    // Upper window (v3): bands with centre in `[low_hz, high_hz)` at or below `top`.
+    let (upper_level_db, upper_burst_db) = match (&params.full_band, top) {
+        (Some(fb), Some(top)) => {
+            let window: Vec<usize> = (0..=top)
+                .filter(|&b| centre(b) >= fb.low_hz && centre(b) < fb.high_hz)
+                .collect();
+            if window.is_empty() {
+                (None, None)
+            } else {
+                let levels: Vec<f64> = window.iter().map(|&b| m[b]).collect();
+                let bursts: Vec<f64> = window
+                    .iter()
+                    .map(|&b| spectra.mean_db[b] - spectra.median_db[b])
+                    .collect();
+                (Some(median(&levels)), Some(median(&bursts)))
+            }
+        }
+        _ => (None, None),
+    };
+
     Measurements {
         noise_floor_db,
         high_frequency_db,
@@ -151,6 +175,8 @@ pub fn measure(spectra: &BandSpectra, params: &DetectionParams) -> Measurements 
         step_db,
         step_hz,
         gap_db,
+        upper_level_db,
+        upper_burst_db,
     }
 }
 
@@ -172,11 +198,21 @@ pub fn cutoff_estimate(m: &Measurements, params: &DetectionParams) -> CutoffEsti
     }
 }
 
+/// Section 2, `FullBand`: the params have a `[full_band]` section, `U` and `B` are defined and
+/// reach their minimums. Without the section it is `false` whatever `U` and `B` are.
+pub fn is_full_band(m: &Measurements, params: &DetectionParams) -> bool {
+    match (&params.full_band, m.upper_level_db, m.upper_burst_db) {
+        (Some(fb), Some(u), Some(b)) => u >= fb.min_level_db && b >= fb.min_burst_db,
+        _ => false,
+    }
+}
+
 /// Section 3, rows V2 to V10, evaluated in order (V1 is decided before the spectra exist).
 pub fn decide(m: &Measurements, params: &DetectionParams) -> (Verdict, Vec<SuspicionReason>) {
     let v = &params.verdict;
     let d = m.step_db;
     let fs = m.step_hz;
+    let full_band = is_full_band(m, params);
     let in_range = fs.is_some_and(|f| f >= v.lossy_min_cutoff_hz && f < v.fake_max_cutoff_hz);
     if m.high_frequency_db < v.low_hf_threshold_db {
         // V2
@@ -184,7 +220,7 @@ pub fn decide(m: &Measurements, params: &DetectionParams) -> (Verdict, Vec<Suspi
             Verdict::Suspicious,
             vec![SuspicionReason::LowHighFrequencyContent],
         )
-    } else if m.gap_db >= v.gap_fake_db || (d >= v.step_fake_db && in_range) {
+    } else if !full_band && (m.gap_db >= v.gap_fake_db || (d >= v.step_fake_db && in_range)) {
         // V3, V4
         (Verdict::Fake, vec![])
     } else if m.gap_db >= v.gap_suspicious_db {

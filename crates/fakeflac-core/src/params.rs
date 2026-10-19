@@ -1,7 +1,8 @@
-//! `DetectionParams` (S4, ADR-0011). Mirrors `specs/detection/detection-params.v2.toml`;
+//! `DetectionParams` (S4, ADR-0011). Mirrors `specs/detection/detection-params.v3.toml`;
 //! a test checks that `Default` equals that file. Values are data, never constants in the algorithm.
 
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum WindowKind {
@@ -25,6 +26,9 @@ pub struct DetectionParams {
     pub extent: ExtentParams,
     pub step: StepParams,
     pub gaps: GapParams,
+    /// Full-band guard (v3, ADR-0038). `None` disables it (v2 behaviour).
+    #[serde(default)]
+    pub full_band: Option<FullBandParams>,
     pub verdict: VerdictParams,
     pub spectrogram: SpectrogramParams,
 }
@@ -87,6 +91,16 @@ pub struct GapParams {
     pub band_hz: f64,
 }
 
+/// Upper window and thresholds of the full-band guard (rules.md section 2).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FullBandParams {
+    pub low_hz: f64,
+    pub high_hz: f64,
+    pub min_level_db: f64,
+    pub min_burst_db: f64,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct VerdictParams {
@@ -116,11 +130,11 @@ pub struct SpectrogramParams {
 }
 
 impl Default for DetectionParams {
-    /// DetectionParams v2: the values of `specs/detection/detection-params.v2.toml`
+    /// DetectionParams v3: the values of `specs/detection/detection-params.v3.toml`
     /// (a test checks the equality).
     fn default() -> Self {
         DetectionParams {
-            algorithm_version: 2,
+            algorithm_version: 3,
             input: InputParams {
                 min_duration_s: 5.0,
                 edge_skip_percent: 5.0,
@@ -157,6 +171,12 @@ impl Default for DetectionParams {
                 edge_hz: 16000.0,
                 band_hz: 700.0,
             },
+            full_band: Some(FullBandParams {
+                low_hz: 20700.0,
+                high_hz: 21000.0,
+                min_level_db: -70.0,
+                min_burst_db: 3.0,
+            }),
             verdict: VerdictParams {
                 low_hf_threshold_db: -60.0,
                 gap_fake_db: 6.0,
@@ -180,5 +200,58 @@ impl Default for DetectionParams {
                 db_ceiling: 0.0,
             },
         }
+    }
+}
+
+/// A parameter set whose values break an invariant that the verdict rules rely on
+/// (rules.md section 4).
+#[derive(Debug, Clone, PartialEq, Error)]
+pub enum ParamsError {
+    #[error(
+        "invalid parameters: gap_suspicious_db ≤ gap_fake_db does not hold ({suspicious} > {fake})"
+    )]
+    GapThresholds { suspicious: f64, fake: f64 },
+    #[error("invalid parameters: step_suspicious_db ≤ step_fake_db does not hold ({suspicious} > {fake})")]
+    StepThresholds { suspicious: f64, fake: f64 },
+    #[error("invalid parameters: fake_max_cutoff_hz < full_band.low_hz does not hold ({fake_max} >= {low})")]
+    FullBandBelowLossyRange { fake_max: f64, low: f64 },
+    #[error(
+        "invalid parameters: full_band.low_hz < full_band.high_hz does not hold ({low} >= {high})"
+    )]
+    FullBandWindowEmpty { low: f64, high: f64 },
+}
+
+impl DetectionParams {
+    /// Checks the value invariants of rules.md section 4. Every loader calls it after
+    /// deserialising and refuses an invalid file.
+    pub fn validate(&self) -> Result<(), ParamsError> {
+        let v = &self.verdict;
+        if v.gap_suspicious_db > v.gap_fake_db {
+            return Err(ParamsError::GapThresholds {
+                suspicious: v.gap_suspicious_db,
+                fake: v.gap_fake_db,
+            });
+        }
+        if v.step_suspicious_db > v.step_fake_db {
+            return Err(ParamsError::StepThresholds {
+                suspicious: v.step_suspicious_db,
+                fake: v.step_fake_db,
+            });
+        }
+        if let Some(fb) = &self.full_band {
+            if v.fake_max_cutoff_hz >= fb.low_hz {
+                return Err(ParamsError::FullBandBelowLossyRange {
+                    fake_max: v.fake_max_cutoff_hz,
+                    low: fb.low_hz,
+                });
+            }
+            if fb.low_hz >= fb.high_hz {
+                return Err(ParamsError::FullBandWindowEmpty {
+                    low: fb.low_hz,
+                    high: fb.high_hz,
+                });
+            }
+        }
+        Ok(())
     }
 }

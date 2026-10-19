@@ -73,6 +73,34 @@ pub struct WatchEntry {
     pub extent_hz: Option<f64>,
     pub high_frequency_db: Option<f64>,
     pub nearest_fake_margin_db: Option<f64>,
+    /// `U` (v3): `None` without a `[full_band]` section or when undefined.
+    pub upper_level_db: Option<f64>,
+    /// `B` (v3).
+    pub upper_burst_db: Option<f64>,
+    /// `Some` only when the params have `[full_band]` and `U` and `B` are defined.
+    pub full_band: Option<bool>,
+}
+
+/// Per setting, for a params file with a `[full_band]` section (evaluation.md section 4): the
+/// detectable positives that are `FullBand`, and the distribution of `B` over those with `B` defined.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FullBandRow {
+    pub setting: String,
+    pub full_band: u32,
+    pub burst_median: Option<f64>,
+    pub burst_p95: Option<f64>,
+    pub burst_max: Option<f64>,
+}
+
+/// Evaluation.md section 9: verdict changes of the positives of one setting against the baseline.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SettingChange {
+    pub setting: String,
+    /// Off-diagonal (baseline verdict, verdict) pairs with a non-zero count.
+    pub counts: BTreeMap<(String, String), u32>,
+    /// Detection rate of this file minus the baseline's, in percentage points (`None` if either
+    /// rate is undefined).
+    pub detection_rate_change_pp: Option<f64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -113,6 +141,11 @@ pub struct Evaluation {
     pub primary_figure: String,
     pub watch: Vec<WatchEntry>,
     pub targets: Vec<TargetResult>,
+    /// One row per setting (config order, then `confirmed_fake`); empty for a params file without
+    /// a `[full_band]` section.
+    pub full_band_by_setting: Vec<FullBandRow>,
+    /// Per-setting verdict changes of the positives; empty for the baseline.
+    pub setting_changes: Vec<SettingChange>,
     /// `None` for the baseline (the first params file).
     pub changes: Option<VerdictChanges>,
 }
