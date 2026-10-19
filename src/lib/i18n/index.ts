@@ -24,6 +24,10 @@ const EN: Record<string, string> = {
   'error.FOLDER_UNREADABLE': 'Cannot open this folder',
   'error.ANALYSIS_RUNNING': 'An analysis is already running',
   'error.INTERNAL': 'The analysis stopped because of an unexpected error',
+  'detail.cutoff': 'Cutoff {khz} kHz',
+  'spectrogram.label': 'Spectrogram',
+  'spectrogram.loading': 'Loading spectrogram…',
+  'spectrogram.unavailable': 'Cannot show the spectrogram of this file',
 }
 
 const ES: Record<string, string> = {

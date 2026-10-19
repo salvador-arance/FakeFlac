@@ -294,3 +294,30 @@ impl From<core::AppError> for AppError {
         }
     }
 }
+
+/// RF-07. `data` is serialised as a JSON number array (`number[]` in the contract).
+#[derive(Debug, Clone, PartialEq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct Spectrogram {
+    pub width: u32,
+    pub height: u32,
+    pub sample_rate: u32,
+    #[specta(type = specta_typescript::Number)]
+    pub max_frequency_hz: f64,
+    #[specta(type = (specta_typescript::Number, specta_typescript::Number))]
+    pub db_range: (f64, f64),
+    pub data: Vec<u8>,
+}
+
+impl From<&core::Spectrogram> for Spectrogram {
+    fn from(s: &core::Spectrogram) -> Self {
+        Spectrogram {
+            width: s.width,
+            height: s.height,
+            sample_rate: s.sample_rate,
+            max_frequency_hz: s.max_frequency_hz,
+            db_range: (s.db_range[0], s.db_range[1]),
+            data: s.data.clone(),
+        }
+    }
+}

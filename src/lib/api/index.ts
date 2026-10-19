@@ -2,7 +2,13 @@
 // Contract: specs/contracts/commands.md. Types come from the generated `bindings.ts` (S3).
 import { Channel } from '@tauri-apps/api/core'
 import { commands } from './bindings'
-import type { AnalysisSummary, AppError, AppErrorCode, ProgressEvent } from './bindings'
+import type {
+  AnalysisSummary,
+  AppError,
+  AppErrorCode,
+  ProgressEvent,
+  Spectrogram,
+} from './bindings'
 
 export type {
   AnalysisSummary,
@@ -11,6 +17,7 @@ export type {
   AudioFormat,
   CutoffEstimate,
   ProgressEvent,
+  Spectrogram,
   SuspicionReason,
   TrackAnalysis,
   TrackError,
@@ -91,6 +98,13 @@ export async function startAnalysisOfDropped(
 /** RF-05: cancels the running analysis; no-op if none is running. */
 export async function cancelAnalysis(): Promise<void> {
   await commands.cancelAnalysis()
+}
+
+/** RF-07: spectrogram of one file for display. Rejects with `ApiError` (`INTERNAL` if undecodable). */
+export async function getSpectrogram(path: string): Promise<Spectrogram> {
+  const result = await commands.getSpectrogram(path)
+  if (result.status === 'error') throw new ApiError(toAppError(result.error))
+  return result.data
 }
 
 import { getCurrentWindow } from '@tauri-apps/api/window'

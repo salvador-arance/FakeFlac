@@ -10,6 +10,8 @@ export const commands = {
 	startAnalysis: (root: string, onProgress: Channel<ProgressEvent>) => typedError<AnalysisSummary, AppError>(__TAURI_INVOKE("start_analysis", { root, onProgress })),
 	/**  RF-05: cancels the running analysis; no-op if none is running. */
 	cancelAnalysis: () => __TAURI_INVOKE<void>("cancel_analysis"),
+	/**  RF-07: spectrogram of one file for display. Decoding runs on a blocking thread. */
+	getSpectrogram: (path: string) => typedError<Spectrogram, AppError>(__TAURI_INVOKE("get_spectrogram", { path })),
 };
 
 /* Types */
@@ -45,6 +47,16 @@ export type CutoffEstimate = {
 };
 
 export type ProgressEvent = { kind: "scanned"; total: number } | { kind: "trackStarted"; index: number; path: string } | { kind: "trackDone"; index: number; analysis: TrackAnalysis } | { kind: "finished"; summary: AnalysisSummary } | { kind: "cancelled"; summary: AnalysisSummary };
+
+/**  RF-07. `data` is serialised as a JSON number array (`number[]` in the contract). */
+export type Spectrogram = {
+	width: number,
+	height: number,
+	sampleRate: number,
+	maxFrequencyHz: number,
+	dbRange: [number, number],
+	data: number[],
+};
 
 export type SuspicionReason = "lowHighFrequencyContent" | "gradualRolloff" | "ambiguousCutoff" | "highBandGaps";
 

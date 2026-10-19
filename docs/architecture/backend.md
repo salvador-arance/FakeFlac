@@ -27,7 +27,7 @@ See `crates/fakeflac-core/src/domain.rs`: `Verdict { Real, Suspicious, Fake, Err
 | Port | Responsibility | Adapter |
 |---|---|---|
 | `FileScanner` | Recursively list supported files and read `TrackInfo` | `fakeflac-fs` |
-| `SpectrumAnalyzer` | `analyze(path, params, cancel)` and `spectrogram(path, opts)` | `fakeflac-audio` |
+| `SpectrumAnalyzer` | `analyze(path, params, cancel)` | `fakeflac-audio` |
 | `ResultStore` | `get(key)`, `put(analysis)`, `clear()` | `fakeflac-store` |
 | `CsvExporter` | `export(&[TrackAnalysis], dest)` | `fakeflac-export` |
 | `Clock` / `Cancel` | Injectable time and cancellation token | `core` / `src-tauri` |
@@ -35,7 +35,7 @@ See `crates/fakeflac-core/src/domain.rs`: `Verdict { Real, Suspicious, Fake, Err
 ## 4. Use cases
 
 - `AnalyzeFolder(root, params, cancel, progress)`: scan → per track (`workers` std scoped threads, ADR-0034): cache lookup → analyse → store → report progress. A `TrackError` becomes `Verdict::Error` and the batch continues (RNF-04).
-- `GetSpectrogram(path, opts)`: on demand; not cached on disk in v1 (measured in phase 5; if it misses the 2 s target, add thumbnails via a new ADR).
+- `GetSpectrogram(path)`: on demand, with no use case in `core` and no port method: `src-tauri` calls the inherent `SymphoniaAnalyzer::spectrogram(path, &SpectrogramParams)` through `run::get_spectrogram` (the display STFT is not part of the analysis contract, and a port method would break the `SpectrumAnalyzer` fakes of the protected tests); decoded on a blocking thread; not cached on disk in v1 (measured in phase 5; if it misses the 2 s target, add thumbnails via a new ADR).
 - `ExportCsv(results, dest)`; `SummarizeByFolder(results)` (RF-10).
 
 ## 5. Concurrency and resources

@@ -19,6 +19,8 @@ Rules (linted by `scripts/lint-arch.mjs`): see `dependencies.md`. Every atom/mol
 src/lib/{tokens, components/{atoms,molecules,organisms,templates}, pages, stores, api, i18n}
 ```
 
+The spectrogram canvas palette lives in `src/lib/tokens/spectrogram.ts`, a TS token rather than CSS, because the canvas needs numeric colours; the `tokens.css` rule (no literal colours outside the tokens) applies to it too.
+
 ## Verdict tokens (RNF-08)
 
 | Verdict | Colour token | Icon | Text (es / en) |

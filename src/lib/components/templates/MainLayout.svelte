@@ -71,6 +71,8 @@
 
   .layout-detail {
     flex-shrink: 0;
+    /* main-screen.md "Layout": default 260 px, min 160 px (the splitter is not built yet) */
+    height: 260px;
     min-height: 160px;
     border-top: 1px solid var(--color-border);
     background: var(--color-surface);

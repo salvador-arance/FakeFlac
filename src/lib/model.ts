@@ -6,6 +6,7 @@ export type {
   AnalysisSummary,
   AudioFormat,
   CutoffEstimate,
+  Spectrogram,
   SuspicionReason,
   TrackAnalysis,
   TrackError,
