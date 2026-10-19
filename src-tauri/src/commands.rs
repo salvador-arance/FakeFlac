@@ -54,3 +54,15 @@ pub async fn start_analysis(
 pub fn cancel_analysis(slot: State<'_, std::sync::Arc<AnalysisSlot>>) {
     slot.cancel();
 }
+
+/// RF-07: spectrogram of one file for display. Decoding runs on a blocking thread.
+#[tauri::command]
+#[specta::specta]
+pub async fn get_spectrogram(path: String) -> Result<dto::Spectrogram, dto::AppError> {
+    tauri::async_runtime::spawn_blocking(move || run::get_spectrogram(Path::new(&path)))
+        .await
+        .map_err(|e| dto::AppError {
+            code: dto::AppErrorCode::Internal,
+            message: format!("spectrogram task failed: {e}"),
+        })?
+}

@@ -45,6 +45,15 @@ pub fn worker_count() -> usize {
 
 /// RF-07: spectrogram of `path` with the default `SpectrogramParams`. A file that cannot be
 /// decoded fails with `INTERNAL` (`specs/contracts/commands.md`).
-pub fn get_spectrogram(_path: &Path) -> Result<dto::Spectrogram, dto::AppError> {
-    todo!("RF-07")
+pub fn get_spectrogram(path: &Path) -> Result<dto::Spectrogram, dto::AppError> {
+    let params = DetectionParams::default();
+    SymphoniaAnalyzer
+        .spectrogram(path, &params.spectrogram)
+        .map(|s| (&s).into())
+        .map_err(|e| {
+            dto::AppError::from(fakeflac_core::AppError::new(
+                fakeflac_core::AppErrorCode::Internal,
+                format!("cannot decode {}: {e:?}", path.display()),
+            ))
+        })
 }

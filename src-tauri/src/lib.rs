@@ -17,6 +17,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             commands::pick_folder,
             commands::start_analysis,
             commands::cancel_analysis,
+            commands::get_spectrogram,
         ])
         // u64/i64 fields (durations, sizes, times) stay far below 2^53: the contract says `number`.
         .dangerously_cast_bigints_to_number()

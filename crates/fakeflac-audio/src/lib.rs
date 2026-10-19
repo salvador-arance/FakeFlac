@@ -2,6 +2,7 @@
 //! See `docs/architecture/backend.md` (pipeline, FFT window, formats) and `specs/detection/rules.md`.
 
 mod decode;
+mod spectrogram;
 mod spectrum;
 pub mod window;
 
@@ -63,9 +64,9 @@ impl SymphoniaAnalyzer {
     /// `[db_floor, db_ceiling]` and mapped to u8. Not cached (backend.md, GetSpectrogram).
     pub fn spectrogram(
         &self,
-        _path: &Path,
-        _params: &SpectrogramParams,
+        path: &Path,
+        params: &SpectrogramParams,
     ) -> Result<Spectrogram, TrackError> {
-        todo!("RF-07")
+        spectrogram::compute(path, params)
     }
 }

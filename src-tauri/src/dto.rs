@@ -310,7 +310,14 @@ pub struct Spectrogram {
 }
 
 impl From<&core::Spectrogram> for Spectrogram {
-    fn from(_s: &core::Spectrogram) -> Self {
-        todo!("RF-07")
+    fn from(s: &core::Spectrogram) -> Self {
+        Spectrogram {
+            width: s.width,
+            height: s.height,
+            sample_rate: s.sample_rate,
+            max_frequency_hz: s.max_frequency_hz,
+            db_range: (s.db_range[0], s.db_range[1]),
+            data: s.data.clone(),
+        }
     }
 }
