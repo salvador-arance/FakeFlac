@@ -10,7 +10,7 @@ rust-version.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 fakeflac-core = { path = "../fakeflac-core" }
-symphonia = { version = "0.6.1", default-features = false, features = ["flac", "wav", "pcm"] }
+symphonia = { version = "0.6.1", default-features = false, features = ["flac", "wav", "pcm", "mp3", "aac", "isomp4", "alac"] }
 realfft = "3.5.0"
 
 [lints]

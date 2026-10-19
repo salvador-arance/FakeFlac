@@ -37,6 +37,27 @@ impl AudioFormat {
     }
 }
 
+/// The codec inside the container (contract version 3, `specs/detection/lossy-source.md` section 2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AudioCodec {
+    Pcm,
+    Flac,
+    Alac,
+    Mp3,
+    Aac,
+    Opus,
+}
+
+/// Bitrate mode of an MP3 stream (contract version 3, `specs/detection/lossy-source.md` section 2.1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum BitrateMode {
+    Cbr,
+    Vbr,
+    Abr,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SuspicionReason {
@@ -64,11 +85,15 @@ pub struct TrackInfo {
     pub path: PathBuf,
     pub folder: PathBuf,
     pub format: AudioFormat,
+    /// The codec inside the container; `None` only when an M4A could not be probed.
+    pub codec: Option<AudioCodec>,
     pub sample_rate: u32,
     pub bit_depth: Option<u8>,
     pub channels: u8,
     /// Declared bitrate in kbps (lossy formats only).
     pub declared_bitrate_kbps: Option<u32>,
+    /// MP3 only (AAC does not signal it).
+    pub bitrate_mode: Option<BitrateMode>,
     pub duration_ms: u64,
     pub size_bytes: u64,
     pub modified_unix: i64,

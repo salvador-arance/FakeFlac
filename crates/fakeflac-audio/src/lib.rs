@@ -41,6 +41,11 @@ impl SpectrumAnalyzer for SymphoniaAnalyzer {
             bit_depth: info.bit_depth,
             channels: info.channels,
             duration_ms: frames * 1000 / u64::from(info.sample_rate.max(1)),
+            codec: None,
+            declared_bitrate_kbps: None,
+            bitrate_mode: None,
+            encoder: None,
+            encoder_lowpass_hz: None,
             spectrum: collector.finish(info.sample_rate, params),
         })
     }
