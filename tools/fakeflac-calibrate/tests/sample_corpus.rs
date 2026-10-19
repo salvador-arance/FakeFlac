@@ -1,6 +1,6 @@
 //! Checks of the test support itself (@RP-11, `specs/calibration/sample-corpus.md`): the synthetic
 //! signals written by `tests/common` have the verdicts that `specs/features/detection-lossless.feature`
-//! requires with DetectionParams v2. These tests exercise only `fakeflac-audio` and `fakeflac-core`,
+//! requires with the default DetectionParams (v3). These tests exercise only `fakeflac-audio` and `fakeflac-core`,
 //! so they pass before the tool exists. Protected after the `test(RP-11)` commit.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -45,7 +45,14 @@ fn rp11_sample_fixtures_have_the_v2_verdicts() {
             vec![SuspicionReason::LowHighFrequencyContent],
         ),
         ("lp16k_dither", Container::Flac, Verdict::Fake, vec![]),
-        ("sfb21_gaps", Container::Flac, Verdict::Fake, vec![]),
+        // v3 (sample-corpus.md section 3): gated content up to Nyquist is full band, so the gap
+        // rule gives Suspicious instead of Fake.
+        (
+            "sfb21_gaps",
+            Container::Flac,
+            Verdict::Suspicious,
+            vec![SuspicionReason::HighBandGaps],
+        ),
         ("lp20k_floor", Container::Flac, Verdict::Fake, vec![]),
         (
             "sfb21_gaps_weak",

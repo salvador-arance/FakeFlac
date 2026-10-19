@@ -812,11 +812,11 @@ impl Sample {
         path
     }
 
-    /// `candidate.toml` of sample-corpus.md section 4: v2 with `algorithm_version = 3` and
-    /// `verdict.gap_fake_db = 4.0`.
+    /// `candidate.toml` of sample-corpus.md section 4: v2 with `algorithm_version = 4` (the
+    /// next free version: never 3, which is detection v3) and `verdict.gap_fake_db = 4.0`.
     pub fn candidate_params(&self) -> PathBuf {
         let text = read(&v2_params())
-            .replace("algorithm_version = 2", "algorithm_version = 3")
+            .replace("algorithm_version = 2", "algorithm_version = 4")
             .replace("gap_fake_db = 6.0", "gap_fake_db = 4.0");
         self.write_scratch("candidate.toml", &text)
     }

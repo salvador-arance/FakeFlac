@@ -213,6 +213,19 @@ fn signal(name: &str) -> Spec {
         "sfb21_gaps" => gated_pink(sr, secs, 16_000.0, -20.0, 9),
         "sfb21_gaps_weak" => gated_pink(sr, secs, 16_000.0, -6.0, 10),
         "hf_bursts" => gated_pink(sr, secs, 8_000.0, -20.0, 11),
+        // Full-band guard fixtures (added with algorithm_version 3, fixtures.md): the gated
+        // sfb21_gaps signal through an exact low-pass; a shelf at 19.5 kHz with and without the gate.
+        "sfb21_gaps_lp20k5" => {
+            exact_lowpass(gated_pink(sr, secs, 16_000.0, -20.0, 9), sr, 20_500.0)
+        }
+        "sfb21_gaps_aa21k" => exact_lowpass(gated_pink(sr, secs, 16_000.0, -20.0, 9), sr, 21_000.0),
+        "shelf19k5" => shaped_noise(
+            sr,
+            secs,
+            |f| pink(f) * if f < 19_500.0 { 1.0 } else { db_to_gain(-15.0) },
+            12,
+        ),
+        "shelf19k5_bursts" => gated_shelf(sr, secs, 19_500.0, -15.0, -20.0, 13),
         other => panic!("unknown fixture {other}"),
     };
     let mut samples = samples;
@@ -260,6 +273,61 @@ fn db_to_gain(db: f64) -> f64 {
 fn gated_pink(sr: u32, secs: f64, edge_hz: f64, gate_db: f64, seed: u64) -> Vec<f64> {
     let low = shaped_noise(sr, secs, |f| if f < edge_hz { pink(f) } else { 0.0 }, seed);
     let high = shaped_noise(sr, secs, |f| if f < edge_hz { 0.0 } else { pink(f) }, seed);
+    let low_gain = db_to_gain(gate_db);
+    low.iter()
+        .zip(&high)
+        .enumerate()
+        .map(|(i, (l, h))| {
+            let t = i as f64 / f64::from(sr);
+            l + h * gate(t % 2.0, low_gain)
+        })
+        .collect()
+}
+
+/// Exact low-pass at `cutoff_hz` (fixtures.md, "Exact low-pass at F"): the DFT of the whole signal
+/// with every bin above `cutoff_hz` set to zero, then the inverse DFT.
+fn exact_lowpass(x: Vec<f64>, sr: u32, cutoff_hz: f64) -> Vec<f64> {
+    let len = x.len();
+    let mut planner = RealFftPlanner::<f64>::new();
+    let fft = planner.plan_fft_forward(len);
+    let ifft = planner.plan_fft_inverse(len);
+    let mut input = x;
+    let mut spectrum = fft.make_output_vec();
+    fft.process(&mut input, &mut spectrum).unwrap();
+    for (k, c) in spectrum.iter_mut().enumerate() {
+        if k as f64 * f64::from(sr) / len as f64 > cutoff_hz {
+            *c = Complex::new(0.0, 0.0);
+        }
+    }
+    let mut out = ifft.make_output_vec();
+    ifft.process(&mut spectrum, &mut out).unwrap();
+    out.iter().map(|v| v / len as f64).collect()
+}
+
+/// Pink noise split exactly in the frequency domain at `edge_hz`; the part from `edge_hz` up is
+/// attenuated by `shelf_db` and multiplied by the gate (`gate_db` outside the last 0.5 s of every
+/// 2 s) before the two parts are added (`shelf19k5_bursts`).
+fn gated_shelf(
+    sr: u32,
+    secs: f64,
+    edge_hz: f64,
+    shelf_db: f64,
+    gate_db: f64,
+    seed: u64,
+) -> Vec<f64> {
+    let low = shaped_noise(sr, secs, |f| if f < edge_hz { pink(f) } else { 0.0 }, seed);
+    let high = shaped_noise(
+        sr,
+        secs,
+        |f| {
+            if f < edge_hz {
+                0.0
+            } else {
+                pink(f) * db_to_gain(shelf_db)
+            }
+        },
+        seed,
+    );
     let low_gain = db_to_gain(gate_db);
     low.iter()
         .zip(&high)
