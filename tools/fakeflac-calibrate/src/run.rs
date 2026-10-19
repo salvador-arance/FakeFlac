@@ -571,6 +571,27 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
             if !errors.is_empty() {
                 return Err(ToolError::input_lines(errors));
             }
+        } else if base
+            .params
+            .full_band
+            .as_ref()
+            .is_some_and(|f| f.max_lossy_step_db.is_none())
+        {
+            let errors: Vec<String> = g
+                .keys
+                .iter()
+                .filter(|k| k.key == "full_band.max_lossy_step_db")
+                .map(|k| {
+                    format!(
+                        "{}: {}: the baseline's [full_band] section has no max_lossy_step_db",
+                        file_name(path),
+                        k.key
+                    )
+                })
+                .collect();
+            if !errors.is_empty() {
+                return Err(ToolError::input_lines(errors));
+            }
         }
     }
     let lists = lists::load(&roots.calibration, &roots.corpus)?;

@@ -71,6 +71,8 @@ pub struct Margins {
     pub m_full_band_burst_db: Option<f64>,
     /// `min` of the two above; `FullBand` when `>= 0`.
     pub full_band_margin_db: Option<f64>,
+    /// `full_band.max_lossy_step_db - D` when the params have it and `InRange(fs)` (v4); `LossyStep` when `<= 0`.
+    pub m_full_band_step_db: Option<f64>,
     pub nearest_fake_margin_db: f64,
 }
 
@@ -96,6 +98,7 @@ pub fn margins(m: &Measurements, params: &DetectionParams) -> Margins {
     let full_band_margin_db = m_full_band_level_db
         .zip(m_full_band_burst_db)
         .map(|(l, b)| l.min(b));
+    let m_full_band_step_db = lossy_step_margin(m, params);
     let a = m_step_fake_db.map_or(m_gap_fake_db, |s| s.min(m_gap_fake_db));
     Margins {
         m_low_hf_db: m.high_frequency_db - v.low_hf_threshold_db,
@@ -114,14 +117,28 @@ pub fn margins(m: &Measurements, params: &DetectionParams) -> Margins {
         m_full_band_level_db,
         m_full_band_burst_db,
         full_band_margin_db,
-        nearest_fake_margin_db: guarded(a, full_band_margin_db),
+        m_full_band_step_db,
+        nearest_fake_margin_db: guarded(a, full_band_margin_db, m_full_band_step_db),
     }
 }
 
-/// `max(a, full_band_margin_db)` when the guard holds, otherwise `a` (evaluation.md section 8).
-fn guarded(a: f64, full_band_margin_db: Option<f64>) -> f64 {
+/// `full_band.max_lossy_step_db - D` when the params have the field and `InRange(fs)`.
+fn lossy_step_margin(m: &Measurements, params: &DetectionParams) -> Option<f64> {
+    let v = &params.verdict;
+    let max = params.full_band.as_ref()?.max_lossy_step_db?;
+    m.step_hz
+        .filter(|f| *f >= v.lossy_min_cutoff_hz && *f < v.fake_max_cutoff_hz)
+        .map(|_| max - m.step_db)
+}
+
+/// Guard margin `g = min(full_band_margin_db, m_full_band_step_db)` (an undefined term is
+/// ignored); `max(a, g)` when `FullBand` holds (`full_band_margin_db >= 0` and the step margin
+/// undefined or `> 0`), otherwise `a` (evaluation.md section 8).
+fn guarded(a: f64, full_band_margin_db: Option<f64>, step_margin_db: Option<f64>) -> f64 {
     match full_band_margin_db {
-        Some(f) if f >= 0.0 => a.max(f),
+        Some(f) if f >= 0.0 && step_margin_db.is_none_or(|s| s > 0.0) => {
+            a.max(step_margin_db.map_or(f, |s| s.min(f)))
+        }
         _ => a,
     }
 }
@@ -141,7 +158,7 @@ pub fn nearest_margin(m: &Measurements, params: &DetectionParams) -> f64 {
         .zip(m.upper_level_db)
         .zip(m.upper_burst_db)
         .map(|((f, u), b)| (u - f.min_level_db).min(b - f.min_burst_db));
-    guarded(a, margin)
+    guarded(a, margin, lossy_step_margin(m, params))
 }
 
 /// The verdict of one labelled row under one params file.

@@ -200,10 +200,20 @@ pub fn cutoff_estimate(m: &Measurements, params: &DetectionParams) -> CutoffEsti
 }
 
 /// Section 2, `FullBand`: the params have a `[full_band]` section, `U` and `B` are defined and
-/// reach their minimums. Without the section it is `false` whatever `U` and `B` are.
+/// reach their minimums and (v4) the cutoff step is not `LossyStep`. Without the section it is
+/// `false` whatever `U` and `B` are.
 pub fn is_full_band(m: &Measurements, params: &DetectionParams) -> bool {
     match (&params.full_band, m.upper_level_db, m.upper_burst_db) {
-        (Some(fb), Some(u), Some(b)) => u >= fb.min_level_db && b >= fb.min_burst_db,
+        (Some(fb), Some(u), Some(b)) => {
+            let v = &params.verdict;
+            let lossy_step = match (fb.max_lossy_step_db, m.step_hz) {
+                (Some(max), Some(fs)) => {
+                    fs >= v.lossy_min_cutoff_hz && fs < v.fake_max_cutoff_hz && m.step_db >= max
+                }
+                _ => false,
+            };
+            u >= fb.min_level_db && b >= fb.min_burst_db && !lossy_step
+        }
         _ => false,
     }
 }

@@ -153,7 +153,7 @@ enum Kind {
 }
 
 /// Every searchable field (rule parameters) and its type.
-const RULE_FIELDS: [(&str, Kind); 29] = [
+const RULE_FIELDS: [(&str, Kind); 30] = [
     ("bands.ref_band_low_hz", Kind::Float),
     ("bands.ref_band_high_hz", Kind::Float),
     ("bands.hf_band_low_hz", Kind::Float),
@@ -172,6 +172,7 @@ const RULE_FIELDS: [(&str, Kind); 29] = [
     ("full_band.high_hz", Kind::Float),
     ("full_band.min_level_db", Kind::Float),
     ("full_band.min_burst_db", Kind::Float),
+    ("full_band.max_lossy_step_db", Kind::Float),
     ("verdict.low_hf_threshold_db", Kind::Float),
     ("verdict.gap_fake_db", Kind::Float),
     ("verdict.gap_suspicious_db", Kind::Float),
@@ -211,6 +212,7 @@ fn field_ref<'a>(p: &'a mut DetectionParams, key: &str) -> Option<FieldRef<'a>> 
         "full_band.high_hz" => F(&mut p.full_band.as_mut()?.high_hz),
         "full_band.min_level_db" => F(&mut p.full_band.as_mut()?.min_level_db),
         "full_band.min_burst_db" => F(&mut p.full_band.as_mut()?.min_burst_db),
+        "full_band.max_lossy_step_db" => F(p.full_band.as_mut()?.max_lossy_step_db.as_mut()?),
         "verdict.low_hf_threshold_db" => F(&mut p.verdict.low_hf_threshold_db),
         "verdict.gap_fake_db" => F(&mut p.verdict.gap_fake_db),
         "verdict.gap_suspicious_db" => F(&mut p.verdict.gap_suspicious_db),
@@ -274,6 +276,11 @@ pub fn invariant_violations(p: &DetectionParams) -> Vec<&'static str> {
         if !(v.fake_max_cutoff_hz < fb.low_hz && fb.low_hz < fb.high_hz) {
             out.push("fake_max_cutoff_hz < full_band.low_hz < full_band.high_hz must hold");
         }
+        if let Some(max) = fb.max_lossy_step_db {
+            if !(0.0 <= max && max <= v.step_fake_db) {
+                out.push("0 <= full_band.max_lossy_step_db <= step_fake_db must hold");
+            }
+        }
     }
     out
 }
@@ -334,9 +341,9 @@ pub fn parse_grid(text: &str, settings: &[String]) -> Result<GridFile, ToolError
     let raw: RawGrid = toml::from_str(text)
         .map_err(|e| ToolError::input_lines(e.to_string().lines().map(str::to_string).collect()))?;
     let mut errors: Vec<String> = Vec::new();
-    if !matches!(raw.grid_version, 1 | 2) {
+    if !matches!(raw.grid_version, 1..=3) {
         errors.push(format!(
-            "grid_version {} is not supported (expected 1 or 2)",
+            "grid_version {} is not supported (expected 1, 2 or 3)",
             raw.grid_version
         ));
     }
@@ -629,7 +636,8 @@ pub fn search(baseline: &DetectionParams, rows: &[SearchRow<'_>], grid: &GridFil
                 // Decide-only keys do not change the measurements.
                 !(k.key.starts_with("verdict.")
                     || k.key == "full_band.min_level_db"
-                    || k.key == "full_band.min_burst_db")
+                    || k.key == "full_band.min_burst_db"
+                    || k.key == "full_band.max_lossy_step_db")
             })
             .map(|(_, v)| v.to_bits())
             .collect();

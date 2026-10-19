@@ -93,7 +93,7 @@ pub fn labels_csv(rows: &[LabelRow]) -> String {
     out
 }
 
-pub const TRACKS_HEADER: [&str; 36] = [
+pub const TRACKS_HEADER: [&str; 37] = [
     "params_file",
     "algorithm_version",
     "path",
@@ -129,6 +129,7 @@ pub const TRACKS_HEADER: [&str; 36] = [
     "m_full_band_level_db",
     "m_full_band_burst_db",
     "full_band_margin_db",
+    "m_full_band_step_db",
     "nearest_fake_margin_db",
 ];
 
@@ -192,6 +193,7 @@ pub fn tracks_csv(runs: &[ParamsRun], groups: &[GroupResult]) -> String {
                 fmt::opt_db(g.and_then(|g| g.m_full_band_level_db)),
                 fmt::opt_db(g.and_then(|g| g.m_full_band_burst_db)),
                 fmt::opt_db(g.and_then(|g| g.full_band_margin_db)),
+                fmt::opt_db(g.and_then(|g| g.m_full_band_step_db)),
                 fmt::opt_db(g.map(|g| g.nearest_fake_margin_db)),
             ]));
         }

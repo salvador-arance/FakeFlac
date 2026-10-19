@@ -1,4 +1,4 @@
-//! `DetectionParams` (S4, ADR-0011). Mirrors `specs/detection/detection-params.v3.toml`;
+//! `DetectionParams` (S4, ADR-0011). Mirrors `specs/detection/detection-params.v4.toml`;
 //! a test checks that `Default` equals that file. Values are data, never constants in the algorithm.
 
 use serde::{Deserialize, Serialize};
@@ -99,6 +99,10 @@ pub struct FullBandParams {
     pub high_hz: f64,
     pub min_level_db: f64,
     pub min_burst_db: f64,
+    /// v4 (ADR-0039): a cutoff step `D` at or above this with `fs` in the lossy range means
+    /// not full band. `None` (a v3 file) disables the condition.
+    #[serde(default)]
+    pub max_lossy_step_db: Option<f64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -130,11 +134,11 @@ pub struct SpectrogramParams {
 }
 
 impl Default for DetectionParams {
-    /// DetectionParams v3: the values of `specs/detection/detection-params.v3.toml`
+    /// DetectionParams v4: the values of `specs/detection/detection-params.v4.toml`
     /// (a test checks the equality).
     fn default() -> Self {
         DetectionParams {
-            algorithm_version: 3,
+            algorithm_version: 4,
             input: InputParams {
                 min_duration_s: 5.0,
                 edge_skip_percent: 5.0,
@@ -176,6 +180,7 @@ impl Default for DetectionParams {
                 high_hz: 21000.0,
                 min_level_db: -70.0,
                 min_burst_db: 3.0,
+                max_lossy_step_db: Some(3.0),
             }),
             verdict: VerdictParams {
                 low_hf_threshold_db: -60.0,
@@ -219,6 +224,12 @@ pub enum ParamsError {
         "invalid parameters: full_band.low_hz < full_band.high_hz does not hold ({low} >= {high})"
     )]
     FullBandWindowEmpty { low: f64, high: f64 },
+    #[error("invalid parameters: full_band.max_lossy_step_db ≥ 0 does not hold ({value})")]
+    MaxLossyStepNegative { value: f64 },
+    #[error(
+        "invalid parameters: full_band.max_lossy_step_db ≤ step_fake_db does not hold ({value} > {fake})"
+    )]
+    MaxLossyStepAboveStepFake { value: f64, fake: f64 },
 }
 
 impl DetectionParams {
@@ -250,6 +261,17 @@ impl DetectionParams {
                     low: fb.low_hz,
                     high: fb.high_hz,
                 });
+            }
+            if let Some(max) = fb.max_lossy_step_db {
+                if !le(0.0, max) {
+                    return Err(ParamsError::MaxLossyStepNegative { value: max });
+                }
+                if !le(max, v.step_fake_db) {
+                    return Err(ParamsError::MaxLossyStepAboveStepFake {
+                        value: max,
+                        fake: v.step_fake_db,
+                    });
+                }
             }
         }
         Ok(())
