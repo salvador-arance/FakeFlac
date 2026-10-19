@@ -2,6 +2,33 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-19 - RF-04 detection v4 implemented (PR #44, awaiting G2)
+
+**Done**
+- `feat/RF-04` rebased onto main. The v3 traceability commit became empty and was dropped. The pre-rebase state is kept locally as `feat/RF-04-v3-backup`.
+- `/feature RF-04` (v4), PR #44:
+  - test: 4b65425 and 97335dc;
+  - implement: a3d09aa and e4d63ce;
+  - traceability row: a206757.
+- Review: no blocking findings. All seven improvements were applied. Owner decision: `grid_version` stays `1 | 2`, and the test uses 2, with no spec change.
+- `just ci` is green, and `privacy-check` finds 0 matches.
+- Real-corpus `just accept` (v2 vs v4): A1–A8 all PASS, and every figure matches the §7.1 prediction. Aggregates are in the PR body.
+  - `primary` `Fake` goes from 4 to 1 (W4).
+  - Fake → Suspicious changes: 160.
+  - A8: the maximum is cbr320, 1.0 %.
+  - v0 detection rate drops 9.9 pp.
+
+**Pending**
+- G2 on #44. After the merge, run `just prune-branches`, then delete `feat/RF-04-v3-backup` by hand (it is not merged).
+- Review improvements left over from v3 (see the RF-04 v3 block): the full-band per-setting table appears only on split `all`; `calibrate` exits 2 outside a git checkout; a malformed `detection-params.v*.toml` is skipped silently when allocating a version.
+- The RF-07 known deviations, the MainLayout splitter (H1 UI) and the RF-15 spec, all unchanged.
+
+**Blockers / questions for the human**
+- Open questions in `rules.md`: Q9 (T2/T3 targets and undetectable transcodes), Q10 (`/calibrate` has no feasible point), Q11 (A8 bound 5 %).
+- The auto-mode classifier blocks `git rebase --continue` and `--skip`, and the owner had to run them by hand. Writes outside the repo, including the session scratchpad, are blocked by `guard-protected.mjs`. Use `target/` for temporary files.
+
+**Next step:** G2 on #44. After that, the remaining H1 UI (MainLayout splitter) or the RF-15 spec.
+
 ## 2026-10-19 - RF-04 Detection v4 spec approved (G1, #42)
 
 **Done**
