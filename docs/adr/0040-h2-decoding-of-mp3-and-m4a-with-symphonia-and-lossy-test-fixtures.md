@@ -42,4 +42,10 @@ Forces:
 
 ## Notes from implementation
 
-(To be filled in by the implementation PR: confirmed feature and crate names, locked versions, installer size.)
+Implemented in RF-14 (H2 decoding).
+
+- **Features confirmed** on symphonia 0.6.1 (`default-features = false`): `mp3` (Layer III only), `aac`, `isomp4` and `alac`, in addition to `flac`, `wav` and `pcm`.
+- **New crates in `Cargo.lock`** (all 0.6.1, MPL-2.0): `symphonia-bundle-mp3`, `symphonia-codec-aac`, `symphonia-codec-alac` and `symphonia-format-isomp4`. No other crate was added.
+- **Stream information** is read by `crates/fakeflac-audio/src/mp3.rs` (frame headers, Xing/Info/VBRI tag frame, LAME extension) and `mp4.rs` (sample entry, AudioSpecificConfig, ALAC magic cookie, `stsz` and `mdhd`), before symphonia opens the file, so HE-AAC and Layer I/II are reported as `unsupportedFormat` by the adapter itself.
+- **MP3 length.** symphonia estimates the length of an MP3 and trims the encoder delay, so the decoder returns fewer frames than the stream's frame count (about 13 ms fewer on the 30 s fixtures). For MP3 the "stream ended before the declared length" check is not applied; the declared length is the frame count of the tag frame (or the counted frames), as `lossy-source.md` section 2.1 defines.
+- **Installer size:** to be measured before release (RNF-06).

@@ -20,6 +20,7 @@ const EN: Record<string, string> = {
   'error.tooShort': 'Too short to analyse',
   'error.corruptStream': 'Corrupt stream',
   'error.unreadable': 'Cannot read the file',
+  'error.unsupportedFormat': 'Unsupported audio format',
   'error.NO_AUDIO_FOUND': 'No WAV or FLAC files in this folder',
   'error.FOLDER_UNREADABLE': 'Cannot open this folder',
   'error.ANALYSIS_RUNNING': 'An analysis is already running',
