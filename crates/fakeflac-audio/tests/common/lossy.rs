@@ -8,10 +8,11 @@
 //! (`#[path = "../../crates/fakeflac-audio/tests/common/lossy.rs"] mod lossy;`, ADR-0036).
 //!
 //! Sources of the constants that are not in the specs:
-//! - The AAC spectral codebook 1 (ISO/IEC 14496-3 table 4.A.1, 81 codewords of four values in
-//!   {-1, 0, 1}) and the scale-factor codebook entry for a difference of 0 (table 4.A.2: index 60,
-//!   one bit, code 0) are standard data. The codebook 1 lengths and codes below were taken from the
-//!   `symphonia-codec-aac` 0.6.1 source (MPL-2.0 file `codebooks.rs`); the test of
+//! - The AAC spectral codebook 1 (ISO/IEC 14496-3, spectral Huffman codebook 1, 81 codewords of four
+//!   values in {-1, 0, 1}) and the scale-factor codebook entry for a difference of 0 (ISO/IEC
+//!   14496-3, scale-factor Huffman codebook: index 60, one bit, code 0) are standard data. The
+//!   codebook 1 lengths and codes live in `aac_codebook1.rs`, an MPL-2.0 file with the attribution
+//!   to `symphonia-codec-aac` 0.6.1 (`codebooks.rs`); the rest of this file is MIT. The test of
 //!   `lossy_fixtures.rs` verifies them by decoding a fixture (lossy-fixtures.md section 3).
 //! - The long-window scale-factor band offsets for 44.1 and 48 kHz (ISO/IEC 14496-3 table 4.109) are
 //!   the standard ones, as in the same source.
@@ -22,6 +23,10 @@
 
 use rand::{RngExt, SeedableRng};
 use rand_chacha::ChaCha8Rng;
+
+// MPL-2.0 file with the two tables copied from symphonia-codec-aac; this file stays MIT.
+#[path = "aac_codebook1.rs"]
+mod aac_codebook1;
 
 /// `global_gain` of every MP3 granule (lossy-fixtures.md 1.1, "Level"). Decoded RMS of a full-band
 /// 44.1 kHz fixture: see `lossy_fixtures.rs`, `levels_are_between_minus_30_and_minus_12_dbfs`.
@@ -464,23 +469,7 @@ const SWB_OFFSET_LONG_48K: [usize; 50] = [
     736, 768, 800, 832, 864, 896, 928, 1024,
 ];
 
-/// AAC spectral codebook 1 (ISO/IEC 14496-3 table 4.A.1): length in bits and code of the quadruple
-/// `(w, x, y, z)`, each value in {-1, 0, 1}, at index `27 (w + 1) + 9 (x + 1) + 3 (y + 1) + (z + 1)`.
-const SPECTRUM_CODEBOOK1_LENS: [u8; 81] = [
-    11, 9, 11, 10, 7, 10, 11, 9, 11, 10, 7, 10, 7, 5, 7, 9, 7, 10, 11, 9, 11, 9, 7, 9, 11, 9, 11,
-    9, 7, 9, 7, 5, 7, 9, 7, 9, 7, 5, 7, 5, 1, 5, 7, 5, 7, 9, 7, 9, 7, 5, 7, 9, 7, 9, 11, 9, 11, 9,
-    7, 9, 11, 9, 11, 10, 7, 9, 7, 5, 7, 9, 7, 10, 11, 9, 11, 10, 7, 9, 11, 9, 11,
-];
-
-const SPECTRUM_CODEBOOK1_CODES: [u32; 81] = [
-    0x7f8, 0x1f1, 0x7fd, 0x3f5, 0x068, 0x3f0, 0x7f7, 0x1ec, 0x7f5, 0x3f1, 0x072, 0x3f4, 0x074,
-    0x011, 0x076, 0x1eb, 0x06c, 0x3f6, 0x7fc, 0x1e1, 0x7f1, 0x1f0, 0x061, 0x1f6, 0x7f2, 0x1ea,
-    0x7fb, 0x1f2, 0x069, 0x1ed, 0x077, 0x017, 0x06f, 0x1e6, 0x064, 0x1e5, 0x067, 0x015, 0x062,
-    0x012, 0x000, 0x014, 0x065, 0x016, 0x06d, 0x1e9, 0x063, 0x1e4, 0x06b, 0x013, 0x071, 0x1e3,
-    0x070, 0x1f3, 0x7fe, 0x1e7, 0x7f3, 0x1ef, 0x060, 0x1ee, 0x7f0, 0x1e2, 0x7fa, 0x3f3, 0x06a,
-    0x1e8, 0x075, 0x010, 0x073, 0x1f4, 0x06e, 0x3f7, 0x7f6, 0x1e0, 0x7f9, 0x3f2, 0x066, 0x1f5,
-    0x7ff, 0x1f7, 0x7f4,
-];
+use aac_codebook1::{SPECTRUM_CODEBOOK1_CODES, SPECTRUM_CODEBOOK1_LENS};
 
 #[derive(Debug, Clone)]
 pub struct AacSpec {
