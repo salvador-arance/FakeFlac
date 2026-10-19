@@ -23,8 +23,9 @@ status: proposed
 | Component | Props | Events | States | Notes |
 |---|---|---|---|---|
 | `VerdictCell` | `verdict: Verdict`, `reasons?: SuspicionReason[]` | — | real · suspicious · fake · error | Icon + text + colour token; reasons in the tooltip. Never colour alone (RNF-08) |
-| `ColumnHeader` | `label: string`, `sort?: 'asc' \| 'desc' \| null` | `sort` | unsorted · asc · desc | `aria-sort` |
+| `ColumnHeader` | `label: string`, `sort?: 'asc' \| 'desc' \| null`, `tooltip?: string` (H2, `lossy-formats.md`) | `sort` | unsorted · asc · desc | `aria-sort`; `tooltip` is shown on hover and focus |
 | `CutoffValue` | `hz: number \| null`, `nyquistHz: number` | — | value · full band · none | "16.0 kHz"; when `hz == nyquistHz` shows "Full band" |
+| `BitrateValue` (H2) | `kbps: number \| null`, `mode?: BitrateMode \| null`, `approx?: boolean` | — | value · vbr · abr · approx · none | Declared and real bitrate cells; spec in `lossy-formats.md` |
 | `WindowControls` | — | `minimize`, `toggleMaximize`, `close` | — | Part of the custom title bar |
 
 ## Organisms
@@ -35,7 +36,7 @@ status: proposed
 | `Toolbar` | `canOpen: boolean`, `canCancel: boolean` | `open`, `cancel` | idle · running | Groups and separators like the reference; H2 adds remove, export, filters and search |
 | `ResultsTable` | `rows: ResultRow[]` (`{ index: number; analysis: TrackAnalysis }`, `index` from the progress events), `selectedIndex: number \| null`, `sort: SortState` | `select(index)`, `sort(column)` | empty · rows · many rows (virtualised) | Columns of `main-screen.md`; virtualised rows (row height token); keyboard navigation |
 | `SpectrogramView` | `spectrogram: Spectrogram \| null`, `cutoffHz: number \| null`, `loading: boolean` | — | loading · image · none | `<canvas>`; colour map from tokens; frequency axis in kHz; cutoff line |
-| `DetailPanel` | `track: TrackAnalysis \| null`, `spectrogram`, `loading` | — | nothing selected · loading · spectrogram · unavailable (request failed: verdict line + `spectrogram.unavailable`) · error | Text line: "Cutoff 16.0 kHz · Fake"; " · <reason>" (`reason.*` text) is appended only when the track has reasons (a `Fake` verdict has none); for errors shows the error text |
+| `DetailPanel` | `track: TrackAnalysis \| null`, `spectrogram`, `loading` | — | nothing selected · loading · spectrogram · unavailable (request failed: verdict line + `spectrogram.unavailable`) · error | Text line: "Cutoff 16.0 kHz · Fake"; " · <reason>" (`reason.*` text) is appended only when the track has reasons (a `Fake` verdict has none); for errors shows the error text. Lossy tracks (H2) add the declared and the source bitrate after the cutoff (`lossy-formats.md`) |
 | `StatusBar` | `phase: 'ready' \| 'scanning' \| 'analysing' \| 'finished' \| 'cancelled' \| 'error'`, `summary`, `message?` | — | one per phase | Uses `ProgressBar` |
 | `FolderDropZone` | `active: boolean` (drag over), `empty: boolean` | — | hint · drag-over | Overlay; the drop itself is handled by the page |
 

@@ -6,7 +6,7 @@ status: proposed
 
 # Sample corpus for CI (OQ-4)
 
-> A small corpus built in temporary folders from the synthetic signals of `specs/detection/fixtures.md`, so that the acceptance path runs in CI (`cargo test`) with no ffmpeg and no real music. Scenarios: `specs/features/calibration.feature`. Expected verdicts with `detection-params.v2.toml` (the tool's default, sections 1 to 3) are the v2 truths of `specs/detection/fixtures.md`, which `detection-lossless.feature` checks in "A v2 params file changes only the guarded verdicts"; with `detection-params.v3.toml` and `detection-params.v4.toml`, section 4 ("v3 side by side", "v4 side by side"). The watch id `W1` below belongs to this synthetic corpus only; it is not the real track FP1 of `specs/detection/rules.md`.
+> A small corpus built in temporary folders from the synthetic signals of `specs/detection/fixtures.md`, so that the acceptance path runs in CI (`cargo test`) with no ffmpeg and no real music. Scenarios: `specs/features/calibration.feature`. Expected verdicts with `detection-params.v2.toml` (the tool's default, sections 1 to 3) are the v2 truths of `specs/detection/fixtures.md`, which `detection-lossless.feature` checks in "A v2 params file changes only the guarded verdicts"; with `detection-params.v3.toml` and `detection-params.v4.toml`, section 4 ("v3 side by side", "v4 side by side"). The watch id `W1` below belongs to this synthetic corpus only; it is not the real track FP1 of `specs/detection/rules.md`. Lossy rows (RF-15) use a separate **lossy variant** of this corpus (`specs/calibration/lossy.md` section 9); everything below is unchanged by it.
 
 ## 1. Fixture transcoder
 
@@ -84,7 +84,7 @@ Track 5 (`low_hf`, bandwidth extent $\le 16\text{ kHz}$) transcoded to `fx128` (
 
 ## 4. Candidate parameters
 
-`candidate.toml` = `detection-params.v2.toml` with `algorithm_version` set to the next free version (1 + the highest `algorithm_version` in `specs/detection/`, 5 today; never 3 or 4, which are detection v3 and v4) and `verdict.gap_fake_db = 4.0`. Only rule values change, so it shares v2's fingerprint. With it, the 6 `fxweak` entries (`G` ≈ 5 dB) become `Fake`, and no negative changes (`full_band` and `hf_bursts` have `G < 4` because they are `Real` under v2; `low_hf` is decided by rule V2 first). The fake row becomes 0 / 0 / 25 / 0, and the verdict-change table against v2 has exactly 6 changes, all `Suspicious → Fake` on positives.
+`candidate.toml` = `detection-params.v2.toml` with `algorithm_version` set to the next free version (1 + the highest `algorithm_version` in `specs/detection/`, 6 today; never 3, 4 or 5, which are detection v3, v4 and v5) and `verdict.gap_fake_db = 4.0`. Only rule values change, so it shares v2's fingerprint. With it, the 6 `fxweak` entries (`G` ≈ 5 dB) become `Fake`, and no negative changes (`full_band` and `hf_bursts` have `G < 4` because they are `Real` under v2; `low_hf` is decided by rule V2 first). The fake row becomes 0 / 0 / 25 / 0, and the verdict-change table against v2 has exactly 6 changes, all `Suspicious → Fake` on positives.
 
 ### v3 side by side (detection v3, ADR-0038)
 
@@ -108,6 +108,6 @@ With `--params detection-params.v2.toml --params detection-params.v3.toml --para
 
 Grid: baseline `detection-params.v2.toml`, `must_catch = ["fx128"]`, default weights, `[values] "verdict.gap_fake_db" = [4.0, 6.0]`.
 
-- With `holdout_fraction = 0.0` (everything `tune`): the baseline costs `0.5 · 1 + 0.1 · 6 = 1.1` (1 Suspicious negative, 6 Suspicious positives; `Error` rows left out), and the point `gap_fake_db = 4.0` costs `0.5`. Proposal: `detection-params.v5.toml` with `algorithm_version = 5` (the next free version, evaluation.md section 7) and `gap_fake_db = 4.0`, the rest of the baseline text unchanged.
+- With `holdout_fraction = 0.0` (everything `tune`): the baseline costs `0.5 · 1 + 0.1 · 6 = 1.1` (1 Suspicious negative, 6 Suspicious positives; `Error` rows left out), and the point `gap_fake_db = 4.0` costs `0.5`. Proposal: `detection-params.v6.toml` with `algorithm_version = 6` (the next free version, evaluation.md section 7) and `gap_fake_db = 4.0`, the rest of the baseline text unchanged.
 - From the v4 baseline with `"full_band.max_lossy_step_db" = [3.0, 10.0, 12.0]` and `holdout_fraction = 0.0`: 12.0 breaks `max_lossy_step_db ≤ step_fake_db` and is skipped. The baseline costs 1.1, as v2 (same verdicts). With 10.0 the `fxv0` step (≈ 6 dB) no longer removes the guard, the 6 `fxv0` entries become `Suspicious`, and the point costs `1.1 + 0.1 · 6 = 1.7`. Output: "no change proposed", no file written.
 - With `holdout_fraction = 1.0` (everything `holdout`): there is no tune data, every point ties with the baseline, and the output is "no change proposed" with no file written. This shows that holdout rows are never used to choose.

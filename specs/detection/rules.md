@@ -11,7 +11,7 @@ supersedes: algorithm_version 3 (detection-params.v3.toml, kept and still loadab
 
 > For a WAV or FLAC file: compute two band spectra (the power **mean** and the per-frame **median**), measure the deepest relative **step** in the treble, the **gap step** at 16 kHz and whether there is **music above the lossy range** (the full-band guard), and decide **real / suspicious / fake**. Every number below is a named parameter in `detection-params.v4.toml`; the code never hard-codes them (S4, ADR-0011). Design rationale and evidence: ADR-0035 (v2), ADR-0038 (v3) and ADR-0039 (v4).
 
-Lossy formats (MP3, M4A, Opus, RF-15) get their own rules in H2. Upsample detection (RF-12) is H3.
+Lossy formats (MP3, M4A with AAC, Opus; RF-15) get their own rules in H2: `specs/detection/lossy-source.md`, detection v5 (`detection-params.v5.toml`, ADR-0041). v5 keeps every section and value of v4 and adds `[lossy]`, so **these rules and values apply unchanged under v5** to WAV, FLAC and ALAC (in M4A), and v5 is the default; sections 3–7 below still describe them as v4. Upsample detection (RF-12) is H3.
 
 **Names used here.** `FP1`–`FP4` are the four purchased tracks confirmed as false positives of v2. The reports of 2026-10-18 and 2026-10-19 list them as watch ids `W1`–`W4` (the tool numbers `false-positive` lines of `confirmed.txt` in line order, inputs.md section 2); this spec uses both names for the same tracks. The sample corpus of the calibration tool has its own, unrelated watch id `W1` (a synthetic track). **"Content up to `fe`"** always means the content extent of section 2: `fe` is the lower edge of the highest band with content, so that band reaches `fe + band_hz`. **"The v3 run"** is the acceptance run `20261019T091918Z` (v2 baseline and v3, split `all`); only its aggregate figures and the measurements of W1–W4 appear here (ADR-0022).
 
@@ -166,8 +166,8 @@ Higher sample rates (88.2/96/192 kHz) use the same absolute frequencies: a lossy
 
 - Deterministic: the same file and parameters always give the same result.
 - Read-only: the file is opened for reading only (RNF-05).
-- `algorithm_version` in every `TrackAnalysis` equals the `algorithm_version` of the parameters used (4 with the defaults).
-- The code's default parameters equal `detection-params.v4.toml` (a test checks it).
+- `algorithm_version` in every `TrackAnalysis` equals the `algorithm_version` of the parameters used (5 with the defaults since detection v5, lossy-source.md; it was 4).
+- The code's default parameters equal `detection-params.v5.toml` (a test checks it), whose lossless sections are those of `detection-params.v4.toml`.
 - **v2 and v3 stay loadable.** `[full_band]` is optional, and `max_lossy_step_db` is optional inside it. A params file without `[full_band]` (such as `detection-params.v2.toml`) loads with `FullBand` always `false` and gives exactly the v2 verdicts, reasons and cutoffs. A params file whose `[full_band]` has no `max_lossy_step_db` (such as `detection-params.v3.toml`) loads with `LossyStep` always `false` and gives exactly the v3 verdicts, reasons and cutoffs. Tests check both on every fixture. This lets the calibration tool compare v2, v3 and v4 in one run (calibration/evaluation.md section 9).
 - **Who checks a params file.** The core has no file loader: `DetectionParams` is deserialised with serde by whoever reads a file (today the calibration tool and tests; the app uses `DetectionParams::default()`). Two layers:
   1. **Shape** (serde, at deserialisation): every section rejects unknown fields; `[full_band]` may be absent, but if present its four fields `low_hz`, `high_hz`, `min_level_db`, `min_burst_db` are all required, and `max_lossy_step_db` is optional.
@@ -175,7 +175,7 @@ Higher sample rates (88.2/96/192 kHz) use the same absolute frequencies: a lossy
 - **Why `0 ≤ max_lossy_step_db`, not `0 <`.** 0 is a meaningful value: since `D > 0` whenever `fs` is defined, it means "any cutoff step in the lossy range removes the guard" (the analysis behind v4 simulated it). A negative value would behave exactly like 0, so it can only be a mistake and is rejected. **Why `≤ step_fake_db`.** It is what makes "V4 is never guarded" (section 3) an invariant instead of a property of today's values. A file that wants the v3 guard on V4 omits `max_lossy_step_db`.
 - `detection-params.v1.toml` stays in the repository as the record of version 1. The code does not have to load it.
 - `[input]` and `[fft]` are the same as in v2 and v3, so v4 needs no new extraction: `fakeflac-audio::EXTRACTION_VERSION` does not change and cached spectra are reused. The app's result cache is invalidated by the new `algorithm_version` (ADR-0008).
-- `algorithm_version` numbers are allocated by the files in `specs/detection/`. A parameter file produced elsewhere (a `/calibrate` proposal, a test candidate) takes the next free number, never one already used here (calibration/evaluation.md section 7). With `detection-params.v4.toml` in the repository, the next free number is 5.
+- `algorithm_version` numbers are allocated by the files in `specs/detection/`. A parameter file produced elsewhere (a `/calibrate` proposal, a test candidate) takes the next free number, never one already used here (calibration/evaluation.md section 7). With `detection-params.v4.toml` in the repository, the next free number was 5; detection v5 (`detection-params.v5.toml`, lossy-source.md section 1) takes it, so the next free number is **6**.
 
 ## 5. Test signals
 

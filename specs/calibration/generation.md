@@ -6,7 +6,7 @@ status: proposed
 
 # Transcode generation and the features cache
 
-> Positives are made from trusted tracks: a fragment from the centre of the track is encoded with a lossy encoder through ffmpeg and decoded back to 16-bit FLAC. Spectra of every labelled track are cached, so recalibrating re-applies the rules without decoding. Main spec: [calibration.md](calibration.md). ffmpeg and LAME are development tools and never part of the product (planning section 1.5, ADR-0036).
+> Positives are made from trusted tracks: a fragment from the centre of the track is encoded with a lossy encoder through ffmpeg and decoded back to 16-bit FLAC. For RF-15 the tool also keeps **lossy files** as labelled tracks (honest encodes and cascades of several encodes, `[[generate.lossy]]`); they follow `lossy.md` section 4, and the lossy intermediate rule of section 3 below does not apply to them. Spectra of every labelled track are cached, so recalibrating re-applies the rules without decoding. Main spec: [calibration.md](calibration.md). ffmpeg and LAME are development tools and never part of the product (planning section 1.5, ADR-0036).
 
 ## 1. What is generated
 
