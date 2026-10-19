@@ -21,10 +21,22 @@ pub struct StreamInfo {
     pub total_frames: Option<u64>,
 }
 
-/// A file seen from `start` on, so that a format reader can begin at the first audio frame.
+/// A file seen from `start` on: position 0 is byte `start` of the file, so that a format reader
+/// begins at the first audio frame. Reads, seeks and the length share that coordinate system.
 struct FromOffset {
     file: File,
     start: u64,
+}
+
+impl FromOffset {
+    fn new(mut file: File, start: u64) -> std::io::Result<Self> {
+        file.seek(SeekFrom::Start(start))?;
+        Ok(FromOffset { file, start })
+    }
+
+    fn relative_len(&self) -> std::io::Result<u64> {
+        Ok(self.file.metadata()?.len().saturating_sub(self.start))
+    }
 }
 
 impl Read for FromOffset {
@@ -35,12 +47,26 @@ impl Read for FromOffset {
 
 impl Seek for FromOffset {
     fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
-        let absolute = match pos {
-            SeekFrom::Start(p) => SeekFrom::Start(self.start.saturating_add(p)),
-            other => other,
+        let before_start = || {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "seek before the start of the stream",
+            )
         };
-        let at = self.file.seek(absolute)?;
-        Ok(at.saturating_sub(self.start))
+        let target = match pos {
+            SeekFrom::Start(p) => p,
+            SeekFrom::Current(d) => {
+                let current = self.file.stream_position()?.saturating_sub(self.start);
+                current.checked_add_signed(d).ok_or_else(before_start)?
+            }
+            SeekFrom::End(d) => self
+                .relative_len()?
+                .checked_add_signed(d)
+                .ok_or_else(before_start)?,
+        };
+        let absolute = self.start.checked_add(target).ok_or_else(before_start)?;
+        self.file.seek(SeekFrom::Start(absolute))?;
+        Ok(target)
     }
 }
 
@@ -50,8 +76,7 @@ impl MediaSource for FromOffset {
     }
 
     fn byte_len(&self) -> Option<u64> {
-        let len = self.file.metadata().ok()?.len();
-        Some(len.saturating_sub(self.start))
+        self.relative_len().ok()
     }
 }
 
@@ -115,10 +140,8 @@ impl MonoStream {
         let format: Box<dyn FormatReader> = if let Some(info) = &mp3_info {
             // The probe scans from byte 0 and trips over large ID3v2 tags (artwork with false
             // syncs): the MP3 reader opens at the first frame the adapter found instead.
-            let source = FromOffset {
-                file,
-                start: info.first_frame_pos,
-            };
+            let source = FromOffset::new(file, info.first_frame_pos)
+                .map_err(|e| TrackError::Unreadable(e.to_string()))?;
             let mss = MediaSourceStream::new(Box::new(source), Default::default());
             let reader =
                 symphonia::default::formats::MpaReader::try_new(mss, FormatOptions::default())
@@ -335,6 +358,70 @@ mod tests {
         let mut bytes = id3v2(blob);
         bytes.extend(tagged_mp3(40, 40));
         assert!(decode("fakesync", &bytes).is_ok());
+    }
+
+    /// `count` back-to-back frames of `len` bytes behind `header`.
+    fn run_of_frames(header: [u8; 4], len: usize, count: usize) -> Vec<u8> {
+        let mut out = Vec::new();
+        for _ in 0..count {
+            out.extend_from_slice(&header);
+            out.resize(out.len() + len - 4, 0);
+        }
+        out
+    }
+
+    /// MPEG-1 Layer III, 128 kbps, 44.1 kHz frames of silence, with no tag frame.
+    fn untagged_mp3(audio_frames: usize) -> Vec<u8> {
+        run_of_frames([0xFF, 0xFB, 0x90, 0x00], 417, audio_frames)
+    }
+
+    #[test]
+    fn untagged_cbr_mp3_behind_a_large_id3v2_tag_decodes_fully() {
+        let mut bytes = id3v2(vec![0; 200_000]);
+        bytes.extend(untagged_mp3(60));
+        assert!(decode("untagged", &bytes).is_ok());
+    }
+
+    #[test]
+    fn consistent_layer_ii_frames_inside_the_tag_are_skipped() {
+        // MPEG-1 Layer II, 192 kbps, 44.1 kHz: 626 bytes.
+        let mut bytes = id3v2(run_of_frames([0xFF, 0xFD, 0xA0, 0x00], 626, 4));
+        bytes.extend(tagged_mp3(40, 40));
+        assert!(decode("l2intag", &bytes).is_ok());
+    }
+
+    #[test]
+    fn consistent_layer_iii_frames_inside_the_tag_are_skipped() {
+        let mut bytes = id3v2(run_of_frames([0xFF, 0xFB, 0x90, 0x00], 417, 4));
+        bytes.extend(untagged_mp3(40));
+        assert!(decode("l3intag", &bytes).is_ok());
+    }
+
+    #[test]
+    fn from_offset_is_relative_to_start() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/unit-tmp");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = TempFile(dir.join(format!("offset-{}.bin", std::process::id())));
+        let data: Vec<u8> = (0..100u8).collect();
+        std::fs::write(&path.0, &data).unwrap();
+        let mut src = FromOffset::new(File::open(&path.0).unwrap(), 10).unwrap();
+        assert_eq!(src.byte_len(), Some(90));
+        let mut b = [0u8; 2];
+        src.read_exact(&mut b).unwrap();
+        assert_eq!(b, [10, 11]);
+        assert_eq!(src.seek(SeekFrom::Start(5)).unwrap(), 5);
+        src.read_exact(&mut b).unwrap();
+        assert_eq!(b, [15, 16]);
+        assert_eq!(src.seek(SeekFrom::Current(-3)).unwrap(), 4);
+        assert_eq!(src.seek(SeekFrom::Current(0)).unwrap(), 4);
+        assert_eq!(src.seek(SeekFrom::End(-1)).unwrap(), 89);
+        src.read_exact(&mut b[..1]).unwrap();
+        assert_eq!(b[0], 99);
+        assert_eq!(src.seek(SeekFrom::End(0)).unwrap(), 90);
+        for pos in [SeekFrom::Current(-91), SeekFrom::End(-91)] {
+            let e = src.seek(pos).unwrap_err();
+            assert_eq!(e.kind(), std::io::ErrorKind::InvalidInput);
+        }
     }
 
     #[test]

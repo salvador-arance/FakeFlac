@@ -66,7 +66,6 @@ struct Header {
     version: u8,
     /// 1 to 3 for Layer I to III.
     layer: u8,
-    crc: bool,
     /// 0 for free format.
     bitrate_kbps: u32,
     bitrate_index: u8,
@@ -116,7 +115,6 @@ impl Header {
         Some(Header {
             version,
             layer,
-            crc: b[1] & 1 == 0,
             bitrate_kbps,
             bitrate_index,
             sample_rate,
@@ -160,7 +158,8 @@ impl Header {
             (_, true) => 9,
             (_, false) => 17,
         };
-        4 + if self.crc { 2 } else { 0 } + side
+        // The CRC word, when present, is not counted: the tag sits after the side information.
+        4 + side
     }
 
     /// Same stream parameters, so that a later header is a frame of the same stream.
@@ -264,7 +263,9 @@ impl Tag {
                 tag.vbr_method = Some(ext[9] & 0x0F);
                 tag.lowpass_hz = (ext[10] != 0).then(|| u32::from(ext[10]) * 100);
                 // Bytes 21 to 23 of the extension: two 12-bit fields, delay then padding.
-                if let Some(&[b0, b1, b2]) = rest.get(21..24) {
+                // Only for the encoders whose fields these are (the decoder trims for them alone).
+                let known = ["LAME", "Lavf", "Lavc"].iter().any(|p| text.starts_with(p));
+                if let (true, Some(&[b0, b1, b2])) = (known, rest.get(21..24)) {
                     tag.delay_padding = Some((
                         (u32::from(b0) << 4) | (u32::from(b1) >> 4),
                         (u32::from(b1 & 0x0F) << 8) | u32::from(b2),
@@ -591,6 +592,40 @@ mod tests {
             read(&path.0),
             Err(TrackError::UnsupportedFormat(_))
         ));
+    }
+
+    fn info_frame(header: [u8; 4], encoder: &[u8; 9]) -> Vec<u8> {
+        let mut tag = header.to_vec();
+        tag.resize(417, 0);
+        tag[36..40].copy_from_slice(b"Info");
+        tag[40..44].copy_from_slice(&1u32.to_be_bytes());
+        tag[44..48].copy_from_slice(&5u32.to_be_bytes());
+        tag[48..57].copy_from_slice(encoder);
+        tag[57] = 0;
+        tag[58] = 180; // 18 kHz
+        tag[69..72].copy_from_slice(&[0x24, 0x09, 0x00]);
+        tag.extend(frames([0xFF, 0xFB, 0x90, 0x00], 417, 5));
+        tag
+    }
+
+    #[test]
+    fn crc_protected_lame_tag_frame_is_recognised() {
+        let path = write("crc", &info_frame([0xFF, 0xFA, 0x90, 0x00], b"LAME3.99r"));
+        let info = read(&path.0).unwrap();
+        assert_eq!(info.encoder.as_deref(), Some("LAME3.99r"));
+        assert_eq!(info.encoder_lowpass_hz, Some(18_000));
+        assert_eq!(info.bitrate_mode, BitrateMode::Cbr);
+        assert_eq!(info.frames, 5);
+        assert_eq!(info.delay_padding, Some((576, 2304)));
+    }
+
+    #[test]
+    fn non_lame_encoder_has_no_delay_and_padding() {
+        let path = write("other", &info_frame([0xFF, 0xFB, 0x90, 0x00], b"Other 1.0"));
+        let info = read(&path.0).unwrap();
+        assert_eq!(info.encoder.as_deref(), Some("Other 1.0"));
+        assert_eq!(info.delay_padding, None);
+        assert_eq!(info.length_tolerance(), 3 * 1152);
     }
 
     #[test]
