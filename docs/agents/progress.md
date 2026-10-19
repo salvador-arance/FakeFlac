@@ -2,6 +2,40 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-19 - RF-14 H2 decoding: PR #52 open (awaiting G2)
+
+**Done**
+- `/feature RF-14` on `feat/RF-14`, PR #52 (10 commits, `just ci` green). MP3 and M4A (AAC-LC, ALAC) are decoded with symphonia 0.6.1, using the `mp3`, `aac`, `isomp4` and `alac` features. The adapter reads stream information itself in `crates/fakeflac-audio/src/{mp3,mp4}.rs`. Contract v3 adds `codec` and `bitrateMode`. `algorithm_version` stays 4.
+- **Scope (owner):** decoding only. These `decode-lossy.feature` scenarios need v5 and are left to `/feature RF-15`:
+  - "A lossy row has the same fields…"
+  - "A variable bitrate is marked…"
+  - the four `@RF-15` presentation scenarios
+  - "Unicode names of lossy files"
+- The fixture checks of `lossy-fixtures.md` section 3 passed on every fixture.
+- Four review rounds, with fixes in `14e752f`, `fdce760`, `c7da1d0` and `9aee8ea`. The corpus probe (read-only, aggregate counts, owner-approved) on a 500-file sample: MP3 413/471 → 471/471, M4A 29/29.
+- **Licensing (owner):** the AAC tables copied from symphonia live in the MPL-2.0 file `crates/fakeflac-audio/tests/common/aac_tables.rs`.
+
+**Pending**
+- G2 of #52. **Stack RF-15 on `feat/RF-14`** and merge both together: until v5 lands, MP3/M4A are judged by the lossless rules.
+- **Spec follow-ups for G1** (one `spec/` PR):
+  - `lossy-source.md` line 82: the MP3 shortfall is `enc_delay + enc_padding` (up to about 2.5 frames), not "up to two frames". The code uses delay + padding + 2 frames, or 3 frames without a LAME/Lavf/Lavc tag.
+  - Should a tag frame count of 0 count as absent?
+  - Free-format MP3.
+  - Implicit HE-AAC (ASC type 2 with SBR) passes as LC.
+- **For `/feature RF-15`:**
+  - M4A error rows keep the info read before the error (needs a port change).
+  - `makeTrack` in `src/lib/testing/fixtures.ts` derives `codec` from `format`.
+  - `error.NO_AUDIO_FOUND` text.
+  - The ten-column `ResultsTable` and the rest of ADR-0041's protected-test list (v5 items).
+- **Installer size against RNF-06:** not measured. ADR-0040 says "before release".
+- Unchanged from the block below: real-corpus `just accept` for B1–B11, the `confirmed.txt` lines, the splitter leftovers.
+
+**Blockers / questions for the human**
+- The harness gap in `lessons.md` (compile-only stubs inside `test(` commits break `guard-tests`) needs a decision on `test-author.md` or `guard-tests.mjs`.
+- Dependabot alert #1 (`glib`), the `specs/CLAUDE.md` line about `specs/pending/`, and the splitter accessibility gap: unchanged.
+
+**Next step:** after #52 passes G2 review (do not merge yet), run `/feature RF-15` on a branch from `feat/RF-14`.
+
 ## 2026-10-19 - RF-15 spec approved (G1, #49)
 
 **Done**
