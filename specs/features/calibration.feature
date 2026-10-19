@@ -5,6 +5,10 @@ Feature: Calibration and acceptance against a labelled corpus
   fixture transcoder, no ffmpeg) in two fresh temporary folders used as
   FAKEFLAC_CORPUS and FAKEFLAC_CALIBRATION. Unless a scenario says otherwise,
   the params file is specs/detection/detection-params.v2.toml.
+  The v4 expectations on fxv0 (sfb21_gaps) rest on a step of 3 to 10 dB in the
+  lossy range (fixtures.md, "Verdicts with v4": derived, and measured once
+  before G1 at D 6.15 dB, fs 16050 Hz); the test stage confirms it first and
+  stops for G1 if it does not hold.
 
   # --- Environment -------------------------------------------------------
 
@@ -248,6 +252,50 @@ Feature: Calibration and acceptance against a labelled corpus
     Then the exit code is 2
     And the error output gives the parser's message, which names "min_burst_db"
 
+  @RP-11 @RF-04
+  Scenario: v2, v3 and v4 side by side in one run
+    Detection v4 (specs/detection/rules.md, ADR-0039) adds the lossy-step
+    condition to the full-band guard. The fxv0 fixture (sfb21_gaps) passes the
+    U and B thresholds, but its deepest step (about 6 dB at 16 kHz) lies in the
+    lossy range, so with v4 it is not full band and stays fake, as with v2
+    (specs/detection/fixtures.md, "Verdicts with v4"). The verdict-change tables
+    compare each file with the first one, v2.
+    When "accept" runs on the sample corpus with an empty features folder and the params files detection-params.v2.toml, detection-params.v3.toml and detection-params.v4.toml
+    Then 33 files are decoded and 24 entries are transcoded
+    And the side-by-side table has one column per params file, with algorithm_version 2, 3 and 4
+    And for detection-params.v4.toml the fake row of the global matrix is 0 Real, 6 Suspicious, 19 Fake, 0 Error
+    And the real row is the same for the three files
+    And the verdict-change table of detection-params.v4.toml against v2 has no change
+    And the verdict-change table of detection-params.v3.toml against v2 has exactly 6 changes, all "fake" to "suspicious" on fxv0 positives
+    And the caught rate of every setting is the same for the three files
+    And the per-setting table of detection-params.v4.toml shows a full_band count of 0 for every setting, and the median, 95th percentile and maximum of B for every setting
+    And the watch list entry "W1" of the sample corpus shows U, B and full_band "true" for detection-params.v3.toml and for detection-params.v4.toml
+
+  @RP-11 @RF-04
+  Scenario: Full-band columns in tracks.csv with detection v4
+    m_full_band_step_db is the margin of the lossy-step condition
+    (specs/calibration/evaluation.md section 8): defined only when the params
+    have max_lossy_step_db and fs lies in the lossy range.
+    When "accept" runs on the sample corpus with the params files detection-params.v2.toml, detection-params.v3.toml and detection-params.v4.toml
+    Then tracks.csv has the column m_full_band_step_db
+    And it is empty on every row of detection-params.v2.toml and of detection-params.v3.toml
+    And on every row of detection-params.v4.toml with spectra, m_full_band_step_db is filled exactly when fs is in [14500, 20300), and then equals 3.0 minus D
+    And on those rows full_band is "true" exactly when full_band_margin_db is at least 0 and m_full_band_step_db is empty or greater than 0
+    And on those rows nearest_fake_margin_db equals the larger of min(m_gap_fake_db, m_step_fake_db) and min(full_band_margin_db, m_full_band_step_db), ignoring an empty term, when full_band is "true", and min(m_gap_fake_db, m_step_fake_db) otherwise
+    And the fxv0 rows of detection-params.v4.toml have m_full_band_step_db at most 0
+
+  @RP-11 @RF-04
+  Scenario Outline: A v4 params file with an invalid max_lossy_step_db is rejected
+    Given a copy of detection-params.v4.toml with <change>
+    When "accept" runs with that params file
+    Then the exit code is 2
+    And the error output names the file and "<inequality>"
+
+    Examples:
+      | change                                          | inequality                                 |
+      | full_band.max_lossy_step_db set to -0.5         | full_band.max_lossy_step_db ≥ 0            |
+      | full_band.max_lossy_step_db set to 10.5         | full_band.max_lossy_step_db ≤ step_fake_db |
+
   # --- trusted.txt and confirmed.txt -------------------------------------
 
   @RP-11
@@ -367,8 +415,8 @@ Feature: Calibration and acceptance against a labelled corpus
     When "calibrate" runs on the sample corpus
     Then the exit code is 0
     And the baseline cost is 1.1 and the cost of "gap_fake_db = 4.0" is 0.5
-    And the report folder holds detection-params.v4.toml
-    And that file parses to detection-params.v2.toml with algorithm_version 4 and gap_fake_db 4.0
+    And the report folder holds detection-params.v5.toml
+    And that file parses to detection-params.v2.toml with algorithm_version 5 and gap_fake_db 4.0
     And its first two lines are the "PROPOSAL" and "Changed: verdict.gap_fake_db 6.0 -> 4.0" comments
     And no file in the repository has changed
 
@@ -405,8 +453,31 @@ Feature: Calibration and acceptance against a labelled corpus
     When "calibrate" runs on the sample corpus
     Then the exit code is 0
     And with the point "full_band.min_burst_db = 100.0" the fxv0 entries are "fake" instead of "suspicious", and its cost is lower than the baseline cost
-    And the report folder holds detection-params.v4.toml with algorithm_version 4 and full_band.min_burst_db 100.0
+    And the report folder holds detection-params.v5.toml with algorithm_version 5 and full_band.min_burst_db 100.0
     And its second line is the comment "# Changed: full_band.min_burst_db 3.0 -> 100.0"
+
+  @RP-11 @RF-04
+  Scenario: The lossy-step condition can be searched from a v4 baseline
+    On the sample corpus the step condition is what keeps fxv0 Fake under v4
+    (specs/detection/fixtures.md, "Verdicts with v4"): with max_lossy_step_db
+    10.0 its 16 kHz step (about 6 dB) no longer removes the guard. 12.0 breaks
+    max_lossy_step_db ≤ step_fake_db and is skipped.
+    Given split.holdout_fraction is 0.0
+    And a grid with baseline detection-params.v4.toml, must_catch ["fx128"] and values "full_band.max_lossy_step_db" = [3.0, 10.0, 12.0]
+    When "calibrate" runs on the sample corpus
+    Then the exit code is 0
+    And 1 point is skipped by the invariants
+    And the baseline cost is 1.1 and the cost of "full_band.max_lossy_step_db = 10.0" is 1.7
+    And with that point the fxv0 entries are "suspicious" instead of "fake"
+    And the output says "no change proposed"
+    And the report folder holds no detection-params file
+
+  @RP-11 @RF-04
+  Scenario: A max_lossy_step_db key needs a baseline that has the field
+    Given a grid with baseline detection-params.v3.toml whose values include "full_band.max_lossy_step_db"
+    When "calibrate" runs on the sample corpus
+    Then the exit code is 2
+    And the error output says "full_band.max_lossy_step_db: the baseline's [full_band] section has no max_lossy_step_db"
 
   @RP-11
   Scenario: Undetectable transcodes are excluded from must_catch feasibility and cost
