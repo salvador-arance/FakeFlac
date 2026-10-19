@@ -12,7 +12,7 @@ path → metadata (fs) → select N windows → decode with seek (f32 mono)
      → apply rules (DetectionParams) → TrackAnalysis
 ```
 
-The full-band guard (detection v3, `specs/detection/rules.md`, ADR-0038) is specified and accepted; its implementation is pending (`/feature RF-04`). Until then the code runs v2.
+The full-band guard (detection v3, `specs/detection/rules.md`, ADR-0038) is the default: `DetectionParams::default()` equals `detection-params.v3.toml`. Params files without `[full_band]` (such as v2) still load and reproduce the v2 verdicts.
 
 - Stages after the FFT are pure functions over arrays; tested with synthetic signals (low-passed noise at 16/19/20 kHz, full band, silence).
 - Mono for analysis (mean of channels). The spectrogram also uses mono by default.

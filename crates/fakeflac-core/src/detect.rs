@@ -151,6 +151,7 @@ pub fn measure(spectra: &BandSpectra, params: &DetectionParams) -> Measurements 
     // Upper window (v3): bands with centre in `[low_hz, high_hz)` at or below `top`.
     let (upper_level_db, upper_burst_db) = match (&params.full_band, top) {
         (Some(fb), Some(top)) => {
+            // Half-open bounds are exact: band centres are `(b + 0.5) * band_hz`, as in `q()`.
             let window: Vec<usize> = (0..=top)
                 .filter(|&b| centre(b) >= fb.low_hz && centre(b) < fb.high_hz)
                 .collect();

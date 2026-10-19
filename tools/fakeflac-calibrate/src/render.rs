@@ -373,7 +373,7 @@ fn setting_changes_table(md: &mut Md, eval: &Evaluation) {
                 c.setting.clone(),
                 changes,
                 c.detection_rate_change_pp
-                    .map(|x| format!("{} pp", fmt::db(x)))
+                    .map(|x| format!("{} pp", fmt::pct_value(x / 100.0)))
                     .unwrap_or_else(|| "n/a".to_string()),
             ]
         })

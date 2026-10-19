@@ -547,7 +547,7 @@ fn setting_changes(
             let mut counts: BTreeMap<(String, String), u32> = BTreeMap::new();
             for (i, from) in &paired {
                 let row = &rows[*i];
-                if row.truth != Truth::Fake || row.undetectable || setting_id(row) != setting {
+                if row.truth != Truth::Fake || setting_id(row) != setting {
                     continue;
                 }
                 let to = run.evals[*i].verdict;

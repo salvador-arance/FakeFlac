@@ -451,9 +451,9 @@ fn create_report_dir(calibration: &Path, run_id: &str) -> std::io::Result<(Strin
     }
 }
 
-/// The next free `algorithm_version` (evaluation.md section 7): 1 + the largest of the baseline's and
-/// that of every `specs/detection/detection-params.v*.toml` of the repository (read-only).
-fn next_free_version(env: &Env, baseline_version: u32) -> Result<u32, ToolError> {
+/// Opens `specs/detection/` of the repository: a `calibrate` run needs it to number a proposal, so
+/// it is checked before anything is written (exit 2 writes nothing).
+fn detection_dir(env: &Env) -> Result<std::fs::ReadDir, ToolError> {
     let cannot = |why: &str| {
         ToolError::input(format!(
             "error: cannot allocate the proposal's algorithm_version: {why}"
@@ -463,8 +463,14 @@ fn next_free_version(env: &Env, baseline_version: u32) -> Result<u32, ToolError>
         .repo_root
         .as_ref()
         .ok_or_else(|| cannot("the repository was not found"))?;
-    let dir = root.join("specs").join("detection");
-    let entries = std::fs::read_dir(&dir).map_err(|_| cannot("specs/detection/ cannot be read"))?;
+    std::fs::read_dir(root.join("specs").join("detection"))
+        .map_err(|_| cannot("specs/detection/ cannot be read"))
+}
+
+/// The next free `algorithm_version` (evaluation.md section 7): 1 + the largest of the baseline's and
+/// that of every `specs/detection/detection-params.v*.toml` of the repository (read-only).
+fn next_free_version(env: &Env, baseline_version: u32) -> Result<u32, ToolError> {
+    let entries = detection_dir(env)?;
     let mut highest = baseline_version;
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().to_string();
@@ -506,6 +512,9 @@ fn tool_commit(env: &Env) -> String {
 fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Outcome, ToolError> {
     // 1. Environment and inputs: every exit-2 check comes before any write.
     let roots: Roots = env.check()?;
+    if job.grid.is_some() {
+        detection_dir(env)?;
+    }
     let config = load_config(job.config)?;
     for s in &config.generate.settings {
         if !transcoder.supports(&s.encoder) {

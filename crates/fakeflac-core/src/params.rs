@@ -226,26 +226,26 @@ impl DetectionParams {
     /// deserialising and refuses an invalid file.
     pub fn validate(&self) -> Result<(), ParamsError> {
         let v = &self.verdict;
-        if v.gap_suspicious_db > v.gap_fake_db {
+        if !le(v.gap_suspicious_db, v.gap_fake_db) {
             return Err(ParamsError::GapThresholds {
                 suspicious: v.gap_suspicious_db,
                 fake: v.gap_fake_db,
             });
         }
-        if v.step_suspicious_db > v.step_fake_db {
+        if !le(v.step_suspicious_db, v.step_fake_db) {
             return Err(ParamsError::StepThresholds {
                 suspicious: v.step_suspicious_db,
                 fake: v.step_fake_db,
             });
         }
         if let Some(fb) = &self.full_band {
-            if v.fake_max_cutoff_hz >= fb.low_hz {
+            if !lt(v.fake_max_cutoff_hz, fb.low_hz) {
                 return Err(ParamsError::FullBandBelowLossyRange {
                     fake_max: v.fake_max_cutoff_hz,
                     low: fb.low_hz,
                 });
             }
-            if fb.low_hz >= fb.high_hz {
+            if !lt(fb.low_hz, fb.high_hz) {
                 return Err(ParamsError::FullBandWindowEmpty {
                     low: fb.low_hz,
                     high: fb.high_hz,
@@ -254,4 +254,17 @@ impl DetectionParams {
         }
         Ok(())
     }
+}
+
+/// `a <= b`; false when either is NaN, so a NaN ordering is reported as not holding.
+fn le(a: f64, b: f64) -> bool {
+    matches!(
+        a.partial_cmp(&b),
+        Some(std::cmp::Ordering::Less | std::cmp::Ordering::Equal)
+    )
+}
+
+/// `a < b`; false when either is NaN.
+fn lt(a: f64, b: f64) -> bool {
+    matches!(a.partial_cmp(&b), Some(std::cmp::Ordering::Less))
 }
