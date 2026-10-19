@@ -1,6 +1,6 @@
 # Backend design (Rust)
 
-> Pipeline: file → technical metadata → N sampled windows → decode → windowed real FFT → band spectra (power mean and per-frame median) → cutoff step and gap step (+ full-band guard from v3, ADR-0038) → rules (`DetectionParams`) → `TrackAnalysis`. Formats: WAV, FLAC (H1); MP3, M4A, Opus (H2). All thresholds, the FFT window and the cutoff→bitrate tables are versioned data.
+> Pipeline: file → technical metadata → N sampled windows → decode → windowed real FFT → band spectra (power mean and per-frame median) → cutoff step and gap step (+ full-band guard from v3, ADR-0038, with the v4 lossy-step condition, ADR-0039) → rules (`DetectionParams`) → `TrackAnalysis`. Formats: WAV, FLAC (H1); MP3, M4A, Opus (H2). All thresholds, the FFT window and the cutoff→bitrate tables are versioned data.
 
 ## 1. Analysis pipeline
 
@@ -8,7 +8,7 @@
 path → metadata (fs) → select N windows → decode with seek (f32 mono)
      → window + real FFT (N=4096 @ 44.1/48 kHz, v2) → 100 Hz bands per frame
      → mean spectrum (dB of mean power) + median spectrum (median of per-frame dB)
-     → cutoff step + gap step (ADR-0035) + full-band guard (U, B above 20.7 kHz; ADR-0038, v3)
+     → cutoff step + gap step (ADR-0035) + full-band guard (U, B above 20.7 kHz; ADR-0038, v3; lossy-step condition, ADR-0039, v4)
      → apply rules (DetectionParams) → TrackAnalysis
 ```
 

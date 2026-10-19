@@ -341,9 +341,9 @@ pub fn parse_grid(text: &str, settings: &[String]) -> Result<GridFile, ToolError
     let raw: RawGrid = toml::from_str(text)
         .map_err(|e| ToolError::input_lines(e.to_string().lines().map(str::to_string).collect()))?;
     let mut errors: Vec<String> = Vec::new();
-    if !matches!(raw.grid_version, 1..=3) {
+    if !matches!(raw.grid_version, 1 | 2) {
         errors.push(format!(
-            "grid_version {} is not supported (expected 1, 2 or 3)",
+            "grid_version {} is not supported (expected 1 or 2)",
             raw.grid_version
         ));
     }

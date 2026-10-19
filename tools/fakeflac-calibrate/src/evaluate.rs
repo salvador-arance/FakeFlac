@@ -683,9 +683,10 @@ pub fn is_near(row: &LabelRow, eval: &RowEval, config: &Config) -> bool {
         Truth::Real => nearest > 0.0 && nearest <= near_db,
         Truth::Fake => nearest > -near_db && nearest <= 0.0,
     };
-    // A negative kept from `Fake` only by the guard, at its threshold (v3 files only).
+    // A negative kept from `Fake` only by the guard, at its threshold (v4: and no lossy step).
     let by_guard = row.truth == Truth::Real
         && m.full_band_margin_db == Some(0.0)
+        && m.m_full_band_step_db.is_none_or(|s| s > 0.0)
         && m.m_step_fake_db
             .map_or(m.m_gap_fake_db, |s| s.min(m.m_gap_fake_db))
             <= 0.0;

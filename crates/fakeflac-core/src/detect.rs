@@ -1,4 +1,4 @@
-//! Detection rules v3 for lossless files (RF-03, RF-04). Spec: `specs/detection/rules.md`.
+//! Detection rules v4 for lossless files (RF-03, RF-04). Spec: `specs/detection/rules.md`.
 //! Pure functions: no I/O, every number comes from `DetectionParams`.
 
 use crate::domain::{CutoffEstimate, SuspicionReason, Verdict};
