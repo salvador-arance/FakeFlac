@@ -1,7 +1,7 @@
 //! Use case: analyse one track (RF-03, RF-04). Combines the scanner's `FileEntry`,
 //! the analyzer port and the pure detection rules into a `TrackAnalysis`.
 
-use crate::detect::detect;
+use crate::detect::{detect_track, StreamInfo};
 use crate::domain::{AudioCodec, TrackAnalysis, TrackError, TrackInfo, Verdict};
 use crate::params::DetectionParams;
 use crate::ports::{FileEntry, SpectrumAnalyzer};
@@ -55,12 +55,22 @@ pub fn analyze_track(
         return error(info, TrackError::CorruptStream("no bitrate".into()));
     }
 
-    let detection = detect(probe.spectrum.as_ref(), params);
+    let stream = StreamInfo {
+        // The probe sets the codec of every analysed file; PCM rules are the fallback.
+        codec: info.codec.unwrap_or(AudioCodec::Pcm),
+        sample_rate: probe.sample_rate,
+        declared_bitrate_kbps: info.declared_bitrate_kbps,
+        encoder_lowpass_hz: probe.encoder_lowpass_hz,
+    };
+    let detection = detect_track(probe.spectrum.as_ref(), &stream, params);
+    if let Some(e) = detection.error {
+        return error(info, e);
+    }
     TrackAnalysis {
         info,
         verdict: detection.verdict,
         cutoff: detection.cutoff,
-        estimated_source_bitrate_kbps: None,
+        estimated_source_bitrate_kbps: detection.estimated_source_bitrate_kbps,
         reasons: detection.reasons,
         error: None,
         algorithm_version: params.algorithm_version,
