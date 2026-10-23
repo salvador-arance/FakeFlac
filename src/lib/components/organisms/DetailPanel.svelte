@@ -15,11 +15,26 @@
 
   let cutoffHz = $derived(track?.cutoff?.frequencyHz ?? null)
 
-  /** "Cutoff 16.0 kHz · Fake" then " · <reason>" for each reason (owner decision, G1). */
+  /**
+   * "Cutoff 16.0 kHz · Fake" then " · <reason>" for each reason (owner decision, G1).
+   * A lossy track adds, after the cutoff, " · {declared} kbps" (with " VBR" / " ABR") and
+   * " · ≈{estimate} kbps source" when the estimate is lower (specs/ui/lossy-formats.md, Detail line).
+   */
   let summary = $derived.by(() => {
     if (!track || track.verdict === 'error') return ''
     const parts: string[] = []
     if (cutoffHz !== null) parts.push(t('detail.cutoff', { khz: (cutoffHz / 1000).toFixed(1) }))
+    const declared = track.info.declaredBitrateKbps
+    if (declared !== null) {
+      const mode = track.info.bitrateMode
+      const suffix =
+        mode === 'vbr' ? ` ${t('bitrate.vbr')}` : mode === 'abr' ? ` ${t('bitrate.abr')}` : ''
+      parts.push(t('detail.declared', { kbps: declared }) + suffix)
+      const estimate = track.estimatedSourceBitrateKbps
+      if (estimate !== null && estimate < declared) {
+        parts.push(t('detail.source', { kbps: estimate }))
+      }
+    }
     parts.push(t(`verdict.${track.verdict}`))
     for (const reason of track.reasons) parts.push(t(`reason.${reason}`))
     return parts.join(' · ')

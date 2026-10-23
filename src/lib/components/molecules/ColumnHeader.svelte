@@ -14,11 +14,9 @@
   let ariaSort: 'none' | 'ascending' | 'descending' = $derived(
     sort === 'asc' ? 'ascending' : sort === 'desc' ? 'descending' : 'none',
   )
-  // Compile-only stub (RF-15 test stage): `tooltip` is not rendered yet.
-  void tooltip
 </script>
 
-<div class="column-header" role="columnheader" aria-sort={ariaSort}>
+<div class="column-header" role="columnheader" aria-sort={ariaSort} title={tooltip}>
   <button type="button" class="header-button" onclick={onsort}>
     <span class="label">{label}</span>
     {#if sort === 'asc'}
