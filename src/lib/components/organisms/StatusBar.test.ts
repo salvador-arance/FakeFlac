@@ -80,9 +80,9 @@ describe('StatusBar', () => {
   // main-screen.md: Error -> message in the status bar
   it('error: shows the message', () => {
     render(StatusBar, {
-      props: { phase: 'error', summary: summary(), message: 'No WAV or FLAC files in this folder' },
+      props: { phase: 'error', summary: summary(), message: 'No supported audio files in this folder' },
     })
-    expect(statusText()).toBe('No WAV or FLAC files in this folder')
+    expect(statusText()).toBe('No supported audio files in this folder')
     expect(screen.queryByRole('progressbar')).toBeNull()
   })
 })

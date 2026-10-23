@@ -1,7 +1,9 @@
 // Synthetic data for component tests and stories. No real audio, no corpus.
 import type {
   AnalysisSummary,
+  AudioCodec,
   AudioFormat,
+  BitrateMode,
   ResultRow,
   Spectrogram,
   SuspicionReason,
@@ -13,6 +15,8 @@ import type {
 export type TrackOptions = {
   path?: string
   format?: AudioFormat
+  /** Never derived from `format`: pass it for lossy and ALAC tracks. Default `flac`. */
+  codec?: AudioCodec | null
   sampleRate?: number
   bitDepth?: number | null
   durationMs?: number
@@ -20,6 +24,9 @@ export type TrackOptions = {
   cutoffHz?: number | null
   reasons?: SuspicionReason[]
   error?: TrackError | null
+  declaredBitrateKbps?: number | null
+  bitrateMode?: BitrateMode | null
+  estimatedSourceBitrateKbps?: number | null
 }
 
 /** A `TrackAnalysis` with sensible defaults (a real 44.1 kHz / 16-bit FLAC). */
@@ -31,12 +38,12 @@ export function makeTrack(o: TrackOptions = {}): TrackAnalysis {
       path,
       folder: cut >= 0 ? path.slice(0, cut) : '',
       format: o.format ?? 'flac',
-      codec: 'flac',
+      codec: o.codec === undefined ? 'flac' : o.codec,
       sampleRate: o.sampleRate ?? 44100,
       bitDepth: o.bitDepth === undefined ? 16 : o.bitDepth,
       channels: 2,
-      declaredBitrateKbps: null,
-      bitrateMode: null,
+      declaredBitrateKbps: o.declaredBitrateKbps ?? null,
+      bitrateMode: o.bitrateMode ?? null,
       durationMs: o.durationMs ?? 181000,
       sizeBytes: 1_000_000,
       modifiedUnix: 1_700_000_000,
@@ -46,10 +53,10 @@ export function makeTrack(o: TrackOptions = {}): TrackAnalysis {
       o.cutoffHz === undefined || o.cutoffHz === null
         ? null
         : { frequencyHz: o.cutoffHz, steepnessDbPerKhz: 40, noiseFloorDb: -90 },
-    estimatedSourceBitrateKbps: null,
+    estimatedSourceBitrateKbps: o.estimatedSourceBitrateKbps ?? null,
     reasons: o.reasons ?? [],
     error: o.error ?? null,
-    algorithmVersion: 2,
+    algorithmVersion: 5,
   }
 }
 

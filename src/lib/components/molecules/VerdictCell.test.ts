@@ -67,3 +67,15 @@ describe('VerdictCell', () => {
     }
   })
 })
+
+describe('VerdictCell: lossy reason', () => {
+  // @RF-07 @RF-15 reason.cutoffBelowDeclared is shown in the tooltip like every reason
+  it('lists cutoffBelowDeclared in the tooltip', () => {
+    const { container } = render(VerdictCell, {
+      props: { verdict: 'suspicious', reasons: ['cutoffBelowDeclared'] },
+    })
+    expect(container.querySelector('[title]')?.getAttribute('title')).toContain(
+      'Cutoff lower than expected for its bitrate',
+    )
+  })
+})

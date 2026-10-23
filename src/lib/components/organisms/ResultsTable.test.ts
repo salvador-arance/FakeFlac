@@ -2,7 +2,8 @@
 //
 // Readings chosen where the specs are open (reported in the test-stage report):
 // - The grid is `div`-based: role="grid" (scroll container) > role="row" > "columnheader" / "gridcell".
-//   Cells are, in order: State, File, Folder, Format, Samplerate, Bits, Duration, Cutoff.
+//   Cells are, in order: State, File, Folder, Format, Samplerate, Bits, Duration, Cutoff, Bitrate,
+//   Real bitrate (specs/ui/lossy-formats.md). The Real bitrate header carries its tooltip as title.
 // - The table sorts `rows` itself by the `sort` prop, so keyboard order = visual order.
 //   The File column sorts by the full path ("sorted by file path").
 // - Virtualisation is testable through `rowHeight` and `viewportHeight` (px). The role="grid"
@@ -12,7 +13,7 @@ import { fireEvent, render, screen, within } from '@testing-library/svelte'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { ResultRow, SortState } from '../../model'
-import { makeManyRows, makeRow } from '../../testing/fixtures'
+import { makeManyRows, makeRow, makeTrack } from '../../testing/fixtures'
 import ResultsTable from './ResultsTable.svelte'
 
 const byPath: SortState = { column: 'file', direction: 'asc' }
@@ -36,7 +37,7 @@ function setup(rows: ResultRow[], extra: Record<string, unknown> = {}) {
 
 describe('ResultsTable: structure', () => {
   // @RF-06 state: empty
-  it('is a grid with the eight columns and no data rows when empty', () => {
+  it('is a grid with the ten columns and no data rows when empty', () => {
     setup([])
     expect(screen.getByRole('grid')).not.toBeNull()
     expect(screen.getAllByRole('columnheader').map((h) => h.textContent?.trim())).toEqual([
@@ -48,6 +49,8 @@ describe('ResultsTable: structure', () => {
       'Bits',
       'Duration',
       'Cutoff',
+      'Bitrate',
+      'Real bitrate',
     ])
     expect(dataRows()).toHaveLength(0)
   })
@@ -274,5 +277,160 @@ describe('ResultsTable: virtualisation', () => {
   it('renders a short list completely when the viewport height is unknown (jsdom)', () => {
     setup(makeManyRows(30))
     expect(dataRows()).toHaveLength(30)
+  })
+})
+
+const REAL_BITRATE_HELP =
+  "The real bitrate is an estimate from the cutoff, in terms of the file\x27s own codec. Files from sources with little treble, from encoders without a low-pass, or re-encoded from a close bitrate may not be detected."
+const BITRATE = 8
+const REAL = 9
+
+const lossy = (
+  index: number,
+  path: string,
+  o: Parameters<typeof makeTrack>[0] = {},
+): ResultRow => ({
+  index,
+  analysis: makeTrack({ path, format: 'mp3', codec: 'mp3', ...o }),
+})
+
+describe('ResultsTable: lossy columns (specs/ui/lossy-formats.md)', () => {
+  // @RF-06 @RF-15 Scenario: Table cells of a stubbed lossy row
+  it('shows format, cutoff, bitrate and real bitrate of a stubbed lossy row', () => {
+    setup([
+      lossy(0, 'C:/A/a.mp3', {
+        declaredBitrateKbps: 320,
+        bitrateMode: 'cbr',
+        estimatedSourceBitrateKbps: 128,
+        cutoffHz: 17000,
+        verdict: 'fake',
+      }),
+      lossy(1, 'C:/A/b.m4a', { format: 'm4a', codec: 'alac', cutoffHz: 22050, verdict: 'real' }),
+    ])
+    const [a, b] = dataRows()
+    expect(cells(a)[3].textContent?.trim()).toBe('MP3')
+    expect(cells(a)[7].textContent?.trim()).toBe('17.0 kHz')
+    expect(cells(a)[BITRATE].textContent?.trim()).toBe('320 kbps')
+    expect(cells(a)[REAL].textContent?.trim()).toBe('≈128 kbps')
+    expect(cells(b)[3].textContent?.trim()).toBe('M4A (ALAC)')
+    expect(cells(b)[BITRATE].textContent?.trim()).toBe('—')
+    expect(cells(b)[REAL].textContent?.trim()).toBe('—')
+  })
+
+  // @RF-06 @RF-15 Scenario: The Real bitrate column explains the estimate
+  it('gives the Real bitrate header its tooltip and no other header has one', () => {
+    setup([])
+    const headers = screen.getAllByRole('columnheader')
+    expect(headers[REAL].getAttribute('title')).toBe(REAL_BITRATE_HELP)
+    expect(headers.filter((_, i) => i !== REAL).some((h) => h.hasAttribute('title'))).toBe(false)
+  })
+
+  // @RF-14 @RF-06 Scenario: A lossy row has the same fields as a lossless row (table side)
+  it('shows the mixed folder with the DTO values of algorithm 5', () => {
+    setup([
+      lossy(0, 'C:/Mixed/mp3_320_lp17k.mp3', {
+        declaredBitrateKbps: 320,
+        bitrateMode: 'cbr',
+        estimatedSourceBitrateKbps: 128,
+        cutoffHz: 17000,
+        verdict: 'fake',
+      }),
+      lossy(1, 'C:/Mixed/m4a_aac_128_lp16k.m4a', {
+        format: 'm4a',
+        codec: 'aac',
+        declaredBitrateKbps: 128,
+        bitrateMode: null,
+        estimatedSourceBitrateKbps: 128,
+        cutoffHz: 16000,
+        verdict: 'real',
+      }),
+      { index: 2, analysis: makeTrack({ path: 'C:/Mixed/full_band.flac', cutoffHz: 22050 }) },
+    ])
+    const byName = Object.fromEntries(dataRows().map((r) => [cells(r)[1].textContent?.trim(), r]))
+    const row = (n: string) => cells(byName[n])
+    expect(row('mp3_320_lp17k.mp3')[0].textContent).toContain('Fake')
+    expect(row('mp3_320_lp17k.mp3')[3].textContent?.trim()).toBe('MP3')
+    expect(row('mp3_320_lp17k.mp3')[BITRATE].textContent?.trim()).toBe('320 kbps')
+    expect(row('mp3_320_lp17k.mp3')[REAL].textContent?.trim()).toBe('≈128 kbps')
+    expect(row('m4a_aac_128_lp16k.m4a')[0].textContent).toContain('Genuine')
+    expect(row('m4a_aac_128_lp16k.m4a')[3].textContent?.trim()).toBe('M4A')
+    expect(row('m4a_aac_128_lp16k.m4a')[BITRATE].textContent?.trim()).toBe('128 kbps')
+    expect(row('m4a_aac_128_lp16k.m4a')[REAL].textContent?.trim()).toBe('128 kbps')
+    expect(row('full_band.flac')[BITRATE].textContent?.trim()).toBe('—')
+    expect(row('full_band.flac')[REAL].textContent?.trim()).toBe('—')
+  })
+
+  // @RF-14 @RF-06 Scenario: A variable bitrate is marked in the table
+  it('marks a variable bitrate', () => {
+    setup([
+      lossy(0, 'C:/VBR/mp3_vbr_lp19k5.mp3', {
+        declaredBitrateKbps: 240,
+        bitrateMode: 'vbr',
+        estimatedSourceBitrateKbps: 240,
+        cutoffHz: 19500,
+      }),
+    ])
+    expect(cells(dataRows()[0])[BITRATE].textContent?.trim()).toBe('240 kbps VBR')
+  })
+
+  // @RNF-09 Scenario: Unicode names of lossy files
+  it('shows a Unicode lossy file name exactly', () => {
+    const name = '01 – Canci\u00f3n \u2018x\u2019.mp3'
+    setup([
+      lossy(0, `C:/M\u00fasica/\u00c1lbum \u2033\u00d1andú\u2033/${name}`, {
+        declaredBitrateKbps: 320,
+        bitrateMode: 'cbr',
+      }),
+    ])
+    expect(fileColumn()).toEqual([name])
+    expect(cells(dataRows()[0])[0].textContent).toContain('Genuine')
+  })
+
+  // @RF-07 @RF-14 Scenario: An unsupported lossy file shows its error text (row tooltip)
+  it('shows "Unsupported audio format" as the tooltip of an error row', () => {
+    setup([
+      makeRow(0, {
+        path: 'C:/A/he-aac.m4a',
+        format: 'm4a',
+        codec: 'aac',
+        verdict: 'error',
+        error: { kind: 'unsupportedFormat', detail: 'HE-AAC is not supported' },
+      }),
+    ])
+    expect(dataRows()[0].matches('[title*="Unsupported audio format"]')).toBe(true)
+  })
+
+  // @RF-06 @RF-15 Table: Bitrate and Real bitrate sort numerically, "—" cells last
+  describe.each([
+    ['bitrate', 'declaredBitrateKbps', BITRATE],
+    ['realBitrate', 'estimatedSourceBitrateKbps', REAL],
+  ] as const)('sorting by %s', (column, field, headerIndex) => {
+    const mk = (index: number, name: string, kbps: number | null) =>
+      lossy(index, `C:/A/${name}.mp3`, { [field]: kbps })
+    const rows = [mk(0, 'b', 128), mk(1, 'n', null), mk(2, 'a', 320), mk(3, 'c', 96)]
+
+    it('ascending is numeric with the "—" row last', () => {
+      setup(rows, { sort: { column, direction: 'asc' } })
+      expect(fileColumn()).toEqual(['c.mp3', 'b.mp3', 'a.mp3', 'n.mp3'])
+    })
+
+    it('descending is numeric with the "—" row still last', () => {
+      setup(rows, { sort: { column, direction: 'desc' } })
+      expect(fileColumn()).toEqual(['a.mp3', 'b.mp3', 'c.mp3', 'n.mp3'])
+    })
+
+    it('marks the column with aria-sort', () => {
+      setup(rows, { sort: { column, direction: 'asc' } })
+      const sorts = screen.getAllByRole('columnheader').map((h) => h.getAttribute('aria-sort'))
+      expect(sorts[headerIndex]).toBe('ascending')
+    })
+
+    it('emits sort(column) when the header is clicked', async () => {
+      const { onsort } = setup(rows)
+      await userEvent.click(
+        screen.getByRole('button', { name: column === 'bitrate' ? /^Bitrate$/ : /Real bitrate/ }),
+      )
+      expect(onsort).toHaveBeenCalledWith(column)
+    })
   })
 })

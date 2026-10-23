@@ -5,13 +5,17 @@
     label: string
     sort?: 'asc' | 'desc' | null
     onsort?: () => void
+    /** Tooltip of the header (only the Real bitrate column sets it). */
+    tooltip?: string
   }
 
-  let { label, sort = null, onsort }: Props = $props()
+  let { label, sort = null, onsort, tooltip }: Props = $props()
 
   let ariaSort: 'none' | 'ascending' | 'descending' = $derived(
     sort === 'asc' ? 'ascending' : sort === 'desc' ? 'descending' : 'none',
   )
+  // Compile-only stub (RF-15 test stage): `tooltip` is not rendered yet.
+  void tooltip
 </script>
 
 <div class="column-header" role="columnheader" aria-sort={ariaSort}>

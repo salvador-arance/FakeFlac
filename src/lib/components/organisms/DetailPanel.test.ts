@@ -157,3 +157,57 @@ describe("DetailPanel: unavailable", () => {
     );
   });
 });
+
+describe("DetailPanel: a lossy track (specs/ui/lossy-formats.md, Detail line)", () => {
+  // @RF-07 @RF-15 Scenario Outline: Detail line of a lossy track
+  it.each([
+    [320, "cbr", 128, 17000, "fake", [], "Cutoff 17.0 kHz · 320 kbps · ≈128 kbps source · Fake"],
+    [
+      320,
+      "cbr",
+      192,
+      18500,
+      "suspicious",
+      ["cutoffBelowDeclared"],
+      "Cutoff 18.5 kHz · 320 kbps · ≈192 kbps source · Suspicious · Cutoff lower than expected for its bitrate",
+    ],
+    [320, "cbr", 320, 20400, "real", [], "Cutoff 20.4 kHz · 320 kbps · Genuine"],
+    [240, "vbr", 240, 19500, "real", [], "Cutoff 19.5 kHz · 240 kbps VBR · Genuine"],
+    [192, "abr", 192, 19000, "real", [], "Cutoff 19.0 kHz · 192 kbps ABR · Genuine"],
+  ] as const)(
+    "declared %s %s, estimate %s, cutoff %s, %s, reasons %j shows the line",
+    (declared, mode, estimate, cutoff, verdict, reasons, line) => {
+      const { container } = render(DetailPanel, {
+        props: {
+          track: makeTrack({
+            path: "C:/Mixed/a.mp3",
+            format: "mp3",
+            codec: "mp3",
+            declaredBitrateKbps: declared,
+            bitrateMode: mode,
+            estimatedSourceBitrateKbps: estimate,
+            cutoffHz: cutoff,
+            verdict,
+            reasons: [...reasons],
+          }),
+          spectrogram: makeSpectrogram({ width: 8, height: 4 }),
+          loading: false,
+        },
+      });
+      expect(text(container)).toContain(line);
+    },
+  );
+
+  // @RF-07 @RF-15 lossless tracks keep the H1 line
+  it("keeps the H1 line for a lossless track", () => {
+    const { container } = render(DetailPanel, {
+      props: {
+        track: makeTrack({ verdict: "fake", cutoffHz: 16000 }),
+        spectrogram: makeSpectrogram({ width: 8, height: 4 }),
+        loading: false,
+      },
+    });
+    expect(text(container)).toContain("Cutoff 16.0 kHz · Fake");
+    expect(text(container)).not.toMatch(/kbps/);
+  });
+});

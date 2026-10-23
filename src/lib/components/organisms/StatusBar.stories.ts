@@ -48,6 +48,6 @@ export const ErrorState: Story = {
   args: {
     phase: 'error',
     summary: { total: 0, done: 0, real: 0, suspicious: 0, fake: 0, errors: 0 },
-    message: 'No WAV or FLAC files in this folder',
+    message: 'No supported audio files in this folder',
   },
 }

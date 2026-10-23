@@ -49,3 +49,50 @@ export const ErrorTrack: Story = {
     loading: false,
   },
 }
+
+export const LossyFake: Story = {
+  args: {
+    track: makeTrack({
+      path: 'C:/Music/Album A/a.mp3',
+      format: 'mp3',
+      codec: 'mp3',
+      verdict: 'fake',
+      cutoffHz: 17000,
+      declaredBitrateKbps: 320,
+      bitrateMode: 'cbr',
+      estimatedSourceBitrateKbps: 128,
+    }),
+    spectrogram: makeLowPassSpectrogram(17000),
+    loading: false,
+  },
+}
+
+export const LossyVbr: Story = {
+  args: {
+    track: makeTrack({
+      path: 'C:/Music/Album A/v.mp3',
+      format: 'mp3',
+      codec: 'mp3',
+      cutoffHz: 19500,
+      declaredBitrateKbps: 240,
+      bitrateMode: 'vbr',
+      estimatedSourceBitrateKbps: 240,
+    }),
+    spectrogram: makeLowPassSpectrogram(19500),
+    loading: false,
+  },
+}
+
+export const UnsupportedFormat: Story = {
+  args: {
+    track: makeTrack({
+      path: 'C:/Music/Album A/he-aac.m4a',
+      format: 'm4a',
+      codec: 'aac',
+      verdict: 'error',
+      error: { kind: 'unsupportedFormat', detail: 'HE-AAC is not supported' },
+    }),
+    spectrogram: null,
+    loading: false,
+  },
+}

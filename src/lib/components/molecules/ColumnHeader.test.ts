@@ -38,4 +38,18 @@ describe('ColumnHeader', () => {
     await user.keyboard('{Enter}')
     expect(onsort).toHaveBeenCalledTimes(1)
   })
+
+  // @RF-06 @RF-15 The Real bitrate column explains the estimate: optional `tooltip` prop.
+  // Reading: the tooltip is the `title` attribute of the columnheader element.
+  it('shows the tooltip as the title of the header', () => {
+    const tooltip = 'The real bitrate is an estimate from the cutoff.'
+    render(ColumnHeader, { props: { label: 'Real bitrate', tooltip } })
+    expect(screen.getByRole('columnheader').getAttribute('title')).toBe(tooltip)
+  })
+
+  // @RF-06 @RF-15 only the Real bitrate column sets a tooltip
+  it('has no title without a tooltip', () => {
+    render(ColumnHeader, { props: { label: 'Duration' } })
+    expect(screen.getByRole('columnheader').hasAttribute('title')).toBe(false)
+  })
 })

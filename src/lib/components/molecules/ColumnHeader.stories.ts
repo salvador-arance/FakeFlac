@@ -28,3 +28,10 @@ export const Descending: Story = {
     sort: 'desc',
   },
 }
+
+export const WithTooltip: Story = {
+  args: {
+    label: 'Real bitrate',
+    tooltip: 'The real bitrate is an estimate from the cutoff.',
+  },
+}

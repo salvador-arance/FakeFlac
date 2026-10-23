@@ -217,7 +217,7 @@ describe('RF-01: choose a folder', () => {
     expect(openButton().disabled).toBe(false)
     expect(cancelButton().disabled).toBe(true)
     expect(screen.getByText(HINT)).not.toBeNull()
-    expect(screen.queryByText(/No WAV or FLAC|Cannot open|already running|unexpected/)).toBeNull()
+    expect(screen.queryByText(/No supported audio|Cannot open|already running|unexpected/)).toBeNull()
   })
 
   // docs/agents/progress.md: a drop during a run would otherwise show ANALYSIS_RUNNING
@@ -500,7 +500,7 @@ describe('screen state: Cancelled', () => {
 describe('screen state: Error', () => {
   // main-screen.md: texts come from i18n by code
   it.each([
-    ['NO_AUDIO_FOUND', 'No WAV or FLAC files in this folder'],
+    ['NO_AUDIO_FOUND', 'No supported audio files in this folder'],
     ['FOLDER_UNREADABLE', 'Cannot open this folder'],
     ['ANALYSIS_RUNNING', 'An analysis is already running'],
   ])('%s before the run starts shows its text', async (code, text) => {
@@ -518,7 +518,7 @@ describe('screen state: Error', () => {
     fakeRun().fail('NO_AUDIO_FOUND')
     await mountPage()
     dragHandler({ type: 'drop', paths: ['C:/Docs'] })
-    await vi.waitFor(() => expect(statusText()).toBe('No WAV or FLAC files in this folder'))
+    await vi.waitFor(() => expect(statusText()).toBe('No supported audio files in this folder'))
     expect(dataRows()).toHaveLength(0)
     expect(openButton().disabled).toBe(false)
   })
