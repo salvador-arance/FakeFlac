@@ -81,8 +81,10 @@ fn v4_file_is_accepted_and_has_max_lossy_step_db() {
 // Built here because tests cannot be shared across crates.
 #[test]
 fn v3_file_equals_the_v4_defaults_without_max_lossy_step_db() {
+    // The defaults are v5 (ADR-0041); a v3 file has no [lossy] section.
     let mut expected = DetectionParams {
         algorithm_version: 3,
+        lossy: None,
         ..DetectionParams::default()
     };
     expected.full_band.as_mut().unwrap().max_lossy_step_db = None;
@@ -239,5 +241,255 @@ fn step_suspicious_above_step_fake_is_rejected() {
             Some("step_suspicious_db = 10.5"),
         ),
         "step_suspicious_db ≤ step_fake_db",
+    );
+}
+
+// =============================================================================================
+// The [lossy] section of detection v5 (specs/features/detection-lossy.feature, @RF-15;
+// specs/detection/lossy-source.md section 6, ADR-0041)
+// =============================================================================================
+
+const V5: &str = "detection-params.v5.toml";
+
+// Scenario Outline: Valid parameter files and their [lossy] section (@RF-15)
+#[test]
+fn rf15_v5_file_is_accepted_and_has_a_lossy_section() {
+    let p: DetectionParams = toml::from_str(&spec_text(V5)).unwrap();
+    p.validate().expect("v5 is valid");
+    assert_eq!(p.algorithm_version, 5);
+    assert!(p.lossy.is_some());
+}
+
+#[test]
+fn rf15_v4_file_is_accepted_and_has_no_lossy_section() {
+    let p: DetectionParams = toml::from_str(&spec_text("detection-params.v4.toml")).unwrap();
+    p.validate().expect("v4 is valid");
+    assert!(p.lossy.is_none());
+}
+
+#[test]
+fn rf15_v2_and_v3_files_have_no_lossy_section() {
+    for file in ["detection-params.v2.toml", "detection-params.v3.toml"] {
+        let p: DetectionParams = toml::from_str(&spec_text(file)).unwrap();
+        p.validate().unwrap();
+        assert!(p.lossy.is_none(), "{file}");
+    }
+}
+
+#[test]
+fn rf15_the_default_params_have_a_lossy_section() {
+    let p = DetectionParams::default();
+    p.validate().expect("the defaults are valid");
+    assert!(p.lossy.is_some());
+}
+
+// v5 is v4 plus [lossy]: every other section and value is unchanged (lossy-source.md section 1).
+#[test]
+fn rf15_v5_is_v4_plus_the_lossy_section() {
+    let v4: DetectionParams = toml::from_str(&spec_text("detection-params.v4.toml")).unwrap();
+    let v5: DetectionParams = toml::from_str(&spec_text(V5)).unwrap();
+    let expected = DetectionParams {
+        algorithm_version: 5,
+        lossy: v5.lossy.clone(),
+        ..v4.clone()
+    };
+    assert_eq!(v5, expected);
+    // And the v4 file is the defaults without [lossy] (the stand-in of the core's tests).
+    assert_eq!(
+        v4,
+        DetectionParams {
+            algorithm_version: 4,
+            lossy: None,
+            ..DetectionParams::default()
+        }
+    );
+}
+
+/// The text of v5 with the exact `old` replaced by `new` (once), searching after `from` when given:
+/// the `mp3` and `aac` tables share some rows.
+fn v5_replace(from: Option<&str>, old: &str, new: &str) -> String {
+    let text = spec_text(V5);
+    let start = from.map_or(0, |marker| {
+        text.find(marker)
+            .unwrap_or_else(|| panic!("{marker} not in {V5}"))
+    });
+    let at = text[start..]
+        .find(old)
+        .unwrap_or_else(|| panic!("{old:?} not found in {V5}"))
+        + start;
+    format!("{}{}{}", &text[..at], new, &text[at + old.len()..])
+}
+
+/// The text of v5 with the whole array `name = [ ... ]` of `[lossy.cutoffs]` replaced.
+fn v5_with_array(name: &str, replacement: &str) -> String {
+    let text = spec_text(V5);
+    let start = text
+        .find(&format!("\n{name} = ["))
+        .unwrap_or_else(|| panic!("{name} array not found"))
+        + 1;
+    let end = start + text[start..].find("\n]").unwrap() + 2;
+    format!("{}{}{}", &text[..start], replacement, &text[end..])
+}
+
+const MP3_112: &str = "  { bitrate_kbps = 112, cutoff_hz = 15600.0 },";
+const MP3_128: &str = "  { bitrate_kbps = 128, cutoff_hz = 17000.0 },";
+
+// Scenario Outline: Invalid [lossy] sections are rejected: by deserialisation (@RF-15)
+#[test]
+fn rf15_lossy_without_suspicious_shortfall_hz_is_rejected() {
+    assert_rejected_by_deserialisation(
+        &edited_file(V5, "lossy", "suspicious_shortfall_hz", None),
+        "suspicious_shortfall_hz",
+    );
+}
+
+#[test]
+fn rf15_lossy_with_an_unknown_field_is_rejected() {
+    let text = spec_text(V5).replace("\n[lossy]", "\n[lossy]\nmax_shortfall_hz = 1.0");
+    assert!(text.contains("max_shortfall_hz"));
+    assert_rejected_by_deserialisation(&text, "max_shortfall_hz");
+}
+
+#[test]
+fn rf15_lossy_cutoffs_without_the_aac_array_is_rejected() {
+    assert_rejected_by_deserialisation(&v5_with_array("aac", ""), "aac");
+}
+
+#[test]
+fn rf15_lossy_cutoffs_with_an_unknown_codec_is_rejected() {
+    let text = spec_text(V5).replace("\n[lossy.cutoffs]", "\n[lossy.cutoffs]\nvorbis = []");
+    assert!(text.contains("vorbis = []"));
+    assert_rejected_by_deserialisation(&text, "vorbis");
+}
+
+#[test]
+fn rf15_a_cutoff_row_without_cutoff_hz_is_rejected() {
+    assert_rejected_by_deserialisation(
+        &v5_replace(None, MP3_128, "  { bitrate_kbps = 128 },"),
+        "cutoff_hz",
+    );
+}
+
+// Scenario Outline: Invalid [lossy] sections are rejected: by validation (@RF-15)
+#[test]
+fn rf15_zero_suspicious_shortfall_hz_is_rejected() {
+    assert_rejected_by_validation(
+        &edited_file(
+            V5,
+            "lossy",
+            "suspicious_shortfall_hz",
+            Some("suspicious_shortfall_hz = 0.0"),
+        ),
+        "lossy.suspicious_shortfall_hz > 0",
+    );
+}
+
+#[test]
+fn rf15_suspicious_shortfall_above_fake_shortfall_is_rejected() {
+    assert_rejected_by_validation(
+        &edited_file(
+            V5,
+            "lossy",
+            "suspicious_shortfall_hz",
+            Some("suspicious_shortfall_hz = 3000.0"),
+        ),
+        "lossy.suspicious_shortfall_hz ≤ lossy.fake_shortfall_hz",
+    );
+}
+
+#[test]
+fn rf15_nan_fake_shortfall_hz_is_rejected() {
+    assert_rejected_by_validation(
+        &edited_file(
+            V5,
+            "lossy",
+            "fake_shortfall_hz",
+            Some("fake_shortfall_hz = nan"),
+        ),
+        "lossy.fake_shortfall_hz",
+    );
+}
+
+#[test]
+fn rf15_fake_min_step_below_step_suspicious_is_rejected() {
+    assert_rejected_by_validation(
+        &edited_file(
+            V5,
+            "lossy",
+            "fake_min_step_db",
+            Some("fake_min_step_db = 6.5"),
+        ),
+        "step_suspicious_db ≤ lossy.fake_min_step_db",
+    );
+}
+
+#[test]
+fn rf15_an_empty_mp3_array_is_rejected() {
+    assert_rejected_by_validation(
+        &v5_with_array("mp3", "mp3 = []"),
+        "lossy.cutoffs.mp3 is not empty",
+    );
+}
+
+#[test]
+fn rf15_an_empty_opus_array_is_rejected() {
+    let text = spec_text(V5).replace("\n[lossy.cutoffs]", "\n[lossy.cutoffs]\nopus = []");
+    assert!(text.contains("opus = []"));
+    assert_rejected_by_validation(&text, "lossy.cutoffs.opus is not empty");
+}
+
+#[test]
+fn rf15_swapped_mp3_rows_are_rejected_by_the_bitrate_check() {
+    assert_rejected_by_validation(
+        &v5_replace(
+            None,
+            &format!("{MP3_112}\n{MP3_128}"),
+            &format!("{MP3_128}\n{MP3_112}"),
+        ),
+        "lossy.cutoffs.mp3: bitrate_kbps increases",
+    );
+}
+
+#[test]
+fn rf15_a_repeated_mp3_bitrate_is_rejected() {
+    assert_rejected_by_validation(
+        &v5_replace(None, MP3_128, &format!("{MP3_128}\n{MP3_128}")),
+        "lossy.cutoffs.mp3: bitrate_kbps increases",
+    );
+}
+
+#[test]
+fn rf15_a_decreasing_mp3_cutoff_is_rejected() {
+    assert_rejected_by_validation(
+        &v5_replace(
+            None,
+            "{ bitrate_kbps = 160, cutoff_hz = 17500.0 }",
+            "{ bitrate_kbps = 160, cutoff_hz = 16500.0 }",
+        ),
+        "lossy.cutoffs.mp3: cutoff_hz does not decrease",
+    );
+}
+
+#[test]
+fn rf15_a_zero_aac_bitrate_is_rejected() {
+    assert_rejected_by_validation(
+        &v5_replace(
+            Some("\naac = ["),
+            "{ bitrate_kbps = 64,  cutoff_hz = 11000.0 }",
+            "{ bitrate_kbps = 0,  cutoff_hz = 11000.0 }",
+        ),
+        "lossy.cutoffs.aac: bitrate_kbps > 0",
+    );
+}
+
+#[test]
+fn rf15_a_zero_aac_cutoff_is_rejected() {
+    assert_rejected_by_validation(
+        &v5_replace(
+            Some("\naac = ["),
+            "{ bitrate_kbps = 64,  cutoff_hz = 11000.0 }",
+            "{ bitrate_kbps = 64,  cutoff_hz = 0.0 }",
+        ),
+        "lossy.cutoffs.aac: cutoff_hz > 0",
     );
 }

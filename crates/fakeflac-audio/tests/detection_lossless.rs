@@ -1,5 +1,7 @@
 //! Tests derived from `specs/features/detection-lossless.feature` (@RF-03 @RF-04 @RF-14 @RNF-04).
-//! Spec: `specs/detection/rules.md` (algorithm_version 4), parameters v4, fixtures of
+//! Spec: `specs/detection/rules.md` (lossless rules of v4, unchanged in v5), parameters v5 (the
+//! defaults, ADR-0041; the file and `algorithm_version` 5 in the tests of "Parameters come from the
+//! versioned file"), fixtures of
 //! `specs/detection/fixtures.md`. One test per example row of each Scenario Outline.
 //! Protected after the `test(RF-03,RF-04)` commit; updated for detection v3 in the `test(RF-04)`
 //! commit that follows ADR-0038 and for v4 in the one that follows ADR-0039. The rule-level
@@ -530,18 +532,19 @@ fn deterministic() {
 #[test]
 fn default_params_equal_versioned_file() {
     let file = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../specs/detection/detection-params.v4.toml");
+        .join("../../specs/detection/detection-params.v5.toml");
     let text = std::fs::read_to_string(file).unwrap();
     let from_file: DetectionParams = toml::from_str(&text).unwrap();
     assert_eq!(DetectionParams::default(), from_file);
-    assert_eq!(from_file.algorithm_version, 4);
+    assert_eq!(from_file.algorithm_version, 5);
+    assert!(from_file.lossy.is_some(), "v5 has a [lossy] section");
 }
 
 #[test]
-fn every_analysis_carries_algorithm_version_4() {
+fn every_analysis_carries_algorithm_version_5() {
     // Analysed, too short and corrupt tracks alike.
     for name in ["lp16k", "silence", "short", "corrupt"] {
-        assert_eq!(analyze(name, Flac).algorithm_version, 4, "{name}");
+        assert_eq!(analyze(name, Flac).algorithm_version, 5, "{name}");
     }
 }
 

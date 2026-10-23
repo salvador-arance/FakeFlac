@@ -2,6 +2,37 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-23 - RF-15 part 1 (detection v5, contract v3, lossy UI): PR #55 open (awaiting G2)
+
+**Done**
+- #52 (RF-14) was merged. `just prune-branches` found nothing to delete.
+- **Scope (owner):** RF-15 is split into two PRs.
+  - Part 1 is `feat/RF-15`, PR #55: detection v5, `[lossy]` params, v5 default, contract v3, the UI, and the `decode-lossy.feature` scenarios RF-14 had deferred.
+  - Part 2 is lossy calibration: `calibration/lossy.md`, `calibration-lossy.feature`, `calibration.v2.toml` as the default config, and the `inputs.rs` messages C11.
+- PR #55 has 9 commits and `just ci` is green.
+  - Tests: 39c0692 and 0445ada.
+  - Implementation: e192be6 and 383abba.
+  - Review round 2: tests in 361d500, fixes in d6145b0, 384087f and d34fc8e.
+- Two review rounds, neither with blocking findings. Round 2's mutation check killed every requested mutation.
+
+**Pending**
+- G2 of #55 (the owner merges it). Its "Follow-ups" section lists these items:
+  - **Spec (G1):** should L0 come before "decoding failed" for `.mp3` files? The codec is known before the probe.
+  - **Spec (G1):** wording of `bitrate.noneLabel`, of "the row tooltip" for `error.unsupportedFormat`, and approx taking precedence over a mode.
+  - **Tests:** a direct `detect_track` test for L0 before silence.
+  - **Tests:** `run_analysis_lossy_v5.rs` uses a WAV where the scenario says FLAC.
+  - **Code:** `unwrap_or(AudioCodec::Pcm)` in `analysis.rs`.
+  - **Code:** the ColumnHeader tooltip bubble is right-aligned.
+- `/feature RF-15` part 2: lossy calibration.
+- The spec follow-ups from the 2026-10-19 block (MP3 shortfall wording, tag frame count 0, free-format, implicit HE-AAC), the installer size against RNF-06, B1–B11 with `just accept`, the `confirmed.txt` lines and the splitter leftovers: all unchanged.
+
+**Blockers / questions for the human**
+- `trusted.txt` was fixed by the owner; `just privacy-check --base main` on #55: 41 files checked, 0 matches.
+- Dependabot alert #1 (`glib`), the `specs/CLAUDE.md` line about `specs/pending/` and the splitter accessibility gap: unchanged. The `guard-tests` stub gap was closed by #53.
+- **Environment:** in this session, Git Bash prints a spurious "cwd: No such file or directory" and exit 1 after every command. Read the real exit code with `echo $?` inside the command. Subagents saw vitest fail from Git Bash when the cwd was `c:` (lowercase); from PowerShell with `Set-Location C:\Workspaces\FakeFlac` it works.
+
+**Next step:** after #55 is merged: `just prune-branches`, then `/feature RF-15` (part 2, lossy calibration) on a new branch from `main`.
+
 ## 2026-10-19 - RF-14 H2 decoding: PR #52 open (awaiting G2)
 
 **Done**

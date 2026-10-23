@@ -62,7 +62,7 @@ export type Spectrogram = {
 	data: number[],
 };
 
-export type SuspicionReason = "lowHighFrequencyContent" | "gradualRolloff" | "ambiguousCutoff" | "highBandGaps";
+export type SuspicionReason = "lowHighFrequencyContent" | "gradualRolloff" | "ambiguousCutoff" | "highBandGaps" | "cutoffBelowDeclared";
 
 export type TrackAnalysis = {
 	info: TrackInfo,

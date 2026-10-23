@@ -4,7 +4,9 @@ import type { AnalysisSummary, TrackAnalysis } from './api/bindings'
 
 export type {
   AnalysisSummary,
+  AudioCodec,
   AudioFormat,
+  BitrateMode,
   CutoffEstimate,
   Spectrogram,
   SuspicionReason,
@@ -27,6 +29,8 @@ export type SortColumn =
   | 'bitDepth'
   | 'duration'
   | 'cutoff'
+  | 'bitrate'
+  | 'realBitrate'
 
 export type SortState = { column: SortColumn; direction: 'asc' | 'desc' }
 

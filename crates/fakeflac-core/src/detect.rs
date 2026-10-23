@@ -1,8 +1,10 @@
-//! Detection rules v4 for lossless files (RF-03, RF-04). Spec: `specs/detection/rules.md`.
-//! Pure functions: no I/O, every number comes from `DetectionParams`.
+//! Detection rules (RF-03, RF-04, RF-15): the v4 rules for lossless files
+//! (`specs/detection/rules.md`) and the v5 rules L0 to L6 for lossy files, which estimate the source
+//! bitrate (`specs/detection/lossy-source.md`). Pure functions: no I/O, every number comes from
+//! `DetectionParams`.
 
-use crate::domain::{CutoffEstimate, SuspicionReason, Verdict};
-use crate::params::DetectionParams;
+use crate::domain::{AudioCodec, CutoffEstimate, SuspicionReason, TrackError, Verdict};
+use crate::params::{CutoffRow, DetectionParams, LossyParams};
 use crate::spectrum::BandSpectra;
 
 /// Tolerance for comparing frequencies and levels that come out of floating-point arithmetic.
@@ -268,6 +270,221 @@ pub fn detect(spectra: Option<&BandSpectra>, params: &DetectionParams) -> Detect
         verdict,
         reasons,
         cutoff: Some(cutoff_estimate(&m, params)),
+    }
+}
+
+/// What the stream declares (`specs/detection/lossy-source.md` section 2) that the verdict needs.
+#[derive(Debug, Clone, PartialEq)]
+pub struct StreamInfo {
+    pub codec: AudioCodec,
+    pub sample_rate: u32,
+    /// Declared bitrate `b` in kbps; `None` for lossless codecs.
+    pub declared_bitrate_kbps: Option<u32>,
+    /// The LAME tag's low-pass in Hz (`L_tag` before the range check).
+    pub encoder_lowpass_hz: Option<u32>,
+}
+
+/// Verdict of a track by codec: the lossless rules of rules.md for `pcm`, `flac` and `alac`, the
+/// lossy rules L0, L2 to L6 of lossy-source.md section 4 otherwise.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TrackDecision {
+    pub verdict: Verdict,
+    pub reasons: Vec<SuspicionReason>,
+    pub estimated_source_bitrate_kbps: Option<u32>,
+    /// Set only with `Verdict::Error` (rule L0: `UnsupportedFormat`).
+    pub error: Option<TrackError>,
+}
+
+/// Table rows of a lossy codec; `None` for a lossless codec or a codec without rows.
+fn cutoff_rows(codec: AudioCodec, params: &DetectionParams) -> Option<&[CutoffRow]> {
+    let cutoffs = &params.lossy.as_ref()?.cutoffs;
+    match codec {
+        AudioCodec::Mp3 => Some(cutoffs.mp3.as_slice()),
+        AudioCodec::Aac => Some(cutoffs.aac.as_slice()),
+        AudioCodec::Opus => cutoffs.opus.as_deref(),
+        AudioCodec::Pcm | AudioCodec::Flac | AudioCodec::Alac => None,
+    }
+}
+
+/// Lossy-source.md section 3: the expected cutoff `c_exp` in Hz; `None` when `T(codec, b)` is
+/// undefined (a declared bitrate below the table, or a lossless codec).
+pub fn expected_cutoff_hz(stream: &StreamInfo, params: &DetectionParams) -> Option<f64> {
+    let rows = cutoff_rows(stream.codec, params)?;
+    let b = stream.declared_bitrate_kbps?;
+    let table = rows
+        .iter()
+        .rev()
+        .find(|r| r.bitrate_kbps <= b)
+        .map(|r| r.cutoff_hz)?;
+    let nyquist = f64::from(stream.sample_rate) / 2.0;
+    let mut c_exp = table.min(nyquist - params.step.search_top_margin_hz);
+    // L_tag only lowers c_exp, and only when it lies in [first row's cutoff, nyquist].
+    if let (Some(tag), Some(first)) = (stream.encoder_lowpass_hz, rows.first()) {
+        let tag = f64::from(tag);
+        if tag >= first.cutoff_hz && tag <= nyquist {
+            c_exp = c_exp.min(tag);
+        }
+    }
+    Some(c_exp)
+}
+
+/// Rule L0 as data: the `[lossy]` section and the table rows of a lossy codec, `Ok(None)` for a
+/// lossless codec, or the `UnsupportedFormat` error when these params cannot judge the codec.
+fn lossy_table(
+    codec: AudioCodec,
+    params: &DetectionParams,
+) -> Result<Option<(&LossyParams, &[CutoffRow])>, TrackError> {
+    let name = match codec {
+        AudioCodec::Pcm | AudioCodec::Flac | AudioCodec::Alac => return Ok(None),
+        AudioCodec::Mp3 => "mp3",
+        AudioCodec::Aac => "aac",
+        AudioCodec::Opus => "opus",
+    };
+    let lossy = params.lossy.as_ref().ok_or_else(|| {
+        TrackError::UnsupportedFormat("these DetectionParams have no [lossy] section".into())
+    })?;
+    let rows = cutoff_rows(codec, params).ok_or_else(|| {
+        TrackError::UnsupportedFormat(format!("no [lossy.cutoffs] rows for {name}"))
+    })?;
+    Ok(Some((lossy, rows)))
+}
+
+/// Rule L0: `Some(error)` when a lossy codec cannot be judged with these params. Depends only on the
+/// codec and the params, never on the probe or the spectra, so it comes before every other rule.
+pub fn lossy_unsupported(codec: AudioCodec, params: &DetectionParams) -> Option<TrackError> {
+    lossy_table(codec, params).err()
+}
+
+fn unsupported(error: TrackError) -> TrackDecision {
+    TrackDecision {
+        verdict: Verdict::Error,
+        reasons: Vec::new(),
+        estimated_source_bitrate_kbps: None,
+        error: Some(error),
+    }
+}
+
+/// Lossy-source.md section 5, rules L3 to L5: `min(b, r*)`, `r*` the row nearest to `fc` (the lower
+/// bitrate on a tie).
+fn shortfall_estimate(rows: &[CutoffRow], fc: f64, b: u32) -> u32 {
+    let mut nearest: Option<(f64, u32)> = None;
+    for r in rows {
+        let dist = (r.cutoff_hz - fc).abs();
+        if nearest.is_none_or(|(best, _)| dist < best) {
+            nearest = Some((dist, r.bitrate_kbps));
+        }
+    }
+    nearest.map_or(b, |(_, kbps)| kbps.min(b))
+}
+
+/// Lossy-source.md sections 4 and 5, and rules.md section 3 for the lossless codecs.
+pub fn decide_track(
+    stream: &StreamInfo,
+    m: &Measurements,
+    params: &DetectionParams,
+) -> TrackDecision {
+    let (lossy, rows) = match lossy_table(stream.codec, params) {
+        Ok(Some(table)) => table,
+        Ok(None) => {
+            let (verdict, reasons) = decide(m, params);
+            return TrackDecision {
+                verdict,
+                reasons,
+                estimated_source_bitrate_kbps: None,
+                error: None,
+            };
+        }
+        // L0
+        Err(e) => return unsupported(e),
+    };
+    let decision = |verdict, reasons, estimate| TrackDecision {
+        verdict,
+        reasons,
+        estimated_source_bitrate_kbps: estimate,
+        error: None,
+    };
+    // L2
+    if m.high_frequency_db < params.verdict.low_hf_threshold_db {
+        return decision(
+            Verdict::Suspicious,
+            vec![SuspicionReason::LowHighFrequencyContent],
+            None,
+        );
+    }
+    let b = stream.declared_bitrate_kbps;
+    // `D >= step_suspicious_db`, the literal comparison that chooses fc and the L4 reason.
+    let step_counts = m.step_db >= params.verdict.step_suspicious_db;
+    // fc: the reported cutoff frequency.
+    let fc = match m.step_hz {
+        Some(fs) if step_counts => fs,
+        _ => m.extent_hz,
+    };
+    let shortfall = expected_cutoff_hz(stream, params).map(|c| c - fc);
+    let at_least = |s: f64, limit: f64| s >= limit - EPS;
+    if let (Some(s), Some(b)) = (shortfall, b) {
+        let estimate = Some(shortfall_estimate(rows, fc, b));
+        // L3
+        if at_least(s, lossy.fake_shortfall_hz) && m.step_db >= lossy.fake_min_step_db {
+            return decision(Verdict::Fake, vec![], estimate);
+        }
+        // L4, L5
+        if at_least(s, lossy.suspicious_shortfall_hz) {
+            let reason = if step_counts {
+                SuspicionReason::CutoffBelowDeclared
+            } else {
+                SuspicionReason::GradualRolloff
+            };
+            return decision(Verdict::Suspicious, vec![reason], estimate);
+        }
+    }
+    // L6
+    decision(Verdict::Real, vec![], b)
+}
+
+/// Outcome of the rules for one analysed track of any codec (silence included).
+#[derive(Debug, Clone, PartialEq)]
+pub struct TrackDetection {
+    pub verdict: Verdict,
+    pub reasons: Vec<SuspicionReason>,
+    pub cutoff: Option<CutoffEstimate>,
+    pub estimated_source_bitrate_kbps: Option<u32>,
+    pub error: Option<TrackError>,
+}
+
+/// Dispatch by codec: measure, then the lossless rules or the lossy rules. `None` spectra means
+/// every frame was silent (rule L0 still comes first for lossy codecs).
+pub fn detect_track(
+    spectra: Option<&BandSpectra>,
+    stream: &StreamInfo,
+    params: &DetectionParams,
+) -> TrackDetection {
+    if let Some(e) = lossy_unsupported(stream.codec, params) {
+        return TrackDetection {
+            verdict: Verdict::Error,
+            reasons: Vec::new(),
+            cutoff: None,
+            estimated_source_bitrate_kbps: None,
+            error: Some(e),
+        };
+    }
+    let Some(spectra) = spectra else {
+        let d = detect(None, params);
+        return TrackDetection {
+            verdict: d.verdict,
+            reasons: d.reasons,
+            cutoff: None,
+            estimated_source_bitrate_kbps: None,
+            error: None,
+        };
+    };
+    let m = measure(spectra, params);
+    let d = decide_track(stream, &m, params);
+    TrackDetection {
+        verdict: d.verdict,
+        reasons: d.reasons,
+        cutoff: Some(cutoff_estimate(&m, params)),
+        estimated_source_bitrate_kbps: d.estimated_source_bitrate_kbps,
+        error: d.error,
     }
 }
 

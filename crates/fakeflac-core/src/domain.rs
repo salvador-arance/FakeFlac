@@ -88,6 +88,9 @@ pub enum SuspicionReason {
     AmbiguousCutoff,
     /// Intermittent empty band above 16 kHz, as left by MP3 encoders (algorithm_version 2).
     HighBandGaps,
+    /// Lossy files: the content stops clearly below the expected cutoff of the declared bitrate
+    /// (algorithm_version 5, `specs/detection/lossy-source.md` rule L4).
+    CutoffBelowDeclared,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

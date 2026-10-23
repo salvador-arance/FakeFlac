@@ -1,9 +1,10 @@
 <script lang="ts">
+  import BitrateValue from '../molecules/BitrateValue.svelte'
   import ColumnHeader from '../molecules/ColumnHeader.svelte'
   import CutoffValue from '../molecules/CutoffValue.svelte'
   import VerdictCell from '../molecules/VerdictCell.svelte'
   import { t } from '../../i18n'
-  import type { ResultRow, SortColumn, SortState } from '../../model'
+  import type { ResultRow, SortColumn, SortState, TrackAnalysis } from '../../model'
 
   type Props = {
     rows: ResultRow[]
@@ -48,6 +49,27 @@
     return `${m}:${s.toString().padStart(2, '0')}`
   }
 
+  /** Format cell: `format` in upper case; an M4A with codec `alac` is "M4A (ALAC)" (lossy-formats.md). */
+  function formatText(a: TrackAnalysis): string {
+    if (a.info.format === 'm4a' && a.info.codec === 'alac') return t('format.m4aAlac')
+    return a.info.format?.toUpperCase() ?? ''
+  }
+
+  /** Real bitrate is approximate when the estimate is lower than the declared bitrate. */
+  function isApprox(a: TrackAnalysis): boolean {
+    const declared = a.info.declaredBitrateKbps
+    const estimate = a.estimatedSourceBitrateKbps
+    return declared !== null && estimate !== null && estimate < declared
+  }
+
+  /** Numeric order in `dir`; null ("—") cells go last in both directions. */
+  function compareNullable(a: number | null, b: number | null, dir: number): number {
+    if (a === null && b === null) return 0
+    if (a === null) return 1
+    if (b === null) return -1
+    return dir * (a - b)
+  }
+
   let sortedRows = $derived.by(() => {
     const copy = [...rows]
     const dir = sort.direction === 'desc' ? -1 : 1
@@ -63,7 +85,7 @@
         case 'state':
           return dir * a.analysis.verdict.localeCompare(b.analysis.verdict)
         case 'format':
-          return dir * (a.analysis.info.format ?? '').localeCompare(b.analysis.info.format ?? '')
+          return dir * formatText(a.analysis).localeCompare(formatText(b.analysis))
         case 'sampleRate':
           return dir * ((a.analysis.info.sampleRate ?? 0) - (b.analysis.info.sampleRate ?? 0))
         case 'bitDepth':
@@ -72,6 +94,18 @@
           return dir * ((a.analysis.info.durationMs ?? 0) - (b.analysis.info.durationMs ?? 0))
         case 'cutoff':
           return dir * ((a.analysis.cutoff?.frequencyHz ?? 0) - (b.analysis.cutoff?.frequencyHz ?? 0))
+        case 'bitrate':
+          return compareNullable(
+            a.analysis.info.declaredBitrateKbps,
+            b.analysis.info.declaredBitrateKbps,
+            dir,
+          )
+        case 'realBitrate':
+          return compareNullable(
+            a.analysis.estimatedSourceBitrateKbps,
+            b.analysis.estimatedSourceBitrateKbps,
+            dir,
+          )
         default:
           return 0
       }
@@ -195,6 +229,17 @@
         sort={sort.column === 'cutoff' ? sort.direction : null}
         onsort={() => onsort?.('cutoff')}
       />
+      <ColumnHeader
+        label={t('column.bitrate')}
+        sort={sort.column === 'bitrate' ? sort.direction : null}
+        onsort={() => onsort?.('bitrate')}
+      />
+      <ColumnHeader
+        label={t('column.realBitrate')}
+        tooltip={t('help.realBitrate')}
+        sort={sort.column === 'realBitrate' ? sort.direction : null}
+        onsort={() => onsort?.('realBitrate')}
+      />
     </div>
   </div>
 
@@ -231,7 +276,7 @@
           {row.analysis.info.folder || getFolderName(row.analysis.info.path)}
         </div>
         <div class="cell format-cell" role="gridcell">
-          {row.analysis.info.format?.toUpperCase() ?? ''}
+          {formatText(row.analysis)}
         </div>
         <div class="cell rate-cell" role="gridcell">
           {row.analysis.info.sampleRate ?? ''}
@@ -244,6 +289,18 @@
         </div>
         <div class="cell cutoff-cell" role="gridcell">
           <CutoffValue hz={row.analysis.cutoff?.frequencyHz ?? null} nyquistHz={nyquist} />
+        </div>
+        <div class="cell bitrate-cell" role="gridcell">
+          <BitrateValue
+            kbps={row.analysis.info.declaredBitrateKbps}
+            mode={row.analysis.info.bitrateMode}
+          />
+        </div>
+        <div class="cell real-bitrate-cell" role="gridcell">
+          <BitrateValue
+            kbps={row.analysis.estimatedSourceBitrateKbps}
+            approx={isApprox(row.analysis)}
+          />
         </div>
       </div>
     {/each}
@@ -275,7 +332,7 @@
 
   .row {
     display: grid;
-    grid-template-columns: 120px minmax(140px, 1.5fr) minmax(140px, 2fr) 70px 80px 50px 70px 90px;
+    grid-template-columns: 120px minmax(140px, 1.5fr) minmax(140px, 2fr) 70px 80px 50px 70px 90px 110px 100px;
     align-items: center;
     height: var(--row-height);
     box-sizing: border-box;
@@ -305,7 +362,9 @@
   .rate-cell,
   .bits-cell,
   .duration-cell,
-  .cutoff-cell {
+  .cutoff-cell,
+  .bitrate-cell,
+  .real-bitrate-cell {
     text-align: right;
   }
 </style>

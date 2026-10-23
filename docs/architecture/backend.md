@@ -12,7 +12,7 @@ path → metadata (fs) → select N windows → decode with seek (f32 mono)
      → apply rules (DetectionParams) → TrackAnalysis
 ```
 
-The full-band guard (detection v3, ADR-0038, with the lossy-step condition of detection v4, ADR-0039; `specs/detection/rules.md`) is the default: `DetectionParams::default()` equals `detection-params.v4.toml`. Params files without `[full_band]` (such as v2) or without `full_band.max_lossy_step_db` (such as v3) still load and reproduce the v2 and v3 verdicts.
+The full-band guard (detection v3, ADR-0038, with the lossy-step condition of detection v4, ADR-0039; `specs/detection/rules.md`) is part of the default. Detection v5 (ADR-0041) is the default: `DetectionParams::default()` equals `detection-params.v5.toml` (v4 plus the optional `[lossy]` section; lossless verdicts are the v4 ones). Params files without `[full_band]` (such as v2), without `full_band.max_lossy_step_db` (such as v3) or without `[lossy]` (v2 to v4) still load and reproduce their verdicts; lossy files analysed with them are `Error(unsupportedFormat)`.
 
 - Stages after the FFT are pure functions over arrays; tested with synthetic signals (low-passed noise at 16/19/20 kHz, full band, silence).
 - Mono for analysis (mean of channels). The spectrogram also uses mono by default.
@@ -94,7 +94,7 @@ All formats go through the same `SpectrumAnalyzer` port: the adapter picks a dec
 
 **Question:** was this 320 kbps MP3 encoded from a good source or from something with a lower bitrate?
 
-**Specified** (proposed, G1 pending) as detection v5: `specs/detection/lossy-source.md`, `specs/detection/detection-params.v5.toml` (`[lossy]`), ADR-0041; calibration in `specs/calibration/lossy.md`. The H2 part below is what v5 implements, except the per-frame bitrate, padding and sfb21 signals, which v5 leaves as candidates.
+**Implemented** as detection v5 (the default): `specs/detection/lossy-source.md`, `specs/detection/detection-params.v5.toml` (`[lossy]`), ADR-0041; calibration in `specs/calibration/lossy.md`. The H2 part below is what v5 implements, except the per-frame bitrate, padding and sfb21 signals, which v5 leaves as candidates.
 
 **Main signal (H2): spectral cutoff vs declared bitrate.** Encoders apply a bitrate-dependent low-pass (indicative: ≈ 16 kHz at 128 kbps, ≈ 19 kHz at 192, ≈ 20 kHz at 256, ≈ 20.5 kHz at 320 in LAME; AAC and Opus have other tables). A 320 kbps file whose content stops at 16 kHz betrays a ≈ 128 kbps origin. A **cutoff → source-bitrate table per codec and encoder** is kept versioned in `DetectionParams` and calibrated with the R3 corpus.
 

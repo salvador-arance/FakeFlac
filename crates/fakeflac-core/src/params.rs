@@ -1,4 +1,4 @@
-//! `DetectionParams` (S4, ADR-0011). Mirrors `specs/detection/detection-params.v4.toml`;
+//! `DetectionParams` (S4, ADR-0011). Mirrors `specs/detection/detection-params.v5.toml`;
 //! a test checks that `Default` equals that file. Values are data, never constants in the algorithm.
 
 use serde::{Deserialize, Serialize};
@@ -29,6 +29,10 @@ pub struct DetectionParams {
     /// Full-band guard (v3, ADR-0038). `None` disables it (v2 behaviour).
     #[serde(default)]
     pub full_band: Option<FullBandParams>,
+    /// Lossy-file rules (v5, `specs/detection/lossy-source.md`). `None` (a v2-v4 file): lossy files
+    /// are not judged.
+    #[serde(default)]
+    pub lossy: Option<LossyParams>,
     pub verdict: VerdictParams,
     pub spectrogram: SpectrogramParams,
 }
@@ -105,6 +109,33 @@ pub struct FullBandParams {
     pub max_lossy_step_db: Option<f64>,
 }
 
+/// The `[lossy]` section (lossy-source.md section 6).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LossyParams {
+    pub suspicious_shortfall_hz: f64,
+    pub fake_shortfall_hz: f64,
+    pub fake_min_step_db: f64,
+    pub cutoffs: LossyCutoffs,
+}
+
+/// The `[lossy.cutoffs]` tables: expected low-pass per declared bitrate, per codec.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LossyCutoffs {
+    pub mp3: Vec<CutoffRow>,
+    pub aac: Vec<CutoffRow>,
+    #[serde(default)]
+    pub opus: Option<Vec<CutoffRow>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CutoffRow {
+    pub bitrate_kbps: u32,
+    pub cutoff_hz: f64,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct VerdictParams {
@@ -134,11 +165,11 @@ pub struct SpectrogramParams {
 }
 
 impl Default for DetectionParams {
-    /// DetectionParams v4: the values of `specs/detection/detection-params.v4.toml`
+    /// DetectionParams v5: the values of `specs/detection/detection-params.v5.toml`
     /// (a test checks the equality).
     fn default() -> Self {
         DetectionParams {
-            algorithm_version: 4,
+            algorithm_version: 5,
             input: InputParams {
                 min_duration_s: 5.0,
                 edge_skip_percent: 5.0,
@@ -181,6 +212,102 @@ impl Default for DetectionParams {
                 min_level_db: -70.0,
                 min_burst_db: 3.0,
                 max_lossy_step_db: Some(3.0),
+            }),
+            lossy: Some(LossyParams {
+                suspicious_shortfall_hz: 1000.0,
+                fake_shortfall_hz: 2500.0,
+                fake_min_step_db: 10.0,
+                cutoffs: LossyCutoffs {
+                    mp3: vec![
+                        CutoffRow {
+                            bitrate_kbps: 32,
+                            cutoff_hz: 5500.0,
+                        },
+                        CutoffRow {
+                            bitrate_kbps: 40,
+                            cutoff_hz: 7000.0,
+                        },
+                        CutoffRow {
+                            bitrate_kbps: 48,
+                            cutoff_hz: 7500.0,
+                        },
+                        CutoffRow {
+                            bitrate_kbps: 56,
+                            cutoff_hz: 10000.0,
+                        },
+                        CutoffRow {
+                            bitrate_kbps: 64,
+                            cutoff_hz: 11000.0,
+                        },
+                        CutoffRow {
+                            bitrate_kbps: 80,
+                            cutoff_hz: 13500.0,
+                        },
+                        CutoffRow {
+                            bitrate_kbps: 96,
+                            cutoff_hz: 15100.0,
+                        },
+                        CutoffRow {
+                            bitrate_kbps: 112,
+                            cutoff_hz: 15600.0,
+                        },
+                        CutoffRow {
+                            bitrate_kbps: 128,
+                            cutoff_hz: 17000.0,
+                        },
+                        CutoffRow {
+                            bitrate_kbps: 160,
+                            cutoff_hz: 17500.0,
+                        },
+                        CutoffRow {
+                            bitrate_kbps: 192,
+                            cutoff_hz: 18600.0,
+                        },
+                        CutoffRow {
+                            bitrate_kbps: 224,
+                            cutoff_hz: 19400.0,
+                        },
+                        CutoffRow {
+                            bitrate_kbps: 256,
+                            cutoff_hz: 19700.0,
+                        },
+                        CutoffRow {
+                            bitrate_kbps: 320,
+                            cutoff_hz: 20500.0,
+                        },
+                    ],
+                    aac: vec![
+                        CutoffRow {
+                            bitrate_kbps: 64,
+                            cutoff_hz: 11000.0,
+                        },
+                        CutoffRow {
+                            bitrate_kbps: 96,
+                            cutoff_hz: 13000.0,
+                        },
+                        CutoffRow {
+                            bitrate_kbps: 128,
+                            cutoff_hz: 15500.0,
+                        },
+                        CutoffRow {
+                            bitrate_kbps: 160,
+                            cutoff_hz: 16000.0,
+                        },
+                        CutoffRow {
+                            bitrate_kbps: 192,
+                            cutoff_hz: 17000.0,
+                        },
+                        CutoffRow {
+                            bitrate_kbps: 256,
+                            cutoff_hz: 19000.0,
+                        },
+                        CutoffRow {
+                            bitrate_kbps: 320,
+                            cutoff_hz: 19500.0,
+                        },
+                    ],
+                    opus: None,
+                },
             }),
             verdict: VerdictParams {
                 low_hf_threshold_db: -60.0,
@@ -230,6 +357,9 @@ pub enum ParamsError {
         "invalid parameters: full_band.max_lossy_step_db ≤ step_fake_db does not hold ({value} > {fake})"
     )]
     MaxLossyStepAboveStepFake { value: f64, fake: f64 },
+    /// A `[lossy]` check failed (lossy-source.md section 6); the text names the inequality.
+    #[error("invalid parameters: {check} does not hold")]
+    Lossy { check: String },
 }
 
 impl DetectionParams {
@@ -274,8 +404,65 @@ impl DetectionParams {
                 }
             }
         }
+        if let Some(l) = &self.lossy {
+            validate_lossy(l, v.step_suspicious_db)?;
+        }
         Ok(())
     }
+}
+
+fn lossy_error(check: &str) -> ParamsError {
+    ParamsError::Lossy {
+        check: check.to_string(),
+    }
+}
+
+/// The checks of lossy-source.md section 6, in the order listed there; the first failure is reported.
+fn validate_lossy(l: &LossyParams, step_suspicious_db: f64) -> Result<(), ParamsError> {
+    if !lt(0.0, l.suspicious_shortfall_hz) {
+        return Err(lossy_error("lossy.suspicious_shortfall_hz > 0"));
+    }
+    if !le(l.suspicious_shortfall_hz, l.fake_shortfall_hz) {
+        return Err(lossy_error(
+            "lossy.suspicious_shortfall_hz ≤ lossy.fake_shortfall_hz",
+        ));
+    }
+    if !le(step_suspicious_db, l.fake_min_step_db) {
+        return Err(lossy_error("step_suspicious_db ≤ lossy.fake_min_step_db"));
+    }
+    let tables = [
+        ("mp3", Some(&l.cutoffs.mp3)),
+        ("aac", Some(&l.cutoffs.aac)),
+        ("opus", l.cutoffs.opus.as_ref()),
+    ];
+    for (name, table) in tables {
+        let Some(rows) = table else { continue };
+        if rows.is_empty() {
+            return Err(lossy_error(&format!("lossy.cutoffs.{name} is not empty")));
+        }
+        if rows.iter().any(|r| r.bitrate_kbps == 0) {
+            return Err(lossy_error(&format!(
+                "lossy.cutoffs.{name}: bitrate_kbps > 0"
+            )));
+        }
+        if rows.iter().any(|r| !lt(0.0, r.cutoff_hz)) {
+            return Err(lossy_error(&format!("lossy.cutoffs.{name}: cutoff_hz > 0")));
+        }
+        if rows
+            .windows(2)
+            .any(|w| w[0].bitrate_kbps >= w[1].bitrate_kbps)
+        {
+            return Err(lossy_error(&format!(
+                "lossy.cutoffs.{name}: bitrate_kbps increases"
+            )));
+        }
+        if rows.windows(2).any(|w| !le(w[0].cutoff_hz, w[1].cutoff_hz)) {
+            return Err(lossy_error(&format!(
+                "lossy.cutoffs.{name}: cutoff_hz does not decrease"
+            )));
+        }
+    }
+    Ok(())
 }
 
 /// `a <= b`; false when either is NaN, so a NaN ordering is reported as not holding.
