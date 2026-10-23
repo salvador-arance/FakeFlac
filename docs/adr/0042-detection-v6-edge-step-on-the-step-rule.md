@@ -1,6 +1,6 @@
 # ADR-0042: Detection v6: the step rule V4 does not apply to a content edge (median step and post-step residual)
 
-- Status: proposed
+- Status: accepted (G1, #60: the direction; the values and Q1–Q7 of the proposal are settled by the follow-up spec PR and the corpus run)
 - Date: 2026-10-23
 
 ## Context and rationale
