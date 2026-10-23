@@ -39,7 +39,7 @@ config: specs/calibration/calibration.v2.toml
 ### 1.1 Accepted files
 
 - **File entries** of `trusted.txt` and `confirmed.txt` may name `.flac`, `.wav`, `.mp3`, `.m4a` or `.opus` files (any letter case). Otherwise: `not a supported audio file (FLAC, WAV, MP3, M4A or Opus)` (C11).
-- **Folder entries** include, recursively, the files selected by `formats=` (section 1.2), even though the app's scanner now also lists MP3 and M4A files (the tool filters what it enumerates): `lossless` (the default, as today) → `.flac` and `.wav`; `lossy` → `.mp3` and `.m4a`; `all` → the four. A folder with no selected file is an error on its line: `no FLAC or WAV files under this folder` (unchanged), `no MP3 or M4A files under this folder`, or `no supported audio files under this folder`.
+- **Folder entries** include, recursively, the files selected by `formats=` (section 1.2), even though the app's scanner now also lists MP3 and M4A files (the tool filters what it enumerates): `lossless` (the default of `trusted.txt` and `fake` folder lines, as today) → `.flac` and `.wav`; `lossy` (the default of `real` folder lines) → `.mp3` and `.m4a`; `all` → the four. A `real` line accepts only `lossy` (1.2). A folder with no selected file is an error on its line: `no FLAC or WAV files under this folder` (unchanged), `no MP3 or M4A files under this folder`, or `no supported audio files under this folder`.
 - **Opus** (decoder pending, ADR-0030): `.opus` files are never enumerated under folders; a file entry naming one is accepted, labelled, and **not evaluated** (section 6.1).
 - **Domain.** Each labelled track is `lossless` or `lossy` by its codec, known after extraction (lossy-source.md section 2): `pcm`, `flac`, `alac` → `lossless`; `mp3`, `aac`, `opus` → `lossy`. An `.m4a` that cannot be probed is an `Error` row of the lossy domain. A trusted ALAC `.m4a` is a lossless trusted track like any FLAC, and a transcode source.
 
@@ -51,7 +51,7 @@ Field 2 of an entry is a **word** (the origin in `trusted.txt`, the kind in `con
 
 | Attribute | Lines | Value | Meaning |
 |---|---|---|---|
-| `formats=` | folder entries of `trusted.txt`; `fake` and `real` folder lines of `confirmed.txt` | `lossless` (default), `lossy`, `all` | Which files the folder includes (1.1) |
+| `formats=` | folder entries of `trusted.txt`; `fake` and `real` folder lines of `confirmed.txt` | `lossless` (default of `trusted.txt` and `fake` folders), `lossy` (default of `real` folders), `all`; a `real` line accepts only `lossy` | Which files the folder includes (1.1) |
 | `group=` | entries of `trusted.txt`; `fake` and `real` lines of `confirmed.txt` | an id | Split unit (section 3), for example one id per main artist |
 | `chain=` | entries of `trusted.txt`; `fake` and `real` lines of `confirmed.txt` | an id | The tracks are versions of one master (section 6.5) |
 | `upstream=` | `confirmed.txt` `fake` lines | `aac`, `opus`, `mp3`, `unknown`, `by-rate` | The codec of the lower-bitrate stage the file came from (1.5) |
@@ -62,7 +62,7 @@ An **id** is 1 to 16 characters among `A–Z`, `a–z`, `0–9`, `_` and `-`. Id
 
 `upstream=`, `source_max_kbps=` and `weak` apply only to the lossy tracks of the line; a `fake` line that covers no lossy file and carries one of them is an error. This check runs when the file is parsed, so it goes by extension: `.mp3`, `.m4a` and `.opus` count as lossy.
 
-Errors, reported on the line like every other error of these files (inputs.md section 1.6): `false-positive lines take no attributes; write them on the trusted.txt line`, `unknown attribute 'x'`, `attribute 'x' given twice`, `formats= applies to folders only`, `invalid value 'v' for formats (expected lossless, lossy or all)`, `invalid id 'v' for group (1 to 16 letters, digits, '_' or '-')` (and `for chain`), `invalid value 'v' for upstream (expected aac, opus, mp3, unknown or by-rate)`, `source_max_kbps must be an integer from 8 to 640`, `upstream=, source_max_kbps= and weak apply to fake lines only`, `upstream=, source_max_kbps= and weak apply to lossy files only`.
+Errors, reported on the line like every other error of these files (inputs.md section 1.6): `false-positive lines take no attributes; write them on the trusted.txt line`, `unknown attribute 'x'`, `attribute 'x' given twice`, `formats= applies to folders only`, `invalid value 'v' for formats (expected lossless, lossy or all)`, `invalid id 'v' for group (1 to 16 letters, digits, '_' or '-')` (and `for chain`), `invalid value 'v' for upstream (expected aac, opus, mp3, unknown or by-rate)`, `source_max_kbps must be an integer from 8 to 640`, `upstream=, source_max_kbps= and weak apply to fake lines only`, `upstream=, source_max_kbps= and weak apply to lossy files only`, `real applies to lossy files only` (a `real` folder line with `formats=lossless` or `formats=all`, or a `real` file entry naming a `.flac` or `.wav` file; like the check above, it goes by extension).
 
 ### 1.3 Kinds of `confirmed.txt`
 
@@ -83,6 +83,8 @@ A trusted lossy file is an **honest lossy negative**: `truth = real`, `origin = 
 ### 1.5 `upstream=by-rate` (C4)
 
 For each lossy track of the line, the tool looks up the decoded sample rate in `[labels.upstream_by_rate]` of the config. A match gives the upstream codec and, if the table has one, the source bound; no match gives `unknown` and no bound. An explicit `source_max_kbps=` on the line wins over the table's bound. `calibration.v2.toml` holds `44100 → aac, 128 kbps` and `48000 → opus, no bound`: on a streaming site, a 44.1 kHz rip comes from its AAC 128 stream and a 48 kHz rip from its Opus stream.
+
+Checks on `[labels.upstream_by_rate]` (exit 2, with the other config errors, before any extraction): each key is a sample rate in Hz written as a positive integer (digits only, no leading zero: `"44100"`); `upstream` is `aac`, `opus`, `mp3` or `unknown` (`by-rate` is not a value of the table); `source_max_kbps`, when present, is an integer from 8 to 640. Messages: `labels.upstream_by_rate: invalid sample rate '<key>' (expected an integer in Hz, for example 44100)`, `labels.upstream_by_rate '<key>': invalid upstream '<v>' (expected aac, opus, mp3 or unknown)`, `labels.upstream_by_rate '<key>': source_max_kbps must be an integer from 8 to 640`. A missing `upstream` or an unknown field is a TOML error, as for the rest of the config.
 
 ## 2. New columns of `labels.csv` (extends inputs.md section 3)
 
@@ -106,16 +108,17 @@ New values in existing columns: `origin` `confirmed_real`; `class` `generated` (
 ## 3. Split units (extends inputs.md section 4; C6)
 
 - The **unit** of a track is the `group=` of the line that gives it its attributes (section 1.2); otherwise `chain:<id>` if that line has `chain=`; otherwise its album id. Generated rows take the unit of their source.
-- Every album id must resolve to one unit (`album has tracks in several split units (lines N and M)`), and every chain to one unit (`chain C1 spans split units G2 and chain:C1`, units in byte order). Both are input errors (exit 2), reported with the other input errors (inputs.md section 1.6).
+- Every album id must resolve to one unit, and every chain to one unit (`chain C1 spans split units G2 and chain:C1`, units in byte order). Both are input errors (exit 2), reported with the other input errors (inputs.md section 1.6).
+  - The album error is `album has tracks in several split units (<ref>, <ref>, …)`, one error per album, printed without a file prefix. It has one `<ref>` per unit of the album: `<file>:<line>` of the first line that gives one of the album's tracks that unit. The refs are in ascending order: `trusted.txt` before `confirmed.txt`, then by line number (`album has tracks in several split units (trusted.txt:4, confirmed.txt:7)`). Several such errors are ordered by their first ref.
 - The hash of inputs.md section 4 is computed on the **unit** instead of the album id; for units that are album ids nothing changes.
-- The class of a unit is the class an album would get from all its tracks (inputs.md section 4; a `confirmed_real` track counts as `reviewed`). **Units whose labelled tracks are all lossy are stratified among themselves**, under the class keys `lossy:primary`, `lossy:reviewed`, `lossy:clean`, `lossy:reference` and `lossy:positive`, so that adding lossy labels never moves a lossless album. Units with a lossless track use the existing strata.
+- The class of a unit is the class an album would get from all its tracks (inputs.md section 4; a `confirmed_real` track counts as `reviewed`). **Units whose labelled tracks are all lossy are stratified among themselves**. Units are formed before extraction, when the codec is not known yet, so "lossy" goes **by file extension** here (`.mp3`, `.m4a`, `.opus`, any letter case), as the check of 1.2 does (a known limitation, section 11). They use the class keys `lossy:primary`, `lossy:reviewed`, `lossy:clean`, `lossy:reference` and `lossy:positive`, so that adding lossy labels never moves a lossless album. Units with a lossless track use the existing strata.
 - The report header counts albums as today and, next to them, units per stratum with their `tune`/`holdout` counts; the holdout warning applies per stratum.
 
 ## 4. Generation of lossy entries (extends generation.md)
 
 ### 4.1 Configuration
 
-- `[[generate.lossy]]` entries: `id` and `stages`, a non-empty list of `[[generate.settings]]` ids applied in order. The last stage decides the declared format of the file. Checks (exit 2): `id` unique among the lossy entries (it may equal a setting id: the single-stage entry `cbr320` is the lossy file of the setting `cbr320`; the `domain` column tells the two rows apart); every stage id exists; in an entry with two or more stages every stage has `bitrate_kbps`; the last stage's `ext` is `mp3` or `m4a`. Messages: `lossy entry <id> is defined twice`, `lossy entry <id>: no stages`, `lossy entry <id>: unknown stage <setting>`, `lossy entry <id>: stage <setting> has no bitrate_kbps`, `lossy entry <id>: Opus output is not supported yet`.
+- `[[generate.lossy]]` entries: `id` and `stages`, a non-empty list of `[[generate.settings]]` ids applied in order. The last stage decides the declared format of the file. Checks (exit 2): `id` unique among the lossy entries (it may equal a setting id: the single-stage entry `cbr320` is the lossy file of the setting `cbr320`; the `domain` column tells the two rows apart); every stage id exists; in an entry with two or more stages every stage has `bitrate_kbps`; the last stage's `ext` is `mp3` or `m4a`. Messages: `lossy entry <id> is defined twice`, `lossy entry <id>: no stages`, `lossy entry <id>: unknown stage <setting>`, `lossy entry <id>: stage <setting> has no bitrate_kbps`, `lossy entry <id>: Opus output is not supported yet` (last stage's `ext` is `opus`, any letter case), `lossy entry <id>: the last stage's ext must be mp3 or m4a` (any other `ext`).
 - `[[generate.settings]]` gains the optional `lossless_transcode` (default `true`). With `false` the setting is only used as a stage and gets no FLAC transcode, so the lossless tables do not change (used by the sample corpus, section 9).
 - **Sources** are those of generation.md section 1: trusted lossless tracks that are not `Error` and not silent. Lossy tracks are never sources.
 
@@ -179,7 +182,7 @@ Per params file with `[lossy]` and split (`all`, `tune`, `holdout`):
 
 ### 6.3 Per group
 
-One row per `[[generate.lossy]]` entry in config order, then: trusted lossy files per class; `confirmed_real`; confirmed lossy fakes per `upstream` (`aac`, `opus`, `mp3`, `unknown`); confirmed lossy fakes per sample rate (44100, 48000, other); weak labels. Columns: `Real`, `Suspicious`, `Fake`, `Undetectable`, `Source-limited`, `Error`, total, `Fake` rate, caught rate (positives) or FP rate (negatives), the median and 5th percentile of `s`, the median estimate, and, for positives with a source bitrate, the share of estimates at most that bitrate. These rows serve lossy-source.md section 9 (B2–B8).
+One row per `[[generate.lossy]]` entry in config order, then: trusted lossy files per class; `confirmed_real`; confirmed lossy fakes per `upstream` (`aac`, `opus`, `mp3`, `unknown`); confirmed lossy fakes per sample rate (44100, 48000, other); weak labels. Columns: `Real`, `Suspicious`, `Fake`, `Undetectable`, `Source-limited`, `Error`, total, `Fake` rate, caught rate (positives) or FP rate (negatives), the median and 5th percentile of `s`, the median estimate (over the rows with an estimate), and, for positive groups only, the median estimate of the `Fake` rows (empty when there is none; the figure B8 gates) and the share of estimates at most the source bitrate (over the rows with an estimate and a `source_bitrate_kbps`; empty when there is none). A group is **positive** when its rows have `truth = fake`: the generated cascades with `truth = fake` (4.2), the confirmed lossy fakes per `upstream` and per sample rate, and weak labels; every other group is negative and leaves those two columns empty (the negative cascade `cbr320_cbr128` has a source bitrate, 320, but no share). These rows serve lossy-source.md section 9 (B2–B8).
 
 ### 6.4 `tracks.csv` and margins
 
@@ -190,7 +193,7 @@ Lossy rows fill the measurement columns of evaluation.md section 8 (`H`, `F`, `f
 ### 6.5 Chains (C5)
 
 - The **version** of a chained track is its codec (`flac`, `pcm`, `alac`, `aac`, `mp3`).
-- Its **key** (`chain_key`): the leading run of 1 to 3 digits of the file stem, as an integer (`03 – x` → `3`); if the stem does not start with a digit, the stem lower-cased with only its letters and digits kept.
+- Its **key** (`chain_key`): when the file stem starts with a run of 1 to 3 ASCII digits, that run as an integer (`03 – x` → `3`). Otherwise, that is, when the stem does not start with a digit or its leading run has 4 or more digits (a year or a catalogue number, not a track number: `2024 – x`), the stem lower-cased with only its letters and digits kept, Unicode included (`2024 – x` → `2024x`, `Ópera` → `ópera`).
 - Within one chain, tracks of different versions with the same key form a **pair group**. A key that appears twice within one version is ambiguous: its tracks are listed and not paired.
 - **`report.md`**, per chain and key: path, version, verdict, reasons, `fc`, estimate, declared bitrate and watch id. **`summary.md`**, per chain id: keys, pair groups, versions present, verdict counts per version, the median `|fc(mp3) − fc(aac)|` over the keys that have both versions, and the watch ids in the chain (the owner's full-chain album holds FP4, watch id W4). Lossless versions are judged with the lossless rules of the same params file.
 
@@ -257,7 +260,7 @@ The base sample corpus and its expectations (sample-corpus.md sections 1–5) do
 - **Not evaluated:** v2: 22 lossy rows; v5: 1 (the Opus file).
 - **Lossy matrix (v5, split `all`):** real row 11 `Real`, 2 `Source-limited` (`l128` and `l320` from track 5, `low_hf`, whose own cutoff is about 6 kHz), total 13; fake row 7 `Fake`, 1 `Undetectable` (`l128_320` from track 5), total 8; fake (weak) row empty.
 - **What the test stage confirms first** (derived, not measured): that the reported cutoff of `low_hf` with v5 is below 16000 Hz (the source-limited threshold of `l128`, `17000 − 1000`; it is expected near 6 kHz, its `fe`); that the other five sources (`full_band`, `hf_bursts`) report a cutoff above 19500 Hz (the threshold of `l320`); and the checks of `lossy-fixtures.md` section 3 for the three fixtures written. If one does not hold, it stops and returns to G1.
-- **Per group (v5):** `l128` 5 Real + 1 source-limited; `l320` 5 Real + 1 source-limited; `l128_320` 5 Fake + 1 undetectable, median estimate 128; `confirmed_real` 1 Real; confirmed fakes `aac` 2 Fake; `opus` 0 rows evaluated. Track 12's estimate (128) is at most its bound (128).
+- **Per group (v5):** `l128` 5 Real + 1 source-limited; `l320` 5 Real + 1 source-limited; `l128_320` 5 Fake + 1 undetectable, median estimate of the `Fake` rows 128; `confirmed_real` 1 Real; confirmed fakes `aac` 2 Fake; `opus` 0 rows evaluated. Track 12's estimate (128) is at most its bound (128).
 - **Chain `C1`:** keys 1, 2 and 3; one pair group (key 1: the WAV track 7, `Real`, and the MP3 track 15, `Fake`, estimate 128); keys 2 and 3 have the WAV version only (both `Error`).
 - The Ørsted album and `Cadena/MP3 – Ørsted` form the unit `chain:C1`.
 
@@ -269,3 +272,8 @@ How the owner's RF-15 input (docs/agents/progress.md, 2026-10-18; aggregate figu
 - The 14 AAC 128 `.m4a` files copied without re-encoding: `real` (C2); the one now labelled `fake` changes.
 - The album with the full chain from one master: its trusted FLAC line, its AAC lines (`real`) and its MP3 lines (`fake upstream=aac`) all get the same `chain=<id>`. Its FLAC version holds FP4 (watch id W4), so the chain report shows W4's other versions.
 - Albums that share a main artist: one `group=<id>` per artist on their lines.
+
+## 11. Known limitations
+
+- **Split strata go by extension** (section 3). A unit made only of ALAC `.m4a` files is stratified as lossy (`lossy:<class>`), although its tracks are lossless-domain rows after extraction (1.1) and are evaluated with the lossless tables (6.1). It does not move any other album; it only means such a unit is split among the lossy units.
+- **Chain keys of stems without a track number** (section 6.5). A stem whose leading digit run has 4 or more digits gets the letters-and-digits key, so its versions pair only when their whole stems match after that reduction.
