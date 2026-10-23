@@ -2,6 +2,44 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-23 - Detection v6 proposal (edge step on V4): merged at G1 (#60)
+
+**Done**
+- The owner tested the app on one album held in three copies: store FLAC, store 320 kbps MP3, and a rip (AAC 128 plus MP3 320 transcoded from it). The test ran the engine headless with `DetectionParams::default()` from a scratch crate outside the repo.
+  - MP3 and M4A (v5) are all correct: the store MP3 is `Real` at 320, the rip's AAC is `Real` at 128, and the rip's MP3 is `Fake` with an estimate of 128 (112 on 4 tracks).
+  - The FLAC copy gives 1 `Fake` and 2 `Suspicious`, all false positives. The `Fake` is **W4 (FP4)**: same `D`, `fs`, `G`, `U` and `B` as rules.md. The other two, named **N1** and **N2** in the proposal, are the `primary` tracks rules.md section 6 already mentions (N1 0.12 dB below V4 by V6, N2 by V5 with `G` = 5.65).
+- Root cause of W4 and N1: a short narrow-band sound just below a natural roll-off. It makes a step on the mean spectrum, but the median spectrum is smooth across it and the level above it is far from the floor. The album was transcoded with 7 `calibration.v2.toml` settings (91 transcodes, scratch only). Neither the median step nor the residual separates them alone; together they separate W4 and N1 from the 78 low-pass transcodes.
+- **#60 merged at G1 (690b7dd):**
+  - `specs/pending/detection-v6-edge-step.md`: `D_Q`, `R` and `EdgeStep`; V4 gains "and not `EdgeStep`"; an optional `[edge]` section, `algorithm_version` 6; acceptance E1–E7; questions Q1–Q7.
+  - ADR-0042, now `accepted` (direction only; values open, see below).
+
+**Pending**
+- **Follow-up spec PR (stage `spec`)** to make the proposal an approved spec:
+  - move the rules into `specs/detection/rules.md` (sections 2–7);
+  - write `specs/detection/detection-params.v6.toml` (v6 becomes the default);
+  - write the fixtures `edge_bump19k3` and `edge_bump19k3_lp19k5` in `fixtures.md`;
+  - write the scenarios (`@RF-04`), and the `D_Q` / `R` / `EdgeStep` reporting in `specs/calibration/evaluation.md`;
+  - delete the pending file.
+- Then `/feature RF-04` (detection v6) and `just accept --params …v5.toml --params …v6.toml` on the corpus. The indicative values (3 dB, 12 dB) are decided there; a failed E1, E2, E3 or E6 goes back to G1.
+- Owner, in the local corpus (not the repo): add N1 and N2 as `false-positive` lines of `confirmed.txt` after W4 (Q7), so the tool lists them.
+- Unchanged from the block below: the review-3 improvements of #58, the Q16/Q17 round in `mp3.rs`, the #55 leftovers, acceptance B1–B11 on the corpus, and the `clippy --all-targets` error in `full_band.rs:892`.
+
+**Blockers / questions for the human**
+- **Q1–Q7 of the proposal.** #60 was merged without explicit answers. The next spec PR assumes the defaults unless the owner says otherwise:
+  - Q1: V4 only, not V6;
+  - Q2: no new reason;
+  - Q3: 3 / 12 dB as starting values;
+  - Q4: N2 accepted as `Suspicious`;
+  - Q5: not for lossy L3;
+  - Q6: absolute floor window;
+  - Q7: the owner adds N1 and N2.
+- Unchanged: Dependabot alert #1 (`glib`), the `specs/CLAUDE.md` line about `specs/pending/`, the splitter accessibility gap.
+- **Environment:**
+  - `privacy-check` reads the committed branch diff only: run it after the commit (it reports "0 files checked" before).
+  - From PowerShell, `just` recipes with a shebang (`accept`, `calibrate`, `privacy-check`) fail with "could not find `cygpath`". Run the binary directly: `cargo run --release -q -p fakeflac-calibrate -- privacy-check --base main`.
+
+**Next step:** the follow-up spec PR that turns `specs/pending/detection-v6-edge-step.md` into rules.md v6 and `detection-params.v6.toml`, with the Q1–Q7 defaults unless the owner answers them first.
+
 ## 2026-10-23 - RF-15 part 2 (lossy calibration): merged (#58)
 
 **Done**

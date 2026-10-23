@@ -8,7 +8,7 @@ Desktop app for Windows that tells you whether your audio files are what they cl
 
 Supported formats: **WAV, FLAC, MP3, M4A, Opus**. Everything is processed locally; nothing is sent to the Internet. Files are never modified.
 
-> **Status: pre-alpha.** Milestone H0 (harness) is done. Milestone H1 (MVP, WAV and FLAC) is nearly done: the detection engine (v2), folder analysis with progress and cancellation, the main screen and results table, and the calibration tool are built; detection v3 and the spectrogram (RF-07) are pending. MP3, M4A and Opus come in H2. See [`docs/agents/progress.md`](docs/agents/progress.md).
+> **Status: pre-alpha.** Milestones H0 (harness) and H1 (MVP, WAV and FLAC) are built: the lossless detection rules (v4), folder analysis with progress and cancellation, the main screen, results table and spectrogram, and the calibration tool. H2 is under way: MP3 and M4A decoding and source-bitrate detection for lossy files (detection v5) are merged, and Opus waits for its decoder. Detection v6, which clears a known kind of lossless false positive, is approved as a proposal. See [`docs/agents/progress.md`](docs/agents/progress.md).
 
 ## How this project is built
 
