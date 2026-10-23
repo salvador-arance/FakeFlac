@@ -210,6 +210,7 @@ fn reasons_map_for_every_variant() {
         R::GradualRolloff,
         R::AmbiguousCutoff,
         R::HighBandGaps,
+        R::CutoffBelowDeclared,
     ];
     assert_eq!(
         track_json(&t)["reasons"],
@@ -217,9 +218,44 @@ fn reasons_map_for_every_variant() {
             "lowHighFrequencyContent",
             "gradualRolloff",
             "ambiguousCutoff",
-            "highBandGaps"
+            "highBandGaps",
+            "cutoffBelowDeclared"
         ])
     );
+}
+
+// @RF-15 @RF-06 Contract version 3: a lossy track after detection v5 (algorithmVersion 5, the
+// estimated source bitrate, the new reason).
+#[test]
+fn rf15_a_lossy_track_json_matches_the_contract() {
+    let mut t = track(core::Verdict::Suspicious, None);
+    t.info = core::TrackInfo {
+        format: core::AudioFormat::Mp3,
+        codec: Some(core::AudioCodec::Mp3),
+        bit_depth: None,
+        channels: 1,
+        declared_bitrate_kbps: Some(192),
+        bitrate_mode: Some(core::BitrateMode::Cbr),
+        ..t.info
+    };
+    t.cutoff = Some(core::CutoffEstimate {
+        frequency_hz: 17000.0,
+        steepness_db_per_khz: 100.0,
+        noise_floor_db: -90.0,
+    });
+    t.estimated_source_bitrate_kbps = Some(128);
+    t.reasons = vec![core::SuspicionReason::CutoffBelowDeclared];
+    t.algorithm_version = 5;
+    let v = track_json(&t);
+    assert_eq!(v["info"]["format"], "mp3");
+    assert_eq!(v["info"]["codec"], "mp3");
+    assert_eq!(v["info"]["bitDepth"], Value::Null);
+    assert_eq!(v["info"]["declaredBitrateKbps"], 192);
+    assert_eq!(v["info"]["bitrateMode"], "cbr");
+    assert_eq!(v["verdict"], "suspicious");
+    assert_eq!(v["estimatedSourceBitrateKbps"], 128);
+    assert_eq!(v["reasons"], json!(["cutoffBelowDeclared"]));
+    assert_eq!(v["algorithmVersion"], 5);
 }
 
 // @RF-05

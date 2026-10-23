@@ -29,6 +29,10 @@ pub struct DetectionParams {
     /// Full-band guard (v3, ADR-0038). `None` disables it (v2 behaviour).
     #[serde(default)]
     pub full_band: Option<FullBandParams>,
+    /// Lossy-file rules (v5, `specs/detection/lossy-source.md`). `None` (a v2-v4 file): lossy files
+    /// are not judged.
+    #[serde(default)]
+    pub lossy: Option<LossyParams>,
     pub verdict: VerdictParams,
     pub spectrogram: SpectrogramParams,
 }
@@ -103,6 +107,33 @@ pub struct FullBandParams {
     /// not full band. `None` (a v3 file) disables the condition.
     #[serde(default)]
     pub max_lossy_step_db: Option<f64>,
+}
+
+/// The `[lossy]` section (lossy-source.md section 6).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LossyParams {
+    pub suspicious_shortfall_hz: f64,
+    pub fake_shortfall_hz: f64,
+    pub fake_min_step_db: f64,
+    pub cutoffs: LossyCutoffs,
+}
+
+/// The `[lossy.cutoffs]` tables: expected low-pass per declared bitrate, per codec.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LossyCutoffs {
+    pub mp3: Vec<CutoffRow>,
+    pub aac: Vec<CutoffRow>,
+    #[serde(default)]
+    pub opus: Option<Vec<CutoffRow>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CutoffRow {
+    pub bitrate_kbps: u32,
+    pub cutoff_hz: f64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -182,6 +213,7 @@ impl Default for DetectionParams {
                 min_burst_db: 3.0,
                 max_lossy_step_db: Some(3.0),
             }),
+            lossy: None,
             verdict: VerdictParams {
                 low_hf_threshold_db: -60.0,
                 gap_fake_db: 6.0,

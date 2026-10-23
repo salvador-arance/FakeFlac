@@ -1,7 +1,7 @@
 //! Detection rules v4 for lossless files (RF-03, RF-04). Spec: `specs/detection/rules.md`.
 //! Pure functions: no I/O, every number comes from `DetectionParams`.
 
-use crate::domain::{CutoffEstimate, SuspicionReason, Verdict};
+use crate::domain::{AudioCodec, CutoffEstimate, SuspicionReason, TrackError, Verdict};
 use crate::params::DetectionParams;
 use crate::spectrum::BandSpectra;
 
@@ -269,6 +269,45 @@ pub fn detect(spectra: Option<&BandSpectra>, params: &DetectionParams) -> Detect
         reasons,
         cutoff: Some(cutoff_estimate(&m, params)),
     }
+}
+
+/// What the stream declares (`specs/detection/lossy-source.md` section 2) that the verdict needs.
+#[derive(Debug, Clone, PartialEq)]
+pub struct StreamInfo {
+    pub codec: AudioCodec,
+    pub sample_rate: u32,
+    /// Declared bitrate `b` in kbps; `None` for lossless codecs.
+    pub declared_bitrate_kbps: Option<u32>,
+    /// The LAME tag's low-pass in Hz (`L_tag` before the range check).
+    pub encoder_lowpass_hz: Option<u32>,
+}
+
+/// Verdict of a track by codec: the lossless rules of rules.md for `pcm`, `flac` and `alac`, the
+/// lossy rules L0, L2 to L6 of lossy-source.md section 4 otherwise.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TrackDecision {
+    pub verdict: Verdict,
+    pub reasons: Vec<SuspicionReason>,
+    pub estimated_source_bitrate_kbps: Option<u32>,
+    /// Set only with `Verdict::Error` (rule L0: `UnsupportedFormat`).
+    pub error: Option<TrackError>,
+}
+
+/// Lossy-source.md section 3: the expected cutoff `c_exp` in Hz; `None` when `T(codec, b)` is
+/// undefined (a declared bitrate below the table, or a lossless codec).
+pub fn expected_cutoff_hz(stream: &StreamInfo, params: &DetectionParams) -> Option<f64> {
+    let _ = (stream, params);
+    todo!("RF-15: expected cutoff c_exp")
+}
+
+/// Lossy-source.md sections 4 and 5, and rules.md section 3 for the lossless codecs.
+pub fn decide_track(
+    stream: &StreamInfo,
+    m: &Measurements,
+    params: &DetectionParams,
+) -> TrackDecision {
+    let _ = (stream, m, params);
+    todo!("RF-15: lossy rules L0-L6")
 }
 
 fn median(values: &[f64]) -> f64 {

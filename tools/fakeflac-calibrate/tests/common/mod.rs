@@ -843,7 +843,7 @@ impl Sample {
     }
 
     /// `candidate.toml` of sample-corpus.md section 4: v2 with `algorithm_version` set to the next
-    /// free version (never 3 or 4, which are detection v3 and v4; 5 today) and `verdict.gap_fake_db = 4.0`.
+    /// free version (never 3, 4 or 5, which are detection v3, v4 and v5; 6 today) and `verdict.gap_fake_db = 4.0`.
     pub fn candidate_params(&self) -> PathBuf {
         let text = read(&v2_params())
             .replace(

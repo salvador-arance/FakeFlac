@@ -903,6 +903,7 @@ fn v2_params() -> DetectionParams {
     DetectionParams {
         algorithm_version: 2,
         full_band: None,
+        lossy: None,
         ..DetectionParams::default()
     }
 }
@@ -912,6 +913,7 @@ fn v2_params() -> DetectionParams {
 fn v3_params() -> DetectionParams {
     let mut p = DetectionParams {
         algorithm_version: 3,
+        lossy: None,
         ..DetectionParams::default()
     };
     p.full_band
@@ -1249,11 +1251,12 @@ fn rf04_v3_without_a_full_band_section_the_guard_is_disabled() {
 
 // ---- Parameters (rules.md section 4) --------------------------------------------------------------
 
-// The defaults of the code are v4 (the audio crate's test compares them with the file).
+// The defaults of the code are v5 (ADR-0041; the audio crate's test compares them with the file).
+// Their [full_band] section is that of v4.
 #[test]
 fn rf04_v3_defaults_are_v3() {
     let p = DetectionParams::default();
-    assert_eq!(p.algorithm_version, 4);
+    assert_eq!(p.algorithm_version, 5);
     assert_eq!(
         p.full_band,
         Some(FullBandParams {
