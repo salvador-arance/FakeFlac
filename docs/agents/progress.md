@@ -2,6 +2,39 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-23 - RF-15 part 2 (lossy calibration): merged (#58)
+
+**Done**
+- #57 is merged into `feat/RF-15-calibration` (b53373e).
+- Round 2:
+  - 6486941 test: #57 follow-ups and the mutants that survived round 1.
+  - a9fdf10 feat: the shared pure `fakeflac_core::detect::track_guard`, used by `analyze_track` and by the tool. It fixes round-1 blocking 2 with no change in the app. Also the #57 items: `real applies to lossy files only`, the album-units `file:line` refs, the `upstream_by_rate` checks, the Fake-rows median and `within_source` for positive groups only. Also the watch list for every params file, `real_excluded` printed once, the ALAC text derived from data, and the `--no-generate` count.
+- Review 2: 1 blocking finding, the holdout warning per stratum. The owner decided:
+  - add the per-stratum warning for every stratum and keep the album-class warning;
+  - keep the `--no-generate` change, so uncached labelled tracks are not "entries not generated".
+- Round 3: f5f7507 test, ba0636c fix (per-stratum warning, lossy files skipped by extension under `--no-generate`, `source_max_kbps` bounds with the spec message, a single watch list). Review 3 found no blocking findings and killed every earlier survivor.
+- `just ci` is green, `privacy-check` has 0 matches. **#58 is merged** (squash, 09fd253). Branches pruned after G2.
+
+**Pending**
+- Improvements left from review 3, for a small follow-up PR:
+  - tests for a `lossy:*` stratum warning, for the `<` boundary of the per-stratum warning (`render.rs:810`), and for upper-case extensions under `--no-generate` (survivors N1b, N2, N3c);
+  - one `pub(crate) is_lossy_path` instead of three extension lists (`run.rs:356`, `extract.rs:61-70`, `extract.rs:336-341`);
+  - `UpstreamRate.source_max_kbps_invalid` as an enum or a raw value;
+  - `upstream = 1` still gives a TOML type error.
+- Spec notes for the next G1:
+  - lossy.md section 11 should record that an uncached ALAC `.m4a` under `--no-generate` is skipped by extension (undercount);
+  - `tests/lossy_inputs.rs:903, :939, :1030` cite scenarios that do not exist ("The holdout warning applies per stratum", "Lossy watch tracks are listed"): add them to `calibration-lossy.feature` or cite the spec section.
+- Unchanged from the previous block: the Q16 and Q17 round in `mp3.rs` (`EXTRACTION_VERSION` 3), the #55 leftovers, and acceptance B1–B11 on the real corpus (`just accept`, now possible).
+- `cargo clippy --all-targets` fails on `tools/fakeflac-calibrate/tests/full_band.rs:892` (type_complexity). The error predates this PR, and the justfile does not run that form.
+
+**Blockers / questions for the human**
+- Unchanged: Dependabot alert #1 (`glib`), the `specs/CLAUDE.md` line about `specs/pending/`, the splitter accessibility gap.
+- **Environment:** the Git Bash cwd noise and the Vitest-from-Git-Bash note of the previous block still apply. The `guard-protected` hook blocks Write outside the repo, the session scratchpad included; pass PR bodies to `gh` on stdin (`--body-file -`).
+
+**Next step:** `just accept` on the corpus (B1–B11) or the Q16/Q17 `/feature` round, whichever the owner prefers.
+
+**Note:** squash-merging a PR before its handoff commit is pushed leaves the handoff out of `main`. Push the handoff before asking for G2.
+
 ## 2026-10-23 - RF-15 part 2 (lossy calibration): review round 1 done, round 2 waits for spec PR #57
 
 **Done**
