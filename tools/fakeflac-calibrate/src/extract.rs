@@ -332,6 +332,15 @@ pub fn extract_group(
             continue;
         }
         let Some(extracted) = corpus_results[i].as_ref() else {
+            // Lossy containers are never sources: they add no generated entries.
+            let ext = item.track.rel.rsplit_once('.').map(|(_, e)| e);
+            if ext.is_some_and(|e| {
+                ["mp3", "m4a", "opus"]
+                    .iter()
+                    .any(|x| e.eq_ignore_ascii_case(x))
+            }) {
+                continue;
+            }
             // Uncached source under --no-generate: its generated entries are not generated either.
             not_generated +=
                 (config.lossless_settings().count() + config.generate.lossy.len()) as u32;

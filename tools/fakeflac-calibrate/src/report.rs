@@ -196,7 +196,6 @@ pub struct LossyWatchEntry {
 pub struct LossyEvaluation {
     pub matrix: BTreeMap<SplitSel, LossyMatrix>,
     pub groups: Vec<LossyGroupRow>,
-    pub watch: Vec<LossyWatchEntry>,
 }
 
 /// One track of a chain (lossy.md section 6.5).

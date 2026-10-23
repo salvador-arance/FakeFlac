@@ -804,6 +804,16 @@ fn warnings(data: &ReportData<'_>) -> Vec<String> {
             }
         }
     }
+    // Units are the split unit (lossy.md section 3), so a stratum can be short of holdout even when
+    // its albums are not.
+    for (stratum, (tune, holdout)) in data.unit_strata {
+        if *holdout < data.config.split.min_holdout_albums {
+            out.push(format!(
+                "stratum {stratum}: {holdout} units in holdout (fewer than {}), {tune} in tune",
+                data.config.split.min_holdout_albums
+            ));
+        }
+    }
     for (run, eval) in data.runs.iter().zip(data.evaluations.iter()) {
         let rows = &data.groups[run.group].rows;
         let t = class_totals(rows, &run.evals, "primary", SplitSel::All);

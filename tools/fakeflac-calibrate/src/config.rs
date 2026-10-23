@@ -27,10 +27,36 @@ pub struct Labels {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(from = "RawUpstreamRate")]
 pub struct UpstreamRate {
     pub upstream: String,
+    /// `None` when absent or out of range (the latter is reported by validation).
     pub source_max_kbps: Option<u32>,
+    /// `source_max_kbps` was present but is not an integer from 8 to 640.
+    pub source_max_kbps_invalid: bool,
+}
+
+/// `source_max_kbps` is read as any TOML value so that a bad one is a validation error with the
+/// documented message rather than a TOML type error.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawUpstreamRate {
+    upstream: String,
+    source_max_kbps: Option<toml::Value>,
+}
+
+impl From<RawUpstreamRate> for UpstreamRate {
+    fn from(raw: RawUpstreamRate) -> Self {
+        let parsed = raw.source_max_kbps.as_ref().map(|v| match v {
+            toml::Value::Integer(n) if (8..=640).contains(n) => Some(*n as u32),
+            _ => None,
+        });
+        UpstreamRate {
+            upstream: raw.upstream,
+            source_max_kbps: parsed.flatten(),
+            source_max_kbps_invalid: parsed == Some(None),
+        }
+    }
 }
 
 /// One `[[generate.lossy]]` (lossy.md section 4.1): setting ids applied in order.
@@ -195,10 +221,7 @@ impl Config {
                     entry.upstream
                 ));
             }
-            if entry
-                .source_max_kbps
-                .is_some_and(|k| !(8..=640).contains(&k))
-            {
+            if entry.source_max_kbps_invalid {
                 errors.push(format!(
                     "labels.upstream_by_rate '{key}': source_max_kbps must be an integer from 8 to 640"
                 ));

@@ -335,11 +335,7 @@ pub fn lossy_tables(
         });
     }
 
-    LossyEvaluation {
-        matrix,
-        groups,
-        watch: lossy_watch(group, evals),
-    }
+    LossyEvaluation { matrix, groups }
 }
 
 /// The lossy `false-positive` tracks with their measurements under one params file (lossy.md

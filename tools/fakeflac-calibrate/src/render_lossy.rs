@@ -68,19 +68,6 @@ pub(crate) fn header_lossy(md: &mut Md, data: &ReportData<'_>) {
             "- confirmed.txt line {line}: real applies to lossy files; the track holds {codec} (excluded)"
         ));
     }
-    for (stratum, (tune, holdout)) in data
-        .unit_strata
-        .iter()
-        .filter(|(k, _)| k.starts_with("lossy:"))
-    {
-        if *holdout < data.config.split.min_holdout_albums {
-            any = true;
-            md.line(format!(
-                "- stratum {stratum}: {holdout} units in holdout (fewer than {}), {tune} in tune",
-                data.config.split.min_holdout_albums
-            ));
-        }
-    }
     let entries: Vec<String> = data
         .config
         .generate
