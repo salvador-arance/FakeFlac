@@ -476,6 +476,9 @@ pub fn evaluation(
             .map(|(base, base_rows)| setting_changes(run, rows, base, base_rows, config))
             .unwrap_or_default(),
         changes,
+        lossy: None,
+        lossy_not_evaluated: 0,
+        chains: Vec::new(),
     }
 }
 

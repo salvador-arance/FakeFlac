@@ -60,6 +60,19 @@ pub fn decode_args(input: &Path, decode_args: &[String], out: &Path) -> Vec<Stri
     args
 }
 
+/// Arguments of every encode call of a lossy entry (lossy.md section 4.3), one list per stage:
+/// stage 1 is [`encode_args`] into `<generated>/<id>.s1.<ext>`, stage `k` > 1 encodes the output of
+/// stage `k - 1` (no `-ss`/`-t`), and the last stage writes `<generated>/<id>.<ext>`.
+pub fn lossy_args(
+    _source: &Path,
+    _fragment: Option<Fragment>,
+    _stages: &[&Setting],
+    _generated_dir: &Path,
+    _id: &str,
+) -> Vec<Vec<String>> {
+    todo!("RF-15 lossy.md section 4.3")
+}
+
 /// `FAKEFLAC_FFMPEG`, or `ffmpeg` on `PATH` when `None`.
 #[derive(Debug, Clone)]
 pub struct FfmpegTranscoder {
@@ -107,6 +120,13 @@ impl FfmpegTranscoder {
 }
 
 impl Transcoder for FfmpegTranscoder {
+    fn transcode_lossy(
+        &self,
+        _request: &crate::transcode::LossyRequest<'_>,
+    ) -> Result<crate::transcode::LossyOutput, TranscodeError> {
+        todo!("RF-15 lossy.md section 4.3")
+    }
+
     fn supports(&self, encoder: &str) -> bool {
         matches!(encoder, "lame" | "aac" | "opus")
     }

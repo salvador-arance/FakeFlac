@@ -66,6 +66,9 @@ pub struct Outcome {
     pub evaluations: Vec<Evaluation>,
     /// `calibrate` only.
     pub grid: Option<GridOutcome>,
+    /// Split units per stratum (lossy.md section 3): class key (`primary`, ..., `lossy:primary`, ...)
+    /// to (tune, holdout) counts.
+    pub unit_strata: BTreeMap<String, (u32, u32)>,
 }
 
 /// Runs one command. Never panics on bad input: errors become `exit_code` 1, 2 or 3 with their
@@ -850,6 +853,7 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
             cache: groups.iter().map(|g| g.stats.clone()).collect(),
             evaluations,
             grid: grid_outcome,
+            unit_strata: BTreeMap::new(),
         })
     })();
     if outcome.is_err() {

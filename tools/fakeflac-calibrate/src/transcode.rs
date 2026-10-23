@@ -32,6 +32,25 @@ pub struct TranscodeOutput {
     pub encoder_version: String,
 }
 
+/// A lossy entry (lossy.md section 4.3): `source` through `stages` in order (at least one setting).
+/// The last stage writes `generated_dir/<id>.<ext of the last stage>`; intermediates are deleted.
+#[derive(Debug, Clone)]
+pub struct LossyRequest<'a> {
+    pub source: &'a Path,
+    pub stages: &'a [&'a Setting],
+    pub fragment: Option<Fragment>,
+    pub generated_dir: &'a Path,
+    pub id: &'a str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LossyOutput {
+    /// `generated_dir/<id>.<ext>`
+    pub file: PathBuf,
+    /// The version string of each stage, joined with ` > `.
+    pub encoder_version: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TranscodeError {
     /// The program could not be started (exit 3).
@@ -47,4 +66,6 @@ pub trait Transcoder: Send + Sync {
     /// transcode is needed or to check staleness; `Err` has kind `ExternalTool`.
     fn version(&self) -> Result<String, ToolError>;
     fn transcode(&self, request: &TranscodeRequest<'_>) -> Result<TranscodeOutput, TranscodeError>;
+    /// Generates the lossy file of a `[[generate.lossy]]` entry (RF-15, lossy.md section 4.3).
+    fn transcode_lossy(&self, request: &LossyRequest<'_>) -> Result<LossyOutput, TranscodeError>;
 }

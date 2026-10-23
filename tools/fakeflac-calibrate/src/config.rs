@@ -12,6 +12,33 @@ pub struct Config {
     pub report: ReportConfig,
     #[serde(default)]
     pub targets: Vec<Target>,
+    /// `[labels.upstream_by_rate]` (lossy.md section 1.5); absent in v1.
+    #[serde(default)]
+    pub labels: Labels,
+}
+
+/// `[labels]` of `calibration.v2.toml`.
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Labels {
+    /// Decoded sample rate (as text, `"44100"`) to upstream codec and optional source bound.
+    #[serde(default)]
+    pub upstream_by_rate: std::collections::BTreeMap<String, UpstreamRate>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct UpstreamRate {
+    pub upstream: String,
+    pub source_max_kbps: Option<u32>,
+}
+
+/// One `[[generate.lossy]]` (lossy.md section 4.1): setting ids applied in order.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LossyEntry {
+    pub id: String,
+    pub stages: Vec<String>,
 }
 
 /// Inputs.md section 4.
@@ -35,6 +62,9 @@ pub struct GenerateConfig {
     #[serde(default)]
     pub min_removed_hf_db: Option<f64>,
     pub settings: Vec<Setting>,
+    /// Lossy entries (lossy.md section 4); empty in v1.
+    #[serde(default)]
+    pub lossy: Vec<LossyEntry>,
 }
 
 /// One `[[generate.settings]]`. `encoder` is `lame`, `aac`, `opus`, or `fixture` (tests only).
@@ -47,7 +77,14 @@ pub struct Setting {
     pub bitrate_kbps: Option<u32>,
     #[serde(default)]
     pub lowpass_hz: Option<u32>,
+    /// `false`: the setting is only a stage of lossy entries (lossy.md section 4.1).
+    #[serde(default = "default_true")]
+    pub lossless_transcode: bool,
     pub args: Vec<String>,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 /// Evaluation.md sections 3 and 8.
@@ -88,9 +125,9 @@ impl Config {
 
     fn validate(&self) -> Result<(), ToolError> {
         let mut errors: Vec<String> = Vec::new();
-        if self.config_version != 1 {
+        if !(1..=2).contains(&self.config_version) {
             errors.push(format!(
-                "config_version {} is not supported (expected 1)",
+                "config_version {} is not supported (expected 1 or 2)",
                 self.config_version
             ));
         }

@@ -68,7 +68,7 @@ fn rp11_trusted_error_not_a_lossless_file() {
         "trusted-not-lossless",
         6,
         "Colección\\Álbum Ü\\folder.jpg | revisado",
-        "trusted.txt:6: not a FLAC or WAV file",
+        "trusted.txt:6: not a supported audio file (FLAC, WAV, MP3, M4A or Opus)",
     );
 }
 
@@ -260,6 +260,6 @@ fn rp11_confirmed_error_unknown_kind() {
     confirmed_line_error(
         "confirmed-unknown-kind",
         "Sueltas\\Mixto\\06 – Falso.flac | dudoso",
-        "confirmed.txt:2: unknown kind 'dudoso' (expected fake or false-positive)",
+        "confirmed.txt:2: unknown kind 'dudoso' (expected fake, real or false-positive)",
     );
 }
