@@ -24,7 +24,7 @@ Columns, in order: State · File · Folder · Format · Samplerate · Bits · Du
 
 | Props | Events | States / variants | Notes |
 |---|---|---|---|
-| `kbps: number \| null`, `mode?: BitrateMode \| null`, `approx?: boolean` | — | value ("320 kbps") · vbr ("245 kbps VBR") · abr ("192 kbps ABR") · approx ("≈128 kbps") · none ("—", with an accessible label "No bitrate") | Plain text, no colour of its own: the verdict carries the colour (RNF-08). Uses `bitrate.kbps`, `bitrate.vbr`, `bitrate.abr`, `bitrate.approx`, `bitrate.none`. Level: molecule (a formatted value, like `CutoffValue`) |
+| `kbps: number \| null`, `mode?: BitrateMode \| null`, `approx?: boolean` | — | value ("320 kbps") · vbr ("245 kbps VBR") · abr ("192 kbps ABR") · approx ("≈128 kbps") · none ("—", with an accessible label "No bitrate") | Plain text, no colour of its own: the verdict carries the colour (RNF-08). `approx` takes precedence over `mode`: an approximate value shows no VBR or ABR suffix. Uses `bitrate.kbps`, `bitrate.vbr`, `bitrate.abr`, `bitrate.approx`, `bitrate.none`, and `bitrate.noneLabel` as the accessible label of state none. Level: molecule (a formatted value, like `CutoffValue`) |
 
 ## Detail line (`DetailPanel`, `components.md`)
 
@@ -37,11 +37,11 @@ Examples: "Cutoff 17.0 kHz · 320 kbps · ≈128 kbps source · Fake"; "Cutoff 1
 
 ## Texts (keys in `src/lib/i18n/`; English is the default, Spanish falls back to English until RF-13)
 
-New: `column.bitrate` Bitrate · `column.realBitrate` Real bitrate · `bitrate.kbps` {kbps} kbps · `bitrate.vbr` VBR · `bitrate.abr` ABR · `bitrate.approx` ≈{kbps} kbps · `bitrate.none` — (accessible label: No bitrate) · `format.m4aAlac` M4A (ALAC) · `detail.declared` {kbps} kbps · `detail.source` ≈{kbps} kbps source · `reason.cutoffBelowDeclared` Cutoff lower than expected for its bitrate · `error.unsupportedFormat` Unsupported audio format (shown for HE-AAC and MP3 layers I/II, and for any other `unsupportedFormat` error) · `help.realBitrate` The real bitrate is an estimate from the cutoff, in terms of the file's own codec. Files from sources with little treble, from encoders without a low-pass, or re-encoded from a close bitrate may not be detected.
+New: `column.bitrate` Bitrate · `column.realBitrate` Real bitrate · `bitrate.kbps` {kbps} kbps · `bitrate.vbr` VBR · `bitrate.abr` ABR · `bitrate.approx` ≈{kbps} kbps · `bitrate.none` — · `bitrate.noneLabel` No bitrate (the accessible label of `bitrate.none`) · `format.m4aAlac` M4A (ALAC) · `detail.declared` {kbps} kbps · `detail.source` ≈{kbps} kbps source · `reason.cutoffBelowDeclared` Cutoff lower than expected for its bitrate · `error.unsupportedFormat` Unsupported audio format (shown for HE-AAC and MP3 layers I/II, and for any other `unsupportedFormat` error) · `help.realBitrate` The real bitrate is an estimate from the cutoff, in terms of the file's own codec. Files from sources with little treble, from encoders without a low-pass, or re-encoded from a close bitrate may not be detected.
 
 Changed: `error.NO_AUDIO_FOUND` "No WAV or FLAC files in this folder" → **"No supported audio files in this folder"** (`main-screen.md`).
 
-Where they appear: `reason.cutoffBelowDeclared` in the `VerdictCell` tooltip and in the detail line, like every reason; `help.realBitrate` as the tooltip of the Real bitrate column header (it explains the limits of `lossy-source.md` section 8 in plain words); `error.unsupportedFormat` in the detail panel and the `VerdictCell` tooltip of an error row.
+Where they appear: `reason.cutoffBelowDeclared` in the `VerdictCell` tooltip and in the detail line, like every reason; `help.realBitrate` as the tooltip of the Real bitrate column header (it explains the limits of `lossy-source.md` section 8 in plain words); `error.unsupportedFormat` in the detail panel and the row tooltip of an error row (the `error.*` text every error row shows on hover, as in H1), like every error text.
 
 ## Scenarios
 

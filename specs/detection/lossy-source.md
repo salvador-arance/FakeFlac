@@ -35,6 +35,8 @@ The verdict answers ADR-0031's question for lossy files: *is the content consist
 | Q13 | **Changes to approved specs and protected tests** in this PR: (a) `rules.md`: the default params and `algorithmVersion` become v5/5 and the next free `algorithm_version` becomes **6** (its Q8(d) said 5); its lossless rules and values do not change; (b) `detection-lossless.feature`: the scenario "Parameters come from the versioned file" names `detection-params.v5.toml` and `algorithmVersion 5`; (c) `calibration.feature`: the proposals of "The grid search proposes new parameters from tune data" and "The full-band guard can be searched from a v3 baseline" are `detection-params.v6.toml` / `algorithm_version 6`, the `trusted.txt` error for `folder.jpg` reads `not a supported audio file (FLAC, WAV, MP3, M4A or Opus)` the `confirmed.txt` unknown-kind error lists `fake, real or false-positive` (calibration/lossy.md C11), and "ffmpeg missing when a transcode is needed" uses the default config, now `calibration.v2.toml`; (d) `calibration/evaluation.md` section 7 and `calibration/sample-corpus.md` sections 4–5: next free version 6; (e) `contracts/commands.md` version 3 (section "Lossy formats"); (f) `ui/main-screen.md` and `ui/components.md`: two new table columns, the `BitrateValue` molecule, an optional `tooltip` prop of `ColumnHeader`, the lossy detail line and the `error.NO_AUDIO_FOUND` text (`ui/lossy-formats.md`); (g) the calibration specs as listed in `calibration/lossy.md`; (h) the protected tests listed in ADR-0041 ("Consequences") change in the test stage: Rust tests of the core, the audio adapter and `src-tauri`, the calibration tool's `inputs.rs` (the C11 messages), and the frontend tests of `ResultsTable` (ten columns), `i18n` and `AnalysisPage` (the `error.NO_AUDIO_FOUND` text). Agree? | Open. Default: yes to all |
 | Q14 | Only `.m4a` is scanned as MP4 audio; `.mp4`, `.m4b` and raw ADTS `.aac` stay out of scope | Open. Default: yes |
 | Q15 | ADR-0040 enables the symphonia feature `alac` as well as `mp3`, `aac` and `isomp4`: ALAC in M4A must be decoded to be treated as lossless (backend.md section 8) | Open. Default: yes |
+| Q16 | **A tag frame whose frames or bytes field is 0** (section 2.1). A stream with audio cannot have 0 frames or 0 bytes, so the field is broken (an encode that never updated its tag). Treat it as absent, so the stream is counted? Today the adapter takes 0 literally: a frame count of 0 gives `durationMs` 0, so the file is `tooShort` after being decoded; a bytes field of 0 on a VBR or ABR file gives no declared bitrate, so it is `corruptStream` (`no bitrate`). Changing it is an adapter change (`EXTRACTION_VERSION`) | Open. Default: treat 0 as absent |
+| Q17 | **Free-format MP3** (bitrate index 0, section 2.1). The decoder (symphonia 0.6.1) does not decode free bitrate, so such a file never gets a verdict. Report it as `unsupportedFormat` (a recognised but not decoded codec, section 2.3, like Layers I and II), with detail `free-format MP3 is not supported`? Today it ends as `corruptStream` (the decoder finds no frame it can read) or, if it finds one, `tooShort` (the adapter counts 0 frames) | Open. Default: `unsupportedFormat` |
 
 ## 1. Scope and versions
 
@@ -69,18 +71,20 @@ The **sample rate** of a lossy file is the decoded rate (44.1 or 48 kHz for most
 
 ### 2.1 MP3
 
-- **Tag frame.** The first frame of the stream may be a tag frame instead of audio: `Xing` or `Info` (written by LAME and ffmpeg) or `VBRI` (Fraunhofer). The adapter parses it itself from the bytes of that frame (no tag library; ADR-0040). A tag frame is not audio.
+- **Tag frame.** The first frame of the stream may be a tag frame instead of audio: `Xing` or `Info` (written by LAME and ffmpeg) or `VBRI` (Fraunhofer). The adapter parses it itself from the bytes of that frame (no tag library; ADR-0040). A tag frame is not audio. A frames or bytes field equal to 0 is treated as absent, so the value is counted from the audio frames instead (Q16).
 - **LAME extension.** When an `Xing`/`Info` frame carries the LAME extension (a 9-byte encoder field of printable ASCII after the Xing fields), the adapter reads: `encoder` = that field with trailing spaces and NUL bytes removed (for example `LAME3.100`, `Lavc60.31`); the **VBR method** (low 4 bits of the next byte); and `encoder_lowpass_hz` = the following byte × 100 Hz, **absent when the byte is 0**.
 - **Mode.**
   - `Info` → `cbr`.
   - `Xing` → `vbr`, unless the LAME VBR method is 1 or 8 (`cbr`) or 2 or 9 (`abr`).
   - `VBRI` → `vbr`.
-  - No tag frame: `cbr` when every audio frame of the file has the same bitrate index, otherwise `vbr`. A free-format stream (bitrate index 0) is `vbr`.
+  - No tag frame: `cbr` when every audio frame of the file has the same bitrate index, otherwise `vbr`. A free-format stream (bitrate index 0) has no mode: it is an error (last item of this section).
 - **Declared bitrate** (kbps, an integer):
   - `cbr`: the bitrate of the frame header of the first audio frame.
   - `vbr` and `abr`: the average, `round(8 · bytes / duration_s / 1000)` (halves away from zero), where `bytes` is the bytes field of the tag frame when it has one (as LAME writes it: every frame of the stream **including the tag frame**, ID3 tags excluded; the adapter uses the value as written) and otherwise the total size of the audio frames, and `duration_s` = `frames · samples_per_frame / sample_rate` with `frames` from the tag frame's frames field when it has one (the number of **audio** frames, the tag frame excluded) and otherwise counted. Counting the tag frame's bytes raises the average by about one frame in a thousand, far below the rounding to 1 kbps.
-- **Duration.** From the tag frame's frame count when present; otherwise the stream is counted as in rules.md section 1.2 (a missing length is never reported as silence). Encoder delay and padding are not subtracted (`durationMs` may exceed the audible length by up to two frames).
+- **Duration.** `frames · samples_per_frame / sample_rate`, with `frames` from the tag frame's frame count when present; otherwise the stream is counted as in rules.md section 1.2 (a missing length is never reported as silence). Encoder delay and padding are not subtracted, so `durationMs` may exceed the audible length by the encoder delay plus padding (`enc_delay + enc_padding` of the LAME extension; up to about 2.5 frames for LAME).
+- **Decoded length.** The decoder trims the encoder delay and padding, so it may return fewer samples than `frames · samples_per_frame`. The stream is `corruptStream` (it ended early, RNF-04) only when the decoded samples fall short of that length by more than a tolerance: `enc_delay + enc_padding` plus two frames when the LAME extension's encoder field starts with `LAME`, `Lavf` or `Lavc` (the encoders whose delay and padding fields, bytes 21 to 23 after the Xing fields, the adapter reads), otherwise three frames.
 - Layer I and II streams are `Error(unsupportedFormat)` (Q10).
+- A **free-format** stream (bitrate index 0) is not decoded, so it has no declared bitrate, duration or mode: `Error(unsupportedFormat)` with detail `free-format MP3 is not supported` (Q17).
 
 ### 2.2 M4A
 
@@ -90,7 +94,7 @@ The **sample rate** of a lossy file is the decoded rate (44.1 or 48 kHz for most
 
 ### 2.3 Errors
 
-As in H1 (ADR-0013, RNF-04): an unreadable file is `unreadable`; a container or bitstream that cannot be parsed or decoded is `corruptStream`; a codec that is recognised but not decoded is `unsupportedFormat`; a track shorter than `min_duration_s` is `tooShort`. **The duration is checked first**: a stream shorter than `min_duration_s`, a zero-duration stream included, is `tooShort`, whatever its bitrate. **A lossy stream that is long enough but has no declared bitrate after section 2.1 or 2.2 is `corruptStream`** (`no bitrate`); with the fallbacks above this should not happen, so it is a guard, not an expected case. A panic in a decoder is caught and becomes `corruptStream` (as in H1).
+As in H1 (ADR-0013, RNF-04): an unreadable file is `unreadable`; a container or bitstream that cannot be parsed or decoded is `corruptStream`; a codec that is recognised but not decoded is `unsupportedFormat`; a track shorter than `min_duration_s` is `tooShort`. **The duration is checked before the declared bitrate**: a stream shorter than `min_duration_s`, a zero-duration stream included, is `tooShort`, whatever its bitrate. The order of these errors against rule L0 is in section 4. **A lossy stream that is long enough but has no declared bitrate after section 2.1 or 2.2 is `corruptStream`** (`no bitrate`); with the fallbacks above this should not happen, so it is a guard, not an expected case. A panic in a decoder is caught and becomes `corruptStream` (as in H1).
 
 ## 3. Measurements
 
@@ -113,19 +117,20 @@ Every lossy file gets the spectra of `rules.md` section 1 and the measurements o
 
 ## 4. Verdict (RF-15)
 
-For a track whose `codec` is lossy. Rules are evaluated in order; the first match wins. Lossless codecs (`pcm`, `flac`, `alac`) use `rules.md` section 3 unchanged.
+For a track whose `codec` is lossy. Rules are evaluated in the order of the table rows (L1a before L0); the first match wins. Lossless codecs (`pcm`, `flac`, `alac`) use `rules.md` section 3 unchanged.
 
 | # | Condition | Verdict | Reasons | `estimatedSourceBitrateKbps` |
 |---|---|---|---|---|
+| L1a | Reading, probing or decoding failed (section 2.3: `unreadable`, `corruptStream`, or `unsupportedFormat` from sections 2.1 and 2.2, such as HE-AAC or MP3 Layer II) | `Error` | — (the `TrackError` explains it) | null |
 | L0 | The params have no `[lossy]` section (Q8): `unsupportedFormat` with detail `these DetectionParams have no [lossy] section`; or `lossy.cutoffs` has no row for the codec (Opus in v5): `unsupportedFormat` with detail `no [lossy.cutoffs] rows for <codec>` (for example `no [lossy.cutoffs] rows for opus`) | `Error` | — | null |
-| L1 | Decoding failed, no declared bitrate, or too short (section 2.3) | `Error` | — (the `TrackError` explains it) | null |
+| L1b | Too short, or no declared bitrate, in that order (section 2.3) | `Error` | — (the `TrackError` explains it) | null |
 | L2 | `H < low_hf_threshold_db` (little treble) | `Suspicious` | `lowHighFrequencyContent` | null |
 | L3 | `s` defined, `s ≥ fake_shortfall_hz` and `D ≥ fake_min_step_db` | `Fake` | — | section 5 |
 | L4 | `s` defined, `s ≥ suspicious_shortfall_hz` and `D ≥ step_suspicious_db` | `Suspicious` | `cutoffBelowDeclared` | section 5 |
 | L5 | `s` defined and `s ≥ suspicious_shortfall_hz` | `Suspicious` | `gradualRolloff` | section 5 |
 | L6 | Otherwise | `Real` | — | `b` |
 
-A silent track is decided after L1 and before L2 (section 3), with the same result as L2 but no cutoff. L0 depends only on the codec and the params, never on the spectra (an M4A still has to be probed to know whether it holds AAC or ALAC). In v5 the app never meets an Opus file, because the scanner skips `.opus` (Q9); the row exists so that the core has a defined answer.
+A silent track is decided after L1b and before L2 (section 3), with the same result as L2 but no cutoff. L0 depends only on the codec and the params, never on the spectra. It comes **after** L1a for every lossy format, MP3 included: an M4A has to be probed to know whether it holds AAC or ALAC, so both formats follow one order, and a broken file keeps the more informative `corruptStream` (or `unreadable`, or the `unsupportedFormat` of an undecoded codec) whatever the params. It comes **before** L1b: with params that cannot judge the codec, a short or bitrate-less lossy file is `unsupportedFormat`, not `tooShort` or `corruptStream`. In v5 the app never meets an Opus file, because the scanner skips `.opus` (Q9); the row exists so that the core has a defined answer.
 
 Consequences (they rely on the checks of section 6):
 - **`Fake` always rests on a clear step:** L3 needs `D ≥ fake_min_step_db ≥ step_suspicious_db`, so `fc = fs`. A track whose content fades without a step (`D < step_suspicious_db`, `fc = fe`) is at most `Suspicious` (L5), whatever its shortfall, in the spirit of planning section 2.5 ("never `Fake` only because of the spectrum shape").
@@ -188,7 +193,7 @@ Shown in the help as "suspicious with the reason" where they produce `Suspicious
 - **Genuine sources that end early.** A recording whose own mastering low-pass or natural roll-off lies more than `suspicious_shortfall_hz` below `c_exp` is `Suspicious`, and `Fake` if its edge is a sharp step `fake_shortfall_hz` below (R1). The calibration tool counts these "source-limited" honest encodes apart (calibration/lossy.md section 6), and B2 reports them.
 - **Other MP3 encoders.** The MP3 table is LAME's. An encoder with a lower low-pass at the same bitrate (old Fraunhofer encoders cut at about 16 kHz at 128 kbps) can be `Suspicious` at its threshold. Encoder-specific tables keyed by `encoder` are a candidate (section 10).
 - **Mono files** can only be missed, not wrongly flagged (section 3).
-- **HE-AAC** is `unsupportedFormat` (Q10). An M4A that uses **implicit** SBR signalling (only inside the bitstream) is decoded as AAC-LC at half its bandwidth and may be judged `Fake`.
+- **HE-AAC** is `unsupportedFormat` (Q10). An M4A that uses **implicit** SBR signalling (only inside the bitstream), or the backward-compatible explicit signalling (object type 2 in the AudioSpecificConfig, with the SBR extension after it), is decoded as AAC-LC at half its bandwidth and may be judged `Fake`: the adapter reads only the first object type of the AudioSpecificConfig.
 - **Sample rates below 32 kHz** (MPEG-2 and 2.5 Layer III) are decoded and judged with the same table, but no acceptance figure covers them.
 - **The estimate is MP3- or AAC-equivalent** (section 5), not the codec of the source.
 - **A user-chosen low-pass** recorded in the LAME tag is honoured (Q6), so a fake made with an explicit low-pass equal to its content edge is `Real`.

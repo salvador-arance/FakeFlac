@@ -67,7 +67,7 @@ Feature: Calibration and acceptance for lossy files
       | l128_320             | 0    | 0          | 5    | 1            | —              | 0     |
       | confirmed_real       | 1    | 0          | 0    | —            | 0              | 0     |
       | confirmed_fake aac   | 0    | 0          | 2    | 0            | —              | 0     |
-    And the median estimate of "l128_320" is 128
+    And the median estimate of the Fake rows of "l128_320" is 128
     And for the confirmed fakes with a source bitrate, 1 of 1 estimates is at most that bitrate
 
   @RP-11 @RF-15
@@ -116,7 +116,7 @@ Feature: Calibration and acceptance for lossy files
     Given line 8 of the sample lossy trusted.txt is "Sueltas\Mixto\05 – Cuatro.flac | analisis group=G1"
     When "accept" runs on the lossy variant of the sample corpus
     Then the exit code is 2
-    And the error output says "album has tracks in several split units"
+    And the error output is "album has tracks in several split units (trusted.txt:8, confirmed.txt:2)"
 
   @RP-11 @RF-15
   Scenario: Adding lossy-only labels does not move a lossless album
@@ -160,6 +160,8 @@ Feature: Calibration and acceptance for lossy files
       | Pérdidas\Vídeo\07 – Falso 320.mp3 \| real upstream=aac                   | upstream=, source_max_kbps= and weak apply to fake lines only               |
       | Compras\Ñandú – Ácido, Vol. 1 (2024)\03 – Bonus.flac \| fake upstream=aac | upstream=, source_max_kbps= and weak apply to lossy files only             |
       | Pérdidas\Vídeo\07 – Falso 320.mp3 \| dudoso                              | unknown kind 'dudoso' (expected fake, real or false-positive)               |
+      | Pérdidas\Vídeo \| real formats=all                                       | real applies to lossy files only                                            |
+      | Compras\Ñandú – Ácido, Vol. 1 (2024)\03 – Bonus.flac \| real             | real applies to lossy files only                                            |
       | Colección\Álbum Ü\folder.jpg \| fake                                     | not a supported audio file (FLAC, WAV, MP3, M4A or Opus)                    |
 
   @RP-11 @RF-15
