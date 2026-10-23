@@ -161,6 +161,8 @@ pub struct LossyGroupRow {
     pub group: String,
     pub counts: LossyCounts,
     pub median_estimate_kbps: Option<f64>,
+    /// Positive groups only: the median estimate of the `Fake` rows (lossy.md section 6.3, B8).
+    pub fake_median_estimate_kbps: Option<f64>,
     /// For rows with a source bitrate: (estimates at most that bitrate, rows with a source bitrate
     /// and an estimate).
     pub within_source: Option<(u32, u32)>,

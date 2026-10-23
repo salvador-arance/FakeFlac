@@ -253,6 +253,270 @@ fn rf15_lossy_table_per_group() {
     assert!(at("l128_320") < at("confirmed_real"));
 }
 
+// ---- Round 2: follow-ups of the spec PR #57 and surviving mutants -------------------------------------
+
+fn group_row<'a>(
+    lossy: &'a fakeflac_calibrate::report::LossyEvaluation,
+    group: &str,
+) -> &'a fakeflac_calibrate::report::LossyGroupRow {
+    lossy
+        .groups
+        .iter()
+        .find(|g| g.group == group)
+        .unwrap_or_else(|| panic!("no group {group} in {:?}", lossy.groups))
+}
+
+// Scenario: Lossy table per group (@RP-11 @RF-15): the median estimate of the `Fake` rows (lossy.md
+// section 6.3), the figure that B8 gates. The all-rows median is 192 here, the Fake rows' one is 128.
+// Also Scenario: Lossy confusion matrix: a Suspicious lossy row is not a Fake one.
+#[test]
+fn rf15_suspicious_lossy_rows_are_their_own_column_and_the_fake_median_ignores_them() {
+    let sample = Sample::new_lossy("lossy-suspicious-rows");
+    // mp3_320_lp18k5 is Suspicious (cutoffBelowDeclared) with an estimate of 192 under detection v5.
+    for name in ["11 – Sospecha A.mp3", "12 – Sospecha B.mp3"] {
+        place_lossy(
+            "mp3_320_lp18k5",
+            &sample.corpus.join("Pérdidas/Vídeo").join(name),
+        );
+    }
+    let mut confirmed = sample.lossy_confirmed_lines();
+    confirmed.push("Pérdidas\\Vídeo\\11 – Sospecha A.mp3 | fake upstream=aac".to_string());
+    confirmed.push("Pérdidas\\Vídeo\\12 – Sospecha B.mp3 | fake upstream=aac".to_string());
+    sample.write_confirmed(&confirmed);
+    let o = sample.accept_lossy();
+    assert_ok(&o);
+    let lossy = v5_eval(&o).lossy.as_ref().expect("lossy tables");
+
+    let m = lossy.matrix[&SplitSel::All];
+    let expected = LossyCounts {
+        suspicious: 2,
+        ..lossy_counts(0, 7, 1, 0)
+    };
+    assert_eq!(m.fake_row, expected, "Suspicious is not Fake");
+    assert_eq!(m.real_row, lossy_counts(11, 0, 0, 2), "real rows unchanged");
+
+    let aac = group_row(lossy, "confirmed_fake aac");
+    assert_eq!(
+        aac.counts,
+        LossyCounts {
+            suspicious: 2,
+            ..lossy_counts(0, 2, 0, 0)
+        }
+    );
+    assert_eq!(
+        aac.median_estimate_kbps,
+        Some(192.0),
+        "all rows with an estimate"
+    );
+    assert_eq!(
+        aac.fake_median_estimate_kbps,
+        Some(128.0),
+        "the Fake rows only"
+    );
+}
+
+// Scenario: Lossy table per group (@RP-11 @RF-15): the median estimate of the Fake rows of l128_320 is 128,
+// and only positive groups carry it.
+#[test]
+fn rf15_the_fake_row_median_estimate_is_for_positive_groups_only() {
+    let shared = shared_lossy();
+    assert_ok(&shared.outcome);
+    let lossy = v5_eval(&shared.outcome)
+        .lossy
+        .as_ref()
+        .expect("lossy tables");
+    for g in &lossy.groups {
+        if g.positive {
+            continue;
+        }
+        assert_eq!(
+            g.fake_median_estimate_kbps, None,
+            "negative group {}",
+            g.group
+        );
+        assert_eq!(g.within_source, None, "negative group {}", g.group);
+    }
+    assert_eq!(
+        group_row(lossy, "l128_320").fake_median_estimate_kbps,
+        Some(128.0)
+    );
+    assert_eq!(
+        group_row(lossy, "confirmed_fake aac").fake_median_estimate_kbps,
+        Some(128.0)
+    );
+    assert_eq!(group_row(lossy, "l128").fake_median_estimate_kbps, None);
+    assert_eq!(
+        group_row(lossy, "confirmed_real").fake_median_estimate_kbps,
+        None
+    );
+}
+
+// Scenario: Lossy confusion matrix (@RP-11 @RF-15): weak labels have their own row and stay out of the
+// strong `fake` row (lossy.md section 6.2)
+#[test]
+fn rf15_a_weak_label_is_counted_in_the_weak_row_only() {
+    let sample = Sample::new_lossy("lossy-weak-row");
+    let mut confirmed = sample.lossy_confirmed_lines();
+    confirmed[3] =
+        "Pérdidas\\Vídeo\\07 – Falso 320.mp3 | fake upstream=aac source_max_kbps=128 weak"
+            .to_string();
+    sample.write_confirmed(&confirmed);
+    let o = sample.accept_lossy();
+    assert_ok(&o);
+    let lossy = v5_eval(&o).lossy.as_ref().expect("lossy tables");
+    let m = lossy.matrix[&SplitSel::All];
+    assert_eq!(m.fake_row, lossy_counts(0, 6, 1, 0), "the strong fake row");
+    assert_eq!(m.weak_row, lossy_counts(0, 1, 0, 0), "the weak row");
+    let weak = group_row(lossy, "weak");
+    assert_eq!(weak.counts, lossy_counts(0, 1, 0, 0));
+    assert!(weak.positive);
+    assert_eq!(weak.within_source, Some((1, 1)));
+    assert_eq!(weak.fake_median_estimate_kbps, Some(128.0));
+}
+
+// Scenario: Lossy table per group (@RP-11 @RF-15), lossy.md section 4.2: a cascade is a fake only when its
+// lowest earlier bitrate is LOWER than the last stage's; at equal bitrates it is an honest (negative) row, and a
+// negative cascade has a source bitrate but neither a share of estimates within it nor a Fake median.
+#[test]
+fn rf15_cascades_at_equal_or_higher_bitrates_are_negatives_without_a_share() {
+    let sample = Sample::new_lossy("lossy-cascade-truth");
+    let path = sample.config_path();
+    let mut text = read(&path);
+    text.push_str(
+        "\n[[generate.lossy]]\nid = \"c128_128\"\nstages = [\"fxmp3_128\", \"fxmp3_128\"]\n\n\
+         [[generate.lossy]]\nid = \"c320_128\"\nstages = [\"fxmp3_320\", \"fxmp3_128\"]\n",
+    );
+    std::fs::write(&path, text).unwrap();
+    let o = sample.accept_lossy();
+    assert_ok(&o);
+
+    let labels = labels(&o, &sample);
+    for (setting, stages, source) in [
+        ("c128_128", "fxmp3_128>fxmp3_128", "128"),
+        ("c320_128", "fxmp3_320>fxmp3_128", "320"),
+    ] {
+        let rows: Vec<_> = labels
+            .rows
+            .iter()
+            .filter(|r| labels.get(r, "domain") == "lossy" && labels.get(r, "setting") == setting)
+            .collect();
+        assert_eq!(rows.len(), 6, "{setting}");
+        for r in rows {
+            assert_eq!(labels.get(r, "truth"), "real", "{setting}");
+            assert_eq!(labels.get(r, "class"), "generated", "{setting}");
+            assert_eq!(labels.get(r, "stages"), stages, "{setting}");
+            assert_eq!(labels.get(r, "source_bitrate_kbps"), source, "{setting}");
+        }
+    }
+
+    let lossy = v5_eval(&o).lossy.as_ref().expect("lossy tables");
+    for id in ["c128_128", "c320_128"] {
+        let g = group_row(lossy, id);
+        assert!(!g.positive, "{id} is a negative group");
+        assert_eq!(
+            g.within_source, None,
+            "{id}: no share for a negative cascade"
+        );
+        assert_eq!(g.fake_median_estimate_kbps, None, "{id}");
+    }
+    let positive = group_row(lossy, "l128_320");
+    assert!(positive.positive);
+    let (within, of) = positive
+        .within_source
+        .expect("a share for a positive cascade");
+    assert!(of > 0 && within == of, "{within} of {of}");
+    // The real rows of the lossy matrix gain the 12 honest cascade encodes (all of them detected or
+    // source-limited, none a Fake row).
+    let m = lossy.matrix[&SplitSel::All];
+    assert_eq!(m.real_row.total(), 13 + 12);
+    assert_eq!(m.fake_row.total(), 8, "the strong fake row is unchanged");
+}
+
+// Scenario: Lossy table per group (@RP-11 @RF-15): a lossless source whose own cutoff ends before the
+// final file's `c_exp - suspicious_shortfall_hz` makes an honest encode source-limited, per row, and the
+// test applies to honest generated rows only (lossy.md section 4.5). Unit test of `evaluate_lossy_row`.
+#[test]
+fn rf15_the_tool_marks_source_limited_encodes_like_the_spec() {
+    use fakeflac_audio::SymphoniaAnalyzer;
+    use fakeflac_calibrate::cache::Extracted;
+    use fakeflac_calibrate::lossy::evaluate_lossy_row;
+    use fakeflac_calibrate::model::{LabelRow, RowMeta, RowRoot};
+    use fakeflac_calibrate::split::Split;
+    use fakeflac_core::ports::SpectrumAnalyzer;
+    use std::sync::Arc;
+
+    let params: DetectionParams = toml::from_str(&read(&v5_params())).unwrap();
+    let lossy = params.lossy.as_ref().unwrap();
+    let extract = |name: &str| {
+        Arc::new(Extracted::from_analysis(
+            SymphoniaAnalyzer.analyze(&lossy_fixture(name), &params),
+        ))
+    };
+    // The final file: MP3 320 with a 20.5 kHz cutoff, c_exp = 20500.
+    let final_file = extract("mp3_320_lp20k5");
+    let row = |truth| LabelRow {
+        root: RowRoot::Generated,
+        path: "0123456789abcdef.mp3".to_string(),
+        truth,
+        origin: "generated",
+        trust_origin: String::new(),
+        class: "generated".to_string(),
+        encoder: "fixture".to_string(),
+        setting: "x".to_string(),
+        bitrate_kbps: Some(320),
+        encoder_version: String::new(),
+        fragment: None,
+        source_path: String::new(),
+        album_id: String::new(),
+        split: Split::Tune,
+        watch_id: String::new(),
+        extracted: final_file.clone(),
+        undetectable: false,
+    };
+    let meta = |source: &str, honest: bool| RowMeta {
+        source: Some(extract(source)),
+        honest_generated: honest,
+        ..RowMeta::default()
+    };
+    let limited = |source: &str, honest: bool| {
+        let e = evaluate_lossy_row(
+            &row(fakeflac_calibrate::model::Truth::Real),
+            &meta(source, honest),
+            &params,
+        );
+        assert!(e.evaluated, "{source}");
+        e.source_limited
+    };
+    let c_exp = 20_500.0;
+    // A source cutoff of 18528 Hz lies between c - fake_shortfall (18000) and c - suspicious_shortfall (19500).
+    assert!(
+        c_exp - lossy.fake_shortfall_hz < 18_528.0
+            && 18_528.0 < c_exp - lossy.suspicious_shortfall_hz
+    );
+    assert!(
+        limited("mp3_320_lp18k5", true),
+        "between the two thresholds: the limit is c - suspicious_shortfall"
+    );
+    assert!(limited("mp3_320_lp17k", true), "below both thresholds");
+    assert!(
+        !limited("mp3_320_lp20k5", true),
+        "a source that reaches c_exp is not limiting"
+    );
+    // Only honest generated rows (not confirmed or trusted rows, not fake cascades).
+    assert!(!limited("mp3_320_lp18k5", false));
+    assert!(!limited("mp3_320_lp17k", false));
+    // A row without a source is never source-limited.
+    let none = evaluate_lossy_row(
+        &row(fakeflac_calibrate::model::Truth::Real),
+        &RowMeta {
+            honest_generated: true,
+            ..RowMeta::default()
+        },
+        &params,
+    );
+    assert!(!none.source_limited);
+}
+
 // Scenario: Lossy columns in tracks.csv (@RP-11 @RF-15)
 #[test]
 fn rf15_lossy_columns_in_tracks_csv() {

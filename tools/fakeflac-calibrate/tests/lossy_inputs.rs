@@ -620,3 +620,265 @@ fn rf15_cascade_command_lines() {
     second.push(last.to_string_lossy().into_owned());
     assert_eq!(calls[1], second);
 }
+
+// ---- Round 2: follow-ups of the spec PR #57 and surviving mutants -------------------------------------
+
+// Scenario Outline: Errors in the attributes of confirmed.txt (@RP-11 @RF-15), row "real folder, formats=all"
+#[test]
+fn rf15_confirmed_error_real_folder_with_formats_all() {
+    confirmed_attribute_error(
+        "lossy-real-folder-all",
+        "Pérdidas\\Vídeo | real formats=all",
+        "real applies to lossy files only",
+    );
+}
+
+// Scenario Outline: Errors in the attributes of confirmed.txt (@RP-11 @RF-15): a `real` folder line with
+// formats=lossless (lossy.md section 1.2)
+#[test]
+fn rf15_confirmed_error_real_folder_with_formats_lossless() {
+    confirmed_attribute_error(
+        "lossy-real-folder-lossless",
+        "Pérdidas\\Vídeo | real formats=lossless",
+        "real applies to lossy files only",
+    );
+}
+
+// Scenario Outline: Errors in the attributes of confirmed.txt (@RP-11 @RF-15), row "real on a FLAC file"
+#[test]
+fn rf15_confirmed_error_real_on_a_flac_file() {
+    confirmed_attribute_error(
+        "lossy-real-flac",
+        "Compras\\Ñandú – Ácido, Vol. 1 (2024)\\03 – Bonus.flac | real",
+        "real applies to lossy files only",
+    );
+}
+
+// Scenario Outline: Errors in the attributes of confirmed.txt (@RP-11 @RF-15): a `real` file entry naming
+// a WAV file (lossy.md section 1.2)
+#[test]
+fn rf15_confirmed_error_real_on_a_wav_file() {
+    confirmed_attribute_error(
+        "lossy-real-wav",
+        "Revisión\\Ørsted\\01 – Tres.wav | real",
+        "real applies to lossy files only",
+    );
+}
+
+// Scenario Outline: Errors in the attributes of confirmed.txt (@RP-11 @RF-15): `weak` is a bare flag, so
+// `weak=x` is an error on its line (lossy.md section 1.2 gives no message for it)
+#[test]
+fn rf15_confirmed_error_weak_with_a_value() {
+    let sample = Sample::new_lossy("lossy-attr-weak-value");
+    let mut lines = sample.lossy_confirmed_lines();
+    lines[3] = format!("{FALSO} | fake weak=x");
+    sample.write_confirmed(&lines);
+    let o = sample.accept_lossy();
+    assert_eq!(o.exit_code, 2, "stderr: {}", o.stderr);
+    let errors = stderr_lines(&o);
+    assert_eq!(errors.len(), 1, "one error: {errors:?}");
+    assert!(
+        errors[0].starts_with("confirmed.txt:4: ") && errors[0].contains("weak"),
+        "{errors:?}"
+    );
+}
+
+// Scenario: A folder line with formats=lossy includes MP3 and M4A files only (@RP-11 @RF-15): the default
+// `formats` of a `real` folder line is `lossy` (lossy.md sections 1.1 and 1.2)
+#[test]
+fn rf15_a_real_folder_line_defaults_to_lossy_files() {
+    let sample = Sample::new_lossy("lossy-real-folder-default");
+    // A FLAC under the folder: `formats=all` would take it, the default must not.
+    place(
+        "full_band",
+        Container::Flac,
+        &sample.corpus.join("Pérdidas/Vídeo/11 – Pista.flac"),
+    );
+    let mut confirmed = sample.lossy_confirmed_lines();
+    confirmed.splice(3..6, ["Pérdidas\\Vídeo | real".to_string()]);
+    sample.write_confirmed(&confirmed);
+    let o = sample.accept_lossy();
+    assert_ok(&o);
+    let labels = labels(&o, &sample);
+    for path in [TRACK_12, TRACK_13] {
+        let row = corpus_row(&labels, path).unwrap_or_else(|| panic!("no row for {path}"));
+        assert_eq!(labels.get(row, "origin"), "confirmed_real", "{path}");
+    }
+    for path in ["Pérdidas/Vídeo/11 – Pista.flac", TRACK_14] {
+        assert!(corpus_row(&labels, path).is_none(), "{path} is not taken");
+    }
+}
+
+// A track in both a real and a fake line (lossy.md section 1.3): the error is on the later line, once.
+// Here the fake file line comes first.
+#[test]
+fn rf15_a_track_in_a_fake_line_and_a_later_real_line_is_listed_twice() {
+    let sample = Sample::new_lossy("lossy-fake-then-real");
+    let mut confirmed = sample.lossy_confirmed_lines();
+    confirmed.push("Pérdidas\\Vídeo | real".to_string()); // line 8, covers file 07 of line 4
+    sample.write_confirmed(&confirmed);
+    let o = sample.accept_lossy();
+    assert_eq!(o.exit_code, 2, "stderr: {}", o.stderr);
+    assert_eq!(
+        stderr_lines(&o),
+        vec!["confirmed.txt:8: already listed at line 4"]
+    );
+}
+
+// Same, with the real folder line first: the error is on the later (fake) line.
+#[test]
+fn rf15_a_track_in_a_real_line_and_a_later_fake_line_is_listed_twice() {
+    let sample = Sample::new_lossy("lossy-real-then-fake");
+    let mut confirmed = sample.lossy_confirmed_lines();
+    let fake_file = confirmed.remove(3);
+    confirmed.insert(3, "Pérdidas\\Vídeo | real".to_string()); // line 4
+    confirmed.insert(4, fake_file); // line 5
+    sample.write_confirmed(&confirmed);
+    let o = sample.accept_lossy();
+    assert_eq!(o.exit_code, 2, "stderr: {}", o.stderr);
+    assert_eq!(
+        stderr_lines(&o),
+        vec!["confirmed.txt:5: already listed at line 4"]
+    );
+}
+
+// A track that a `real` line labels and `trusted.txt` includes too is `also trusted` (lossy.md section 1.3)
+#[test]
+fn rf15_a_real_track_that_is_also_trusted_is_an_error() {
+    let sample = Sample::new_lossy("lossy-real-also-trusted");
+    let mut trusted = sample.lossy_trusted_lines();
+    trusted.push("Pérdidas\\Vídeo\\08 – Señal ’AAC’.m4a | tienda".to_string()); // line 9
+    sample.write_trusted(&trusted);
+    let o = sample.accept_lossy(); // confirmed.txt line 5 says `real` for the same file
+    assert_eq!(o.exit_code, 2, "stderr: {}", o.stderr);
+    assert_eq!(
+        stderr_lines(&o),
+        vec!["confirmed.txt:5: also trusted (trusted.txt line 9)"]
+    );
+}
+
+// Scenario: An album split over two units is an error (@RP-11 @RF-15): the exact message, lossy.md section 3
+#[test]
+fn rf15_an_album_split_over_two_units_names_the_lines_of_its_units() {
+    let sample = Sample::new_lossy("lossy-album-two-units-refs");
+    let mut trusted = sample.lossy_trusted_lines();
+    trusted[7] = "Sueltas\\Mixto\\05 – Cuatro.flac | analisis group=G1".to_string();
+    sample.write_trusted(&trusted);
+    let o = sample.accept_lossy();
+    assert_eq!(o.exit_code, 2, "stderr: {}", o.stderr);
+    assert_eq!(
+        stderr_lines(&o),
+        vec!["album has tracks in several split units (trusted.txt:8, confirmed.txt:2)"]
+    );
+}
+
+// Scenario: An album split over two units is an error (@RP-11 @RF-15): one error per album, each ref the
+// FIRST line (by file, then line number) that gives one of the album's tracks that unit, several errors
+// ordered by their first ref (not by album id), no file prefix
+#[test]
+fn rf15_several_split_albums_are_reported_one_error_each_in_order_of_their_first_ref() {
+    let sample = Sample::new_lossy("lossy-albums-two-units-order");
+    let mut trusted = sample.lossy_trusted_lines();
+    let revision = trusted[6].clone();
+    trusted[6] = "Sueltas\\Mixto\\05 – Cuatro.flac | analisis group=G1".to_string(); // line 7
+    trusted[7] = revision; // line 8: Revisión/Ørsted/, chain=C1
+                           // Both tracks are unit G5; the order of their paths is the reverse of the order of their lines.
+    trusted.push("Revisión\\Ørsted\\03 – Corto.flac | revisado group=G5".to_string()); // line 9
+    trusted.push("Revisión\\Ørsted\\02 – Roto.flac | revisado group=G5".to_string()); // line 10
+    sample.write_trusted(&trusted);
+    let o = sample.accept_lossy();
+    assert_eq!(o.exit_code, 2, "stderr: {}", o.stderr);
+    assert_eq!(
+        stderr_lines(&o),
+        vec![
+            "album has tracks in several split units (trusted.txt:7, confirmed.txt:2)",
+            "album has tracks in several split units (trusted.txt:8, trusted.txt:9)",
+        ]
+    );
+}
+
+// ---- [labels.upstream_by_rate] checks (lossy.md section 1.5) -------------------------------------------
+
+// Scenario Outline: Invalid lossy entries in the config (@RP-11 @RF-15): the checks of
+// [labels.upstream_by_rate] exit 2 before any extraction
+#[test]
+fn rf15_upstream_by_rate_key_with_non_digits_is_invalid() {
+    invalid_lossy_entry(
+        "lossy-cfg-rate-key-text",
+        "[labels.upstream_by_rate.\"44.1k\"]\nupstream = \"aac\"",
+        "labels.upstream_by_rate: invalid sample rate '44.1k' (expected an integer in Hz, for example 44100)",
+    );
+}
+
+#[test]
+fn rf15_upstream_by_rate_key_with_a_leading_zero_is_invalid() {
+    invalid_lossy_entry(
+        "lossy-cfg-rate-key-zero",
+        "[labels.upstream_by_rate.\"044100\"]\nupstream = \"aac\"",
+        "labels.upstream_by_rate: invalid sample rate '044100' (expected an integer in Hz, for example 44100)",
+    );
+}
+
+#[test]
+fn rf15_upstream_by_rate_key_zero_is_invalid() {
+    invalid_lossy_entry(
+        "lossy-cfg-rate-key-0",
+        "[labels.upstream_by_rate.\"0\"]\nupstream = \"aac\"",
+        "labels.upstream_by_rate: invalid sample rate '0' (expected an integer in Hz, for example 44100)",
+    );
+}
+
+#[test]
+fn rf15_upstream_by_rate_upstream_by_rate_is_invalid() {
+    invalid_lossy_entry(
+        "lossy-cfg-rate-by-rate",
+        "[labels.upstream_by_rate.\"32000\"]\nupstream = \"by-rate\"",
+        "labels.upstream_by_rate '32000': invalid upstream 'by-rate' (expected aac, opus, mp3 or unknown)",
+    );
+}
+
+#[test]
+fn rf15_upstream_by_rate_unknown_codec_is_invalid() {
+    invalid_lossy_entry(
+        "lossy-cfg-rate-codec",
+        "[labels.upstream_by_rate.\"32000\"]\nupstream = \"vorbis\"",
+        "labels.upstream_by_rate '32000': invalid upstream 'vorbis' (expected aac, opus, mp3 or unknown)",
+    );
+}
+
+#[test]
+fn rf15_upstream_by_rate_source_bound_below_range_is_invalid() {
+    invalid_lossy_entry(
+        "lossy-cfg-rate-bound-low",
+        "[labels.upstream_by_rate.\"32000\"]\nupstream = \"mp3\"\nsource_max_kbps = 7",
+        "labels.upstream_by_rate '32000': source_max_kbps must be an integer from 8 to 640",
+    );
+}
+
+#[test]
+fn rf15_upstream_by_rate_source_bound_above_range_is_invalid() {
+    invalid_lossy_entry(
+        "lossy-cfg-rate-bound-high",
+        "[labels.upstream_by_rate.\"32000\"]\nupstream = \"mp3\"\nsource_max_kbps = 641",
+        "labels.upstream_by_rate '32000': source_max_kbps must be an integer from 8 to 640",
+    );
+}
+
+// Pins: the ends of the range and every codec of the table are valid; a missing `upstream` or an unknown
+// field is a TOML error.
+#[test]
+fn rf15_upstream_by_rate_valid_entries_load_and_malformed_ones_are_toml_errors() {
+    let base = read(&spec_config_v2());
+    let with = |extra: &str| Config::parse(&format!("{base}\n{extra}\n"));
+    for (rate, codec, bound) in [
+        ("22050", "mp3", "source_max_kbps = 8"),
+        ("32000", "unknown", "source_max_kbps = 640"),
+        ("96000", "opus", ""),
+    ] {
+        let table =
+            format!("[labels.upstream_by_rate.\"{rate}\"]\nupstream = \"{codec}\"\n{bound}");
+        assert!(with(&table).is_ok(), "{table}");
+    }
+    assert!(with("[labels.upstream_by_rate.\"22050\"]\nsource_max_kbps = 128").is_err());
+    assert!(with("[labels.upstream_by_rate.\"22050\"]\nupstream = \"aac\"\nextra = 1").is_err());
+}

@@ -314,6 +314,8 @@ pub fn lossy_tables(
             group: name.clone(),
             counts,
             median_estimate_kbps: percentile(&mut estimates, 50.0),
+            // Compile-only stub: the implementer computes it (lossy.md section 6.3).
+            fake_median_estimate_kbps: None,
             within_source: (with_bound > 0).then_some((within, with_bound)),
             s_median_hz: percentile(&mut shortfalls.clone(), 50.0),
             s_p5_hz: percentile(&mut shortfalls, 5.0),
