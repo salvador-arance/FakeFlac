@@ -27,11 +27,11 @@
 - The spec follow-ups from the 2026-10-19 block (MP3 shortfall wording, tag frame count 0, free-format, implicit HE-AAC), the installer size against RNF-06, B1–B11 with `just accept`, the `confirmed.txt` lines and the splitter leftovers: all unchanged.
 
 **Blockers / questions for the human**
-- **`just privacy-check --base main` cannot run.** It stops while loading the local `trusted.txt`: 302 lines point to corpus files that no longer exist (the corpus was moved or renamed). The owner has to update the local lists. For #55 the diff was checked by hand against the corpus root and folder names, with 0 matches.
+- `trusted.txt` was fixed by the owner; `just privacy-check --base main` on #55: 41 files checked, 0 matches.
 - Dependabot alert #1 (`glib`), the `specs/CLAUDE.md` line about `specs/pending/` and the splitter accessibility gap: unchanged. The `guard-tests` stub gap was closed by #53.
 - **Environment:** in this session, Git Bash prints a spurious "cwd: No such file or directory" and exit 1 after every command. Read the real exit code with `echo $?` inside the command. Subagents saw vitest fail from Git Bash when the cwd was `c:` (lowercase); from PowerShell with `Set-Location C:\Workspaces\FakeFlac` it works.
 
-**Next step:** after #55 is merged: `just prune-branches`, then `/feature RF-15` (part 2, lossy calibration) on a new branch from `main`. Fix `trusted.txt` before that, because calibration and `privacy-check` read it.
+**Next step:** after #55 is merged: `just prune-branches`, then `/feature RF-15` (part 2, lossy calibration) on a new branch from `main`.
 
 ## 2026-10-19 - RF-14 H2 decoding: PR #52 open (awaiting G2)
 
