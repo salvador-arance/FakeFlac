@@ -1,4 +1,4 @@
-//! Use case: analyse one track (RF-03, RF-04). Combines the scanner's `FileEntry`,
+//! Use case: analyse one track (RF-03, RF-04, RF-15). Combines the scanner's `FileEntry`,
 //! the analyzer port and the pure detection rules into a `TrackAnalysis`.
 
 use crate::detect::{detect_track, lossy_unsupported, StreamInfo};

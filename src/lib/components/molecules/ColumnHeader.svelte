@@ -79,7 +79,8 @@
 
   /* Right-aligned: the only header with a tooltip (Real bitrate) is the last column. */
   .header-button[data-tooltip]:focus-visible::after {
-    content: attr(data-tooltip);
+    /* Empty alt text: the tooltip is already the button's description (aria-describedby). */
+    content: attr(data-tooltip) / "";
     position: absolute;
     top: 100%;
     right: 0;
