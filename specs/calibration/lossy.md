@@ -277,3 +277,4 @@ How the owner's RF-15 input (docs/agents/progress.md, 2026-10-18; aggregate figu
 
 - **Split strata go by extension** (section 3). A unit made only of ALAC `.m4a` files is stratified as lossy (`lossy:<class>`), although its tracks are lossless-domain rows after extraction (1.1) and are evaluated with the lossless tables (6.1). It does not move any other album; it only means such a unit is split among the lossy units.
 - **Chain keys of stems without a track number** (section 6.5). A stem whose leading digit run has 4 or more digits gets the letters-and-digits key, so its versions pair only when their whole stems match after that reduction.
+- **Stems with a disc number** (section 6.5, owner decision at G1). A stem such as `1-03 – x` gets the key `1` (its leading digit run), so every track of disc 1 of that version shares one key, is ambiguous and is never paired. No `<disc>-<track>` rule in this version.
