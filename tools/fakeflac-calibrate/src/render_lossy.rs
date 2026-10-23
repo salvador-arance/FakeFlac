@@ -7,9 +7,9 @@ use crate::evaluate::{reason_name, verdict_name};
 use crate::fmt;
 use crate::lossy::is_near;
 use crate::render::{Md, ReportData};
-use crate::report::{ChainReport, LossyCounts, SplitSel};
+use crate::report::{ChainReport, LossyCounts, LossyWatchEntry, SplitSel};
 use fakeflac_core::Verdict;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 const SPLITS: [SplitSel; 3] = [SplitSel::All, SplitSel::Tune, SplitSel::Holdout];
 
@@ -59,13 +59,14 @@ pub(crate) fn header_lossy(md: &mut Md, data: &ReportData<'_>) {
             ));
         }
     }
-    for g in data.groups {
-        for line in &g.real_excluded {
-            any = true;
-            md.line(format!(
-                "- confirmed.txt line {line}: real applies to lossy files; the track holds ALAC (excluded)"
-            ));
-        }
+    // The same labels are excluded in every extraction group: print each once.
+    let excluded: BTreeSet<&(usize, String)> =
+        data.groups.iter().flat_map(|g| &g.real_excluded).collect();
+    for (line, codec) in excluded {
+        any = true;
+        md.line(format!(
+            "- confirmed.txt line {line}: real applies to lossy files; the track holds {codec} (excluded)"
+        ));
     }
     for (stratum, (tune, holdout)) in data
         .unit_strata
@@ -128,6 +129,8 @@ fn counts_cells(c: &LossyCounts, undetectable: bool, source_limited: bool) -> Ve
 pub(crate) fn lossy_section(md: &mut Md, data: &ReportData<'_>, idx: usize, full: bool) {
     let eval = &data.evaluations[idx];
     let Some(lossy) = &eval.lossy else {
+        // No `[lossy]` section: only the watch list, with "not evaluated" entries.
+        watch_table(md, &eval.lossy_watch, full);
         return;
     };
 
@@ -193,6 +196,7 @@ pub(crate) fn lossy_section(md: &mut Md, data: &ReportData<'_>, idx: usize, full
             cells.push(fmt::opt_db(g.s_median_hz));
             cells.push(fmt::opt_db(g.s_p5_hz));
             cells.push(fmt::opt_db(g.median_estimate_kbps));
+            cells.push(fmt::opt_db(g.fake_median_estimate_kbps));
             cells.push(
                 g.within_source
                     .map(|(k, n)| format!("{k}/{n}"))
@@ -216,69 +220,75 @@ pub(crate) fn lossy_section(md: &mut Md, data: &ReportData<'_>, idx: usize, full
             "s median (Hz)",
             "s 5th percentile (Hz)",
             "median estimate (kbps)",
+            "median estimate of the Fake rows (kbps)",
             "estimates at most the source bitrate",
         ],
         &rows,
     );
 
-    if !lossy.watch.is_empty() {
-        md.line("### Lossy watch list");
-        md.blank();
-        let mut head = vec!["id"];
-        if full {
-            head.push("path");
-        }
-        head.extend([
-            "verdict",
-            "reasons",
-            "codec",
-            "declared kbps",
-            "fc",
-            "c_exp",
-            "s",
-            "D",
-            "estimate kbps",
-        ]);
-        let rows: Vec<Vec<String>> = lossy
-            .watch
-            .iter()
-            .map(|w| {
-                let mut cells = vec![w.watch_id.clone()];
-                if full {
-                    cells.push(w.path.clone());
-                }
-                cells.extend([
-                    if w.evaluated {
-                        verdict_name(w.verdict).to_string()
-                    } else {
-                        "not evaluated".to_string()
-                    },
-                    w.reasons
-                        .iter()
-                        .map(|x| reason_name(*x))
-                        .collect::<Vec<_>>()
-                        .join(";"),
-                    w.codec.clone().unwrap_or_default(),
-                    w.declared_bitrate_kbps
-                        .map(|b| b.to_string())
-                        .unwrap_or_default(),
-                    fmt::opt_hz2(w.fc_hz),
-                    fmt::opt_hz2(w.c_exp_hz),
-                    fmt::opt_hz2(w.shortfall_hz),
-                    fmt::opt_db(w.step_db),
-                    w.estimate_kbps.map(|k| k.to_string()).unwrap_or_default(),
-                ]);
-                cells
-            })
-            .collect();
-        md.table(&head, &rows);
-    }
+    watch_table(md, &eval.lossy_watch, full);
 
     chains_section(md, &eval.chains, full);
 
     if full {
         full_lossy_lists(md, data, idx);
     }
+}
+
+/// The lossy watch list (lossy.md section 6.7), shown for every params file.
+fn watch_table(md: &mut Md, watch: &[LossyWatchEntry], full: bool) {
+    if watch.is_empty() {
+        return;
+    }
+    md.line("### Lossy watch list");
+    md.blank();
+    let mut head = vec!["id"];
+    if full {
+        head.push("path");
+    }
+    head.extend([
+        "verdict",
+        "reasons",
+        "codec",
+        "declared kbps",
+        "fc",
+        "c_exp",
+        "s",
+        "D",
+        "estimate kbps",
+    ]);
+    let rows: Vec<Vec<String>> = watch
+        .iter()
+        .map(|w| {
+            let mut cells = vec![w.watch_id.clone()];
+            if full {
+                cells.push(w.path.clone());
+            }
+            cells.extend([
+                if w.evaluated {
+                    verdict_name(w.verdict).to_string()
+                } else {
+                    "not evaluated".to_string()
+                },
+                w.reasons
+                    .iter()
+                    .map(|x| reason_name(*x))
+                    .collect::<Vec<_>>()
+                    .join(";"),
+                w.codec.clone().unwrap_or_default(),
+                w.declared_bitrate_kbps
+                    .map(|b| b.to_string())
+                    .unwrap_or_default(),
+                fmt::opt_hz2(w.fc_hz),
+                fmt::opt_hz2(w.c_exp_hz),
+                fmt::opt_hz2(w.shortfall_hz),
+                fmt::opt_db(w.step_db),
+                w.estimate_kbps.map(|k| k.to_string()).unwrap_or_default(),
+            ]);
+            cells
+        })
+        .collect();
+    md.table(&head, &rows);
 }
 
 fn median(values: &mut [f64]) -> Option<f64> {

@@ -15,7 +15,7 @@ use crate::report::{
 };
 use crate::split::Split;
 use fakeflac_core::detect::{
-    cutoff_estimate, decide_track, detect_track, expected_cutoff_hz, lossy_unsupported, measure,
+    cutoff_estimate, decide_track, detect_track, expected_cutoff_hz, measure, track_guard,
     Measurements,
 };
 use fakeflac_core::{DetectionParams, SuspicionReason, TrackError, Verdict};
@@ -86,15 +86,18 @@ pub fn evaluate_lossy_row(
         Extracted::Error(e) => return LossyRowEval::error(e.clone()),
         Extracted::Probe(p) => p,
     };
-    if (probe.duration_ms as f64) < params.input.min_duration_s * 1000.0 {
-        return LossyRowEval::error(TrackError::TooShort);
-    }
     let Some(stream) = probe.stream_info() else {
         return LossyRowEval::error(TrackError::UnsupportedFormat(
             "the stream has no codec".to_string(),
         ));
     };
-    if let Some(e) = lossy_unsupported(stream.codec, params) {
+    // L0, then L1b: the guards of `analyze_track`, from the same function of the core.
+    if let Some(e) = track_guard(
+        Some(stream.codec),
+        probe.duration_ms,
+        stream.declared_bitrate_kbps,
+        params,
+    ) {
         return LossyRowEval::error(e);
     }
     let Some(spectrum) = probe.spectrum.as_ref() else {
@@ -293,15 +296,25 @@ pub fn lossy_tables(
         if labelled == 0 && !always {
             continue;
         }
+        let positive = group
+            .lossy_rows
+            .iter()
+            .filter(|r| group.meta.get(&r.identity()).is_some_and(|m| pick(r, m)))
+            .any(|r| r.truth == Truth::Fake);
         let mut counts = LossyCounts::default();
         let mut estimates: Vec<f64> = Vec::new();
+        let mut fake_estimates: Vec<f64> = Vec::new();
         let mut shortfalls: Vec<f64> = Vec::new();
         let (mut within, mut with_bound) = (0_u32, 0_u32);
         for (row, meta, e) in rows.iter().filter(|(r, m, _)| pick(r, m)) {
-            add(&mut counts, bucket(row, e));
+            let b = bucket(row, e);
+            add(&mut counts, b);
             if let Some(k) = e.estimate_kbps {
                 estimates.push(f64::from(k));
-                if let Some(bound) = meta.source_bitrate_kbps {
+                if positive && b == Bucket::Fake {
+                    fake_estimates.push(f64::from(k));
+                }
+                if let (true, Some(bound)) = (positive, meta.source_bitrate_kbps) {
                     with_bound += 1;
                     within += u32::from(k <= bound);
                 }
@@ -314,60 +327,57 @@ pub fn lossy_tables(
             group: name.clone(),
             counts,
             median_estimate_kbps: percentile(&mut estimates, 50.0),
-            // Compile-only stub: the implementer computes it (lossy.md section 6.3).
-            fake_median_estimate_kbps: None,
+            fake_median_estimate_kbps: percentile(&mut fake_estimates, 50.0),
             within_source: (with_bound > 0).then_some((within, with_bound)),
             s_median_hz: percentile(&mut shortfalls.clone(), 50.0),
             s_p5_hz: percentile(&mut shortfalls, 5.0),
-            positive: group
-                .lossy_rows
-                .iter()
-                .filter(|r| group.meta.get(&r.identity()).is_some_and(|m| pick(r, m)))
-                .any(|r| r.truth == Truth::Fake),
+            positive,
         });
     }
-
-    let watch: Vec<LossyWatchEntry> = {
-        let mut list: Vec<LossyWatchEntry> = group
-            .lossy_rows
-            .iter()
-            .zip(evals.iter())
-            .filter(|(r, _)| !r.watch_id.is_empty())
-            .map(|(r, e)| LossyWatchEntry {
-                watch_id: r.watch_id.clone(),
-                path: r.path.clone(),
-                evaluated: e.evaluated,
-                verdict: e.verdict,
-                reasons: e.reasons.clone(),
-                codec: match r.extracted.as_ref() {
-                    Extracted::Probe(p) => p.stream.codec.map(|c| codec_name(c).to_string()),
-                    Extracted::Error(_) => None,
-                },
-                declared_bitrate_kbps: match r.extracted.as_ref() {
-                    Extracted::Probe(p) => p.stream.declared_bitrate_kbps,
-                    Extracted::Error(_) => None,
-                },
-                fc_hz: e.fc_hz,
-                c_exp_hz: e.c_exp_hz,
-                shortfall_hz: e.shortfall_hz,
-                step_db: e.m.as_ref().map(|m| m.step_db),
-                estimate_kbps: e.estimate_kbps,
-            })
-            .collect();
-        list.sort_by_key(|w| {
-            w.watch_id
-                .trim_start_matches('W')
-                .parse::<u32>()
-                .unwrap_or(0)
-        });
-        list
-    };
 
     LossyEvaluation {
         matrix,
         groups,
-        watch,
+        watch: lossy_watch(group, evals),
     }
+}
+
+/// The lossy `false-positive` tracks with their measurements under one params file (lossy.md
+/// section 6.7); "not evaluated" entries for params without `[lossy]`.
+pub fn lossy_watch(group: &GroupResult, evals: &[LossyRowEval]) -> Vec<LossyWatchEntry> {
+    let mut list: Vec<LossyWatchEntry> = group
+        .lossy_rows
+        .iter()
+        .zip(evals.iter())
+        .filter(|(r, _)| !r.watch_id.is_empty())
+        .map(|(r, e)| LossyWatchEntry {
+            watch_id: r.watch_id.clone(),
+            path: r.path.clone(),
+            evaluated: e.evaluated,
+            verdict: e.verdict,
+            reasons: e.reasons.clone(),
+            codec: match r.extracted.as_ref() {
+                Extracted::Probe(p) => p.stream.codec.map(|c| codec_name(c).to_string()),
+                Extracted::Error(_) => None,
+            },
+            declared_bitrate_kbps: match r.extracted.as_ref() {
+                Extracted::Probe(p) => p.stream.declared_bitrate_kbps,
+                Extracted::Error(_) => None,
+            },
+            fc_hz: e.fc_hz,
+            c_exp_hz: e.c_exp_hz,
+            shortfall_hz: e.shortfall_hz,
+            step_db: e.m.as_ref().map(|m| m.step_db),
+            estimate_kbps: e.estimate_kbps,
+        })
+        .collect();
+    list.sort_by_key(|w| {
+        w.watch_id
+            .trim_start_matches('W')
+            .parse::<u32>()
+            .unwrap_or(0)
+    });
+    list
 }
 
 /// Lossy rows this params file does not evaluate: all of them without `[lossy]`, the Opus tracks

@@ -746,6 +746,10 @@ fn entry_problem(
         return None;
     }
     if is_dir {
+        // Before the empty-folder check: a `real` line includes lossy files only.
+        if word == "real" && formats != Formats::Lossy {
+            return Some("real applies to lossy files only".to_string());
+        }
         if files.is_empty() {
             return Some(
                 match formats {

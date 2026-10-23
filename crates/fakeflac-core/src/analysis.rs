@@ -1,7 +1,7 @@
 //! Use case: analyse one track (RF-03, RF-04, RF-15). Combines the scanner's `FileEntry`,
 //! the analyzer port and the pure detection rules into a `TrackAnalysis`.
 
-use crate::detect::{detect_track, lossy_unsupported, StreamInfo};
+use crate::detect::{detect_track, track_guard, StreamInfo};
 use crate::domain::{AudioCodec, TrackAnalysis, TrackError, TrackInfo, Verdict};
 use crate::params::DetectionParams;
 use crate::ports::{FileEntry, SpectrumAnalyzer};
@@ -47,20 +47,14 @@ pub fn analyze_track(
     info.declared_bitrate_kbps = probe.declared_bitrate_kbps;
     info.bitrate_mode = probe.bitrate_mode;
 
-    // lossy-source.md section 4, L0 first: a lossy codec these params cannot judge is reported as
-    // such before the too-short (L1) and no-bitrate guards.
-    if let Some(e) = info
-        .codec
-        .and_then(|codec| lossy_unsupported(codec, params))
-    {
+    // lossy-source.md section 4: L0, then the too-short and no-bitrate guards (L1b).
+    if let Some(e) = track_guard(
+        info.codec,
+        probe.duration_ms,
+        info.declared_bitrate_kbps,
+        params,
+    ) {
         return error(info, e);
-    }
-    if (probe.duration_ms as f64) < params.input.min_duration_s * 1000.0 {
-        return error(info, TrackError::TooShort);
-    }
-    // lossy-source.md 2.3: a long-enough lossy stream with no declared bitrate is a guard failure.
-    if info.codec.is_some_and(AudioCodec::is_lossy) && info.declared_bitrate_kbps.is_none() {
-        return error(info, TrackError::CorruptStream("no bitrate".into()));
     }
 
     let stream = StreamInfo {

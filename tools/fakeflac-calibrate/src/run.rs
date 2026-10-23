@@ -410,7 +410,8 @@ fn build_items(
 
     // Every album and every chain must resolve to one unit.
     let mut errors: Vec<String> = Vec::new();
-    let mut album_units: BTreeMap<String, BTreeMap<String, usize>> = BTreeMap::new();
+    // Per album, per unit: the first line (trusted.txt before confirmed.txt, then by number) giving it.
+    let mut album_units: BTreeMap<String, BTreeMap<String, (u8, usize)>> = BTreeMap::new();
     let mut chain_units: BTreeMap<&str, BTreeSet<String>> = BTreeMap::new();
     for l in &labelled {
         let album = album_id(&l.track.rel, prefixes);
@@ -421,19 +422,42 @@ fn build_items(
                 .or_default()
                 .insert(unit.clone());
         }
-        album_units
+        let at = (u8::from(l.origin != "trusted"), l.line);
+        let first = album_units
             .entry(album)
             .or_default()
             .entry(unit)
-            .or_insert(l.line);
+            .or_insert(at);
+        *first = (*first).min(at);
     }
-    for units in album_units.values().filter(|u| u.len() > 1) {
-        let mut lines = units.values();
-        if let (Some(a), Some(b)) = (lines.next(), lines.next()) {
-            errors.push(format!(
-                "album has tracks in several split units (lines {a} and {b})"
-            ));
-        }
+    let mut album_errors: Vec<Vec<(u8, usize)>> = album_units
+        .values()
+        .filter(|u| u.len() > 1)
+        .map(|u| {
+            let mut refs: Vec<(u8, usize)> = u.values().copied().collect();
+            refs.sort_unstable();
+            refs
+        })
+        .collect();
+    album_errors.sort();
+    for refs in album_errors {
+        let list: Vec<String> = refs
+            .iter()
+            .map(|(file, line)| {
+                format!(
+                    "{}:{line}",
+                    if *file == 0 {
+                        "trusted.txt"
+                    } else {
+                        "confirmed.txt"
+                    }
+                )
+            })
+            .collect();
+        errors.push(format!(
+            "album has tracks in several split units ({})",
+            list.join(", ")
+        ));
     }
     for (chain, units) in &chain_units {
         if units.len() > 1 {
@@ -819,6 +843,7 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
             let mut eval = evaluation(run, &groups[run.group].rows, &config, baseline);
             let group = &groups[run.group];
             eval.lossy_not_evaluated = crate::lossy::not_evaluated_count(&run.lossy_evals);
+            eval.lossy_watch = crate::lossy::lossy_watch(group, &run.lossy_evals);
             if run.params.lossy.is_some() {
                 eval.lossy = Some(crate::lossy::lossy_tables(group, &run.lossy_evals, &config));
                 eval.chains = crate::lossy::chains(group, run, &run.lossy_evals);

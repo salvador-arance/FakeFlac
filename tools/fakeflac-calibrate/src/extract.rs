@@ -2,7 +2,7 @@
 //! fingerprint (calibration.md section 4, generation.md). Decoding and transcoding run on
 //! `cores - 1` std threads; results are put back in order, so the thread count never changes an output.
 
-use crate::cache::{canonical_json, error_code, Extracted, FeatureCache, Fingerprint};
+use crate::cache::{canonical_json, codec_name, error_code, Extracted, FeatureCache, Fingerprint};
 use crate::config::{Config, LossyEntry, Setting};
 use crate::env::Roots;
 use crate::error::ToolError;
@@ -105,7 +105,7 @@ pub struct GroupResult {
     /// Lossy columns of every row, by [`LabelRow::identity`].
     pub meta: BTreeMap<String, RowMeta>,
     /// `confirmed.txt` lines of `real` labels that turned out to hold a lossless codec.
-    pub real_excluded: Vec<usize>,
+    pub real_excluded: Vec<(usize, String)>,
     pub stats: CacheStats,
     /// (source path, reason) of trusted tracks that cannot be a source.
     pub skipped_sources: Vec<(String, String)>,
@@ -295,10 +295,10 @@ pub fn extract_group(
         }
     }
     misses.retain(|i| results[*i].is_none());
-    // --no-generate evaluates only what is already cached: uncached tracks are not decoded.
+    // --no-generate evaluates only what is already cached: uncached tracks are not decoded. They are
+    // labelled tracks, not generated entries, so they are not counted as "not generated".
     let mut not_generated = 0;
     if ctx.no_generate {
-        not_generated += misses.len() as u32;
         misses.clear();
     }
     let mut io_error: Option<std::io::Error> = None;
@@ -615,7 +615,7 @@ pub fn extract_group(
     let mut rows: Vec<LabelRow> = Vec::new();
     let mut lossy_rows: Vec<LabelRow> = Vec::new();
     let mut meta: BTreeMap<String, RowMeta> = BTreeMap::new();
-    let mut real_excluded: Vec<usize> = Vec::new();
+    let mut real_excluded: Vec<(usize, String)> = Vec::new();
     for (item, extracted) in items.iter().zip(corpus_results.iter()) {
         let Some(extracted) = extracted else {
             continue;
@@ -623,7 +623,11 @@ pub fn extract_group(
         let lossy = is_lossy_domain(&item.track.rel, extracted);
         if item.origin == "confirmed_real" && !lossy {
             // A `real` label on a lossless codec (ALAC): no row (lossy.md section 1.3).
-            real_excluded.push(item.line);
+            let codec = match extracted.as_ref() {
+                Extracted::Probe(p) => p.stream.codec.map(|c| codec_name(c).to_ascii_uppercase()),
+                Extracted::Error(_) => None,
+            };
+            real_excluded.push((item.line, codec.unwrap_or_else(|| "LOSSLESS".to_string())));
             continue;
         }
         let row = LabelRow {

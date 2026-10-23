@@ -478,6 +478,7 @@ pub fn evaluation(
         changes,
         lossy: None,
         lossy_not_evaluated: 0,
+        lossy_watch: Vec::new(),
         chains: Vec::new(),
     }
 }

@@ -258,6 +258,9 @@ pub struct Evaluation {
     pub lossy: Option<LossyEvaluation>,
     /// Lossy rows this params file does not evaluate (lossy.md section 6.1).
     pub lossy_not_evaluated: u32,
+    /// The lossy watch list of every params file (lossy.md section 6.7); "not evaluated" entries
+    /// without a `[lossy]` section.
+    pub lossy_watch: Vec<LossyWatchEntry>,
     /// Chains, for a params file with `[lossy]`.
     pub chains: Vec<ChainReport>,
 }

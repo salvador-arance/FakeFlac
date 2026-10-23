@@ -179,6 +179,33 @@ impl Config {
         }
     }
 
+    /// Lossy.md section 1.5: checks on `[labels.upstream_by_rate]`.
+    fn validate_upstream_by_rate(&self, errors: &mut Vec<String>) {
+        for (key, entry) in &self.labels.upstream_by_rate {
+            let positive_integer =
+                !key.is_empty() && key.bytes().all(|b| b.is_ascii_digit()) && !key.starts_with('0');
+            if !positive_integer {
+                errors.push(format!(
+                    "labels.upstream_by_rate: invalid sample rate '{key}' (expected an integer in Hz, for example 44100)"
+                ));
+            }
+            if !["aac", "opus", "mp3", "unknown"].contains(&entry.upstream.as_str()) {
+                errors.push(format!(
+                    "labels.upstream_by_rate '{key}': invalid upstream '{}' (expected aac, opus, mp3 or unknown)",
+                    entry.upstream
+                ));
+            }
+            if entry
+                .source_max_kbps
+                .is_some_and(|k| !(8..=640).contains(&k))
+            {
+                errors.push(format!(
+                    "labels.upstream_by_rate '{key}': source_max_kbps must be an integer from 8 to 640"
+                ));
+            }
+        }
+    }
+
     /// Parses the text of a config file. Errors are exit 2.
     pub fn parse(text: &str) -> Result<Config, ToolError> {
         let config: Config = toml::from_str(text).map_err(|e| {
@@ -234,6 +261,7 @@ impl Config {
             }
         }
         self.validate_lossy(&mut errors);
+        self.validate_upstream_by_rate(&mut errors);
         for t in &self.targets {
             if !["real", "suspicious", "fake"].contains(&t.verdict.as_str()) {
                 errors.push(format!(
