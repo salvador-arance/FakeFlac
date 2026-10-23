@@ -689,3 +689,90 @@ fn rf15_summary_holds_no_lossy_corpus_names() {
         }
     }
 }
+
+// ---- Round 3: surviving mutants ---------------------------------------------------------------------
+
+// Scenario: Lossy table per group (@RP-11 @RF-15), lossy.md section 6.3 (mutant M5a): a negative group
+// has no Fake median even when one of its rows is judged Fake. A trusted `tienda` MP3 with the 17 kHz
+// low-pass of a 320 kbps file is a Fake-bucket row of the group `trusted primary`.
+#[test]
+fn rf15_a_negative_group_with_a_fake_row_has_no_fake_median() {
+    let sample = Sample::new_lossy("lossy-negative-fake-row");
+    let mut trusted = sample.lossy_trusted_lines();
+    trusted.push("Pérdidas\\Vídeo\\07 – Falso 320.mp3 | tienda".to_string());
+    sample.write_trusted(&trusted);
+    let mut confirmed = sample.lossy_confirmed_lines();
+    confirmed.remove(3); // the fake label of the same file
+    sample.write_confirmed(&confirmed);
+    let o = sample.accept_lossy();
+    assert_ok(&o);
+    let lossy = v5_eval(&o).lossy.as_ref().expect("lossy tables");
+    let g = group_row(lossy, "trusted primary");
+    assert!(!g.positive);
+    assert_eq!(g.counts, lossy_counts(0, 1, 0, 0), "judged Fake: {g:?}");
+    assert!(
+        g.median_estimate_kbps.is_some(),
+        "it has an estimate: {g:?}"
+    );
+    assert_eq!(g.fake_median_estimate_kbps, None);
+    assert_eq!(g.within_source, None);
+}
+
+/// The sum of the "N entries not generated" warnings of `summary.md`.
+fn not_generated(o: &fakeflac_calibrate::Outcome) -> u32 {
+    report_text(o, "summary.md")
+        .lines()
+        .filter_map(|l| l.strip_suffix(" entries not generated"))
+        .filter_map(|l| l.rsplit(' ').next()?.parse::<u32>().ok())
+        .sum()
+}
+
+// Scenario: --no-generate leaves labels.csv untouched (@RP-11 @RF-15), calibration.md section 2 and
+// lossy.md section 4.1 (the still-open bug of `extract.rs`): with a cold cache nothing is cached, and the
+// entries not generated are those of the trusted LOSSLESS sources: 8 trusted lossless tracks of the sample,
+// each with 4 lossless settings and 3 lossy entries. A trusted `.mp3` or `.m4a` is never a source (lossy
+// files are never sources), so it adds 0 whatever its codec.
+#[test]
+fn rf15_uncached_trusted_lossy_files_add_no_entries_not_generated() {
+    let plain = Sample::new_lossy("lossy-nogen-cold-plain");
+    let before = plain.accept_opts(&[v2_params()], true);
+    assert_ok(&before);
+    assert_eq!(not_generated(&before), 8 * (4 + 3), "trusted lossless only");
+
+    let sample = Sample::new_lossy("lossy-nogen-cold-lossy");
+    let mut trusted = sample.lossy_trusted_lines();
+    trusted.push("Pérdidas\\Vídeo\\07 – Falso 320.mp3 | tienda".to_string());
+    trusted.push("Pérdidas\\Vídeo\\08 – Señal ’AAC’.m4a | tienda".to_string());
+    sample.write_trusted(&trusted);
+    let mut confirmed = sample.lossy_confirmed_lines();
+    confirmed.drain(3..5); // the fake and real labels of those two files
+    sample.write_confirmed(&confirmed);
+    let o = sample.accept_opts(&[v2_params()], true);
+    assert_ok(&o);
+    assert_eq!(decoded(&o), 0, "no decoding under --no-generate");
+    assert_eq!(not_generated(&o), 8 * (4 + 3), "lossy tracks add 0");
+}
+
+// Scenario: --no-generate leaves labels.csv untouched (@RP-11 @RF-15), owner decision (a), mutant M6: a
+// labelled track without cached spectra is not decoded under --no-generate and is not counted as an
+// "entry not generated" (it is a labelled track, not a generated entry).
+#[test]
+fn rf15_an_uncached_labelled_track_is_not_an_entry_not_generated() {
+    let sample = Sample::new_lossy("lossy-nogen-warm");
+    assert_ok(&sample.accept_lossy());
+    place_lossy(
+        "mp3_320_lp17k",
+        &sample.corpus.join("Pérdidas/Vídeo/11 – Nuevo.mp3"),
+    );
+    let mut confirmed = sample.lossy_confirmed_lines();
+    confirmed.push("Pérdidas\\Vídeo\\11 – Nuevo.mp3 | fake upstream=aac".to_string());
+    sample.write_confirmed(&confirmed);
+    let o = sample.accept_opts(&[v2_params(), v5_params()], true);
+    assert_ok(&o);
+    assert_eq!(decoded(&o), 0, "no decoding under --no-generate");
+    assert_eq!(not_generated(&o), 0);
+    assert!(
+        !report_text(&o, "summary.md").contains("entries not generated"),
+        "no such warning"
+    );
+}

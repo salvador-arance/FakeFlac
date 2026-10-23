@@ -882,3 +882,212 @@ fn rf15_upstream_by_rate_valid_entries_load_and_malformed_ones_are_toml_errors()
     assert!(with("[labels.upstream_by_rate.\"22050\"]\nsource_max_kbps = 128").is_err());
     assert!(with("[labels.upstream_by_rate.\"22050\"]\nupstream = \"aac\"\nextra = 1").is_err());
 }
+
+// ---- Round 3: per-stratum holdout warning, real_excluded once, I5 -------------------------------------
+
+/// The warning lines of `summary.md` (the `## Warnings` section).
+fn warning_lines(o: &fakeflac_calibrate::Outcome) -> Vec<String> {
+    let summary = report_text(o, "summary.md");
+    let mut in_warnings = false;
+    let mut out = Vec::new();
+    for line in summary.lines() {
+        if line.starts_with("## ") {
+            in_warnings = line == "## Warnings";
+        } else if in_warnings && line.starts_with("- ") {
+            out.push(line.to_string());
+        }
+    }
+    out
+}
+
+/// Scenario: The holdout warning applies per stratum (@RP-11 @RF-15), lossy.md section 3, last bullet.
+/// The only primary unit is `group=G1` over two `tienda` albums, `holdout_fraction = 0.5`: the unit goes to
+/// holdout (1 unit, 2 albums). The album-class warning is silent (2 albums in holdout), the per-stratum
+/// one is not: 1 unit in holdout is fewer than 2. The spec does not fix the wording for a lossless
+/// stratum: the test asserts the stratum key, the counts and the threshold, in the form that `lossy:`
+/// strata use today (`stratum <key>: <h> units in holdout (fewer than <min>), <t> in tune`).
+#[test]
+fn rf15_one_primary_unit_over_two_albums_warns_per_stratum() {
+    let sample = Sample::new_lossy("lossy-stratum-one-unit");
+    sample.write_lossy_config(Some(0.5));
+    let mut trusted = sample.lossy_trusted_lines();
+    trusted[3] = "Compras\\Ñandú – Ácido, Vol. 1 (2024) | tienda group=G1 | comprado".to_string();
+    trusted[5] = "Colección\\Álbum Ü | tienda group=G1".to_string();
+    sample.write_trusted(&trusted);
+    let o = sample.accept_lossy();
+    assert_ok(&o);
+    assert_eq!(
+        o.unit_strata.get("primary"),
+        Some(&(0, 1)),
+        "{:?}",
+        o.unit_strata
+    );
+    let warnings = warning_lines(&o);
+    assert!(
+        !warnings.iter().any(|w| w.contains("class primary:")),
+        "2 albums in holdout: no album-class warning: {warnings:?}"
+    );
+    let line = warnings
+        .iter()
+        .find(|w| w.contains("stratum primary"))
+        .unwrap_or_else(|| panic!("no per-stratum warning for primary: {warnings:?}"));
+    assert!(line.contains("1 units in holdout"), "{line}");
+    assert!(line.contains("fewer than 2"), "{line}");
+    assert!(line.contains("0 in tune"), "{line}");
+}
+
+/// Scenario: The holdout warning applies per stratum (@RP-11 @RF-15). `min_holdout_albums = 3`, two primary
+/// units (`G1`, `G2`) of two albums each: both go to holdout (4 albums, no album-class warning) but 2 units
+/// are fewer than 3.
+#[test]
+fn rf15_two_primary_units_below_min_holdout_warn_per_stratum() {
+    let sample = Sample::new_lossy("lossy-stratum-two-units");
+    let path = sample.write_lossy_config(None);
+    let text = read(&path);
+    assert!(text.contains("min_holdout_albums = 2"));
+    std::fs::write(
+        &path,
+        text.replace("min_holdout_albums = 2", "min_holdout_albums = 3"),
+    )
+    .unwrap();
+    for album in ["Tienda2/Uno", "Tienda2/Dos"] {
+        place(
+            "full_band",
+            Container::Flac,
+            &sample.corpus.join(album).join("01 – a.flac"),
+        );
+    }
+    let mut trusted = sample.lossy_trusted_lines();
+    trusted[3] = "Compras\\Ñandú – Ácido, Vol. 1 (2024) | tienda group=G1 | comprado".to_string();
+    trusted[5] = "Colección\\Álbum Ü | tienda group=G1".to_string();
+    trusted.push("Tienda2\\Uno | tienda group=G2".to_string());
+    trusted.push("Tienda2\\Dos | tienda group=G2".to_string());
+    sample.write_trusted(&trusted);
+    let o = sample.accept_lossy();
+    assert_ok(&o);
+    assert_eq!(
+        o.unit_strata.get("primary"),
+        Some(&(0, 2)),
+        "{:?}",
+        o.unit_strata
+    );
+    let warnings = warning_lines(&o);
+    assert!(
+        !warnings.iter().any(|w| w.contains("class primary:")),
+        "4 albums in holdout: no album-class warning: {warnings:?}"
+    );
+    let line = warnings
+        .iter()
+        .find(|w| w.contains("stratum primary"))
+        .unwrap_or_else(|| panic!("no per-stratum warning for primary: {warnings:?}"));
+    assert!(line.contains("2 units in holdout"), "{line}");
+    assert!(line.contains("fewer than 3"), "{line}");
+    assert!(line.contains("0 in tune"), "{line}");
+}
+
+/// Pin (owner decision (a)): the existing per-album-class warning stays where it is. In the default
+/// lossy sample the only primary album is in tune.
+#[test]
+fn rf15_the_album_class_holdout_warning_is_kept() {
+    let shared = shared_lossy();
+    assert_ok(&shared.outcome);
+    assert_eq!(
+        shared.outcome.unit_strata["primary"],
+        (1, 0),
+        "{:?}",
+        shared.outcome.unit_strata
+    );
+    let warnings = warning_lines(&shared.outcome);
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w == "- class primary: 0 albums in holdout (fewer than 2), 1 in tune"),
+        "{warnings:?}"
+    );
+}
+
+/// Scenario: A real label on a lossless file is excluded after extraction (@RP-11 @RF-15), lossy.md section 1.3
+/// (mutant M7): two params files with different extraction settings are two extraction groups; the excluded
+/// label is printed once in each of `summary.md` and `report.md`.
+#[test]
+fn rf15_a_real_excluded_line_is_printed_once_across_extraction_groups() {
+    let sample = Sample::new_lossy("lossy-real-excluded-once");
+    place_lossy("m4a_alac_full_band", &sample.corpus.join(ALAC_TRACK));
+    let mut confirmed = sample.lossy_confirmed_lines();
+    confirmed.push("Pérdidas\\Vídeo\\10 – Sin pérdida.m4a | real".to_string());
+    sample.write_confirmed(&confirmed);
+    let o = sample.accept(&[v2_params(), sample.blackman_params()]);
+    assert_ok(&o);
+    assert_eq!(o.cache.len(), 2, "two extraction groups");
+    let needle =
+        "confirmed.txt line 8: real applies to lossy files; the track holds ALAC (excluded)";
+    for file in ["summary.md", "report.md"] {
+        let text = report_text(&o, file);
+        assert_eq!(text.matches(needle).count(), 1, "{file}");
+    }
+}
+
+/// Scenario: Lossy watch tracks are listed (@RP-11 @RF-15), lossy.md section 6.7 (mutant M8): a params file
+/// without `[lossy]` still lists the lossy `false-positive` track, as a "not evaluated" entry.
+#[test]
+fn rf15_the_lossy_watch_list_is_listed_for_params_without_a_lossy_section() {
+    let sample = Sample::new_lossy("lossy-watch-no-section");
+    let mut trusted = sample.lossy_trusted_lines();
+    trusted.push(format!("{FALSO} | tienda"));
+    sample.write_trusted(&trusted);
+    let mut confirmed = sample.lossy_confirmed_lines();
+    confirmed[3] = format!("{FALSO} | false-positive");
+    sample.write_confirmed(&confirmed);
+    let o = sample.accept_lossy();
+    assert_ok(&o);
+    let (v2, v5) = (&o.evaluations[0], &o.evaluations[1]);
+    assert!(v2.lossy.is_none());
+    assert_eq!(v2.lossy_watch.len(), 1, "{:?}", v2.lossy_watch);
+    assert_eq!(v2.lossy_watch[0].watch_id, "W2");
+    assert_eq!(v2.lossy_watch[0].path, TRACK_12);
+    assert!(!v2.lossy_watch[0].evaluated, "v2 has no [lossy] section");
+    assert_eq!(v5.lossy_watch.len(), 1);
+    assert!(v5.lossy_watch[0].evaluated);
+
+    for file in ["summary.md", "report.md"] {
+        let text = report_text(&o, file);
+        let rows: Vec<&str> = text
+            .lines()
+            .filter(|l| l.contains("W2") && l.contains("not evaluated"))
+            .collect();
+        assert_eq!(rows.len(), 1, "{file}: one not-evaluated row for W2");
+    }
+    assert!(
+        !report_text(&o, "summary.md").contains("Falso 320"),
+        "summary.md shows the watch id only"
+    );
+}
+
+// ---- I5: [labels.upstream_by_rate] source_max_kbps outside the integers 8 to 640 ---------------------
+
+fn bad_bound(test: &str, value: &str) {
+    invalid_lossy_entry(
+        test,
+        &format!(
+            "[labels.upstream_by_rate.\"32000\"]\nupstream = \"mp3\"\nsource_max_kbps = {value}"
+        ),
+        "labels.upstream_by_rate '32000': source_max_kbps must be an integer from 8 to 640",
+    );
+}
+
+// Scenario Outline: Invalid lossy entries in the config (@RP-11 @RF-15): lossy.md section 1.5 reserves TOML
+// errors for a missing `upstream` and unknown fields only
+#[test]
+fn rf15_upstream_by_rate_negative_source_bound_is_invalid() {
+    bad_bound("lossy-cfg-rate-bound-neg", "-1");
+}
+
+#[test]
+fn rf15_upstream_by_rate_fractional_source_bound_is_invalid() {
+    bad_bound("lossy-cfg-rate-bound-frac", "128.5");
+}
+
+#[test]
+fn rf15_upstream_by_rate_huge_source_bound_is_invalid() {
+    bad_bound("lossy-cfg-rate-bound-huge", "5000000000");
+}
