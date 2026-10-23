@@ -225,6 +225,8 @@ pub struct ParamsRun {
     /// Index of the extraction group (the rows) this file is evaluated on.
     pub group: usize,
     pub evals: Vec<RowEval>,
+    /// The verdicts of the lossy rows of the group (`GroupResult::lossy_rows`), in the same order.
+    pub lossy_evals: Vec<crate::lossy::LossyRowEval>,
 }
 
 impl ParamsRun {
@@ -342,9 +344,7 @@ pub fn evaluation(
         matrix.insert(sel, m);
 
         let mut settings: Vec<SettingRow> = config
-            .generate
-            .settings
-            .iter()
+            .lossless_settings()
             .map(|s| SettingRow {
                 setting: s.id.clone(),
                 counts: Counts::default(),
@@ -476,6 +476,10 @@ pub fn evaluation(
             .map(|(base, base_rows)| setting_changes(run, rows, base, base_rows, config))
             .unwrap_or_default(),
         changes,
+        lossy: None,
+        lossy_not_evaluated: 0,
+        lossy_watch: Vec::new(),
+        chains: Vec::new(),
     }
 }
 
@@ -490,9 +494,7 @@ fn setting_id(row: &LabelRow) -> &str {
 
 fn setting_ids(config: &Config) -> Vec<String> {
     config
-        .generate
-        .settings
-        .iter()
+        .lossless_settings()
         .map(|s| s.id.clone())
         .chain(std::iter::once("confirmed_fake".to_string()))
         .collect()

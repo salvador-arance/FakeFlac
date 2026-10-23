@@ -12,6 +12,59 @@ pub struct Config {
     pub report: ReportConfig,
     #[serde(default)]
     pub targets: Vec<Target>,
+    /// `[labels.upstream_by_rate]` (lossy.md section 1.5); absent in v1.
+    #[serde(default)]
+    pub labels: Labels,
+}
+
+/// `[labels]` of `calibration.v2.toml`.
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Labels {
+    /// Decoded sample rate (as text, `"44100"`) to upstream codec and optional source bound.
+    #[serde(default)]
+    pub upstream_by_rate: std::collections::BTreeMap<String, UpstreamRate>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(from = "RawUpstreamRate")]
+pub struct UpstreamRate {
+    pub upstream: String,
+    /// `None` when absent or out of range (the latter is reported by validation).
+    pub source_max_kbps: Option<u32>,
+    /// `source_max_kbps` was present but is not an integer from 8 to 640.
+    pub source_max_kbps_invalid: bool,
+}
+
+/// `source_max_kbps` is read as any TOML value so that a bad one is a validation error with the
+/// documented message rather than a TOML type error.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawUpstreamRate {
+    upstream: String,
+    source_max_kbps: Option<toml::Value>,
+}
+
+impl From<RawUpstreamRate> for UpstreamRate {
+    fn from(raw: RawUpstreamRate) -> Self {
+        let parsed = raw.source_max_kbps.as_ref().map(|v| match v {
+            toml::Value::Integer(n) if (8..=640).contains(n) => Some(*n as u32),
+            _ => None,
+        });
+        UpstreamRate {
+            upstream: raw.upstream,
+            source_max_kbps: parsed.flatten(),
+            source_max_kbps_invalid: parsed == Some(None),
+        }
+    }
+}
+
+/// One `[[generate.lossy]]` (lossy.md section 4.1): setting ids applied in order.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LossyEntry {
+    pub id: String,
+    pub stages: Vec<String>,
 }
 
 /// Inputs.md section 4.
@@ -35,6 +88,9 @@ pub struct GenerateConfig {
     #[serde(default)]
     pub min_removed_hf_db: Option<f64>,
     pub settings: Vec<Setting>,
+    /// Lossy entries (lossy.md section 4); empty in v1.
+    #[serde(default)]
+    pub lossy: Vec<LossyEntry>,
 }
 
 /// One `[[generate.settings]]`. `encoder` is `lame`, `aac`, `opus`, or `fixture` (tests only).
@@ -47,7 +103,14 @@ pub struct Setting {
     pub bitrate_kbps: Option<u32>,
     #[serde(default)]
     pub lowpass_hz: Option<u32>,
+    /// `false`: the setting is only a stage of lossy entries (lossy.md section 4.1).
+    #[serde(default = "default_true")]
+    pub lossless_transcode: bool,
     pub args: Vec<String>,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 /// Evaluation.md sections 3 and 8.
@@ -77,6 +140,95 @@ pub struct Target {
 pub const ENCODERS: [&str; 4] = ["lame", "aac", "opus", "fixture"];
 
 impl Config {
+    /// The settings that get a FLAC transcode (`lossless_transcode`, lossy.md section 4.1): the
+    /// rows of every lossless table.
+    pub fn lossless_settings(&self) -> impl Iterator<Item = &Setting> {
+        self.generate
+            .settings
+            .iter()
+            .filter(|s| s.lossless_transcode)
+    }
+
+    /// The settings of a lossy entry, in stage order (a stage id that does not exist is skipped).
+    pub fn stages_of(&self, entry: &LossyEntry) -> Vec<&Setting> {
+        entry
+            .stages
+            .iter()
+            .filter_map(|id| self.generate.settings.iter().find(|s| &s.id == id))
+            .collect()
+    }
+
+    /// Lossy.md section 4.1: checks on `[[generate.lossy]]`, before any ffmpeg call.
+    fn validate_lossy(&self, errors: &mut Vec<String>) {
+        let mut seen = std::collections::BTreeSet::new();
+        for entry in &self.generate.lossy {
+            let id = &entry.id;
+            if !seen.insert(id.as_str()) {
+                errors.push(format!("lossy entry {id} is defined twice"));
+            }
+            if entry.stages.is_empty() {
+                errors.push(format!("lossy entry {id}: no stages"));
+                continue;
+            }
+            let mut stages: Vec<&Setting> = Vec::new();
+            for stage in &entry.stages {
+                match self.generate.settings.iter().find(|s| &s.id == stage) {
+                    Some(s) => stages.push(s),
+                    None => errors.push(format!("lossy entry {id}: unknown stage {stage}")),
+                }
+            }
+            if stages.len() != entry.stages.len() {
+                continue;
+            }
+            if stages.len() >= 2 {
+                for s in &stages {
+                    if s.bitrate_kbps.is_none() {
+                        errors.push(format!(
+                            "lossy entry {id}: stage {} has no bitrate_kbps",
+                            s.id
+                        ));
+                    }
+                }
+            }
+            if let Some(last) = stages.last() {
+                let ext = last.ext.to_ascii_lowercase();
+                if ext == "opus" {
+                    errors.push(format!(
+                        "lossy entry {id}: Opus output is not supported yet"
+                    ));
+                } else if ext != "mp3" && ext != "m4a" {
+                    errors.push(format!(
+                        "lossy entry {id}: the last stage's ext must be mp3 or m4a"
+                    ));
+                }
+            }
+        }
+    }
+
+    /// Lossy.md section 1.5: checks on `[labels.upstream_by_rate]`.
+    fn validate_upstream_by_rate(&self, errors: &mut Vec<String>) {
+        for (key, entry) in &self.labels.upstream_by_rate {
+            let positive_integer =
+                !key.is_empty() && key.bytes().all(|b| b.is_ascii_digit()) && !key.starts_with('0');
+            if !positive_integer {
+                errors.push(format!(
+                    "labels.upstream_by_rate: invalid sample rate '{key}' (expected an integer in Hz, for example 44100)"
+                ));
+            }
+            if !["aac", "opus", "mp3", "unknown"].contains(&entry.upstream.as_str()) {
+                errors.push(format!(
+                    "labels.upstream_by_rate '{key}': invalid upstream '{}' (expected aac, opus, mp3 or unknown)",
+                    entry.upstream
+                ));
+            }
+            if entry.source_max_kbps_invalid {
+                errors.push(format!(
+                    "labels.upstream_by_rate '{key}': source_max_kbps must be an integer from 8 to 640"
+                ));
+            }
+        }
+    }
+
     /// Parses the text of a config file. Errors are exit 2.
     pub fn parse(text: &str) -> Result<Config, ToolError> {
         let config: Config = toml::from_str(text).map_err(|e| {
@@ -88,9 +240,9 @@ impl Config {
 
     fn validate(&self) -> Result<(), ToolError> {
         let mut errors: Vec<String> = Vec::new();
-        if self.config_version != 1 {
+        if !(1..=2).contains(&self.config_version) {
             errors.push(format!(
-                "config_version {} is not supported (expected 1)",
+                "config_version {} is not supported (expected 1 or 2)",
                 self.config_version
             ));
         }
@@ -131,6 +283,8 @@ impl Config {
                 ));
             }
         }
+        self.validate_lossy(&mut errors);
+        self.validate_upstream_by_rate(&mut errors);
         for t in &self.targets {
             if !["real", "suspicious", "fake"].contains(&t.verdict.as_str()) {
                 errors.push(format!(

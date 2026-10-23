@@ -121,6 +121,111 @@ pub struct VerdictChanges {
     pub counts: BTreeMap<(String, String), u32>,
 }
 
+/// Verdict counts of a set of lossy tracks (lossy.md section 6.2). A cell that the tables show as
+/// `—` is 0 here.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct LossyCounts {
+    pub real: u32,
+    pub suspicious: u32,
+    pub fake: u32,
+    pub undetectable: u32,
+    pub source_limited: u32,
+    pub error: u32,
+}
+
+impl LossyCounts {
+    pub fn total(&self) -> u32 {
+        self.real
+            + self.suspicious
+            + self.fake
+            + self.undetectable
+            + self.source_limited
+            + self.error
+    }
+}
+
+/// Lossy confusion matrix of one split (lossy.md section 6.2).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct LossyMatrix {
+    pub real_row: LossyCounts,
+    pub fake_row: LossyCounts,
+    /// Fake with a weak label.
+    pub weak_row: LossyCounts,
+}
+
+/// One row of the lossy per-group table (lossy.md section 6.3), split `all`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LossyGroupRow {
+    /// A `[[generate.lossy]]` id, `trusted <class>`, `confirmed_real`, `confirmed_fake <upstream>`,
+    /// `confirmed_fake <rate>` or `weak`.
+    pub group: String,
+    pub counts: LossyCounts,
+    pub median_estimate_kbps: Option<f64>,
+    /// Positive groups only: the median estimate of the `Fake` rows (lossy.md section 6.3, B8).
+    pub fake_median_estimate_kbps: Option<f64>,
+    /// For rows with a source bitrate: (estimates at most that bitrate, rows with a source bitrate
+    /// and an estimate).
+    pub within_source: Option<(u32, u32)>,
+    /// Median and 5th percentile of the shortfall `s`.
+    pub s_median_hz: Option<f64>,
+    pub s_p5_hz: Option<f64>,
+    /// The group holds positives (rate shown: caught) rather than negatives (rate shown: FP).
+    pub positive: bool,
+}
+
+/// A lossy `false-positive` track (lossy.md section 6.7).
+#[derive(Debug, Clone, PartialEq)]
+pub struct LossyWatchEntry {
+    pub watch_id: String,
+    /// Relative to `FAKEFLAC_CORPUS`, `/` separators.
+    pub path: String,
+    pub evaluated: bool,
+    pub verdict: Verdict,
+    pub reasons: Vec<fakeflac_core::SuspicionReason>,
+    pub codec: Option<String>,
+    pub declared_bitrate_kbps: Option<u32>,
+    pub fc_hz: Option<f64>,
+    pub c_exp_hz: Option<f64>,
+    pub shortfall_hz: Option<f64>,
+    pub step_db: Option<f64>,
+    pub estimate_kbps: Option<u32>,
+}
+
+/// The lossy tables of one params file with a `[lossy]` section.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct LossyEvaluation {
+    pub matrix: BTreeMap<SplitSel, LossyMatrix>,
+    pub groups: Vec<LossyGroupRow>,
+}
+
+/// One track of a chain (lossy.md section 6.5).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ChainEntry {
+    /// Relative to `FAKEFLAC_CORPUS`, `/` separators.
+    pub path: String,
+    /// The codec: `flac`, `pcm`, `alac`, `aac`, `mp3`.
+    pub version: String,
+    pub key: String,
+    pub verdict: Verdict,
+    pub reasons: Vec<fakeflac_core::SuspicionReason>,
+    pub estimate_kbps: Option<u32>,
+    /// The reported cutoff `fc`.
+    pub fc_hz: Option<f64>,
+    pub declared_bitrate_kbps: Option<u32>,
+    pub watch_id: String,
+}
+
+/// One chain id with its keys and pair groups.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ChainReport {
+    pub id: String,
+    /// Distinct keys in ascending order (`"1"`, `"2"`, `"3"`).
+    pub keys: Vec<String>,
+    /// Keys with at least two versions (unambiguous).
+    pub pair_groups: Vec<String>,
+    pub entries: Vec<ChainEntry>,
+}
+
 /// Everything computed for one params file, in `--params` order.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Evaluation {
@@ -148,6 +253,15 @@ pub struct Evaluation {
     pub setting_changes: Vec<SettingChange>,
     /// `None` for the baseline (the first params file).
     pub changes: Option<VerdictChanges>,
+    /// `None` for a params file without a `[lossy]` section (lossy rows are not evaluated).
+    pub lossy: Option<LossyEvaluation>,
+    /// Lossy rows this params file does not evaluate (lossy.md section 6.1).
+    pub lossy_not_evaluated: u32,
+    /// The lossy watch list of every params file (lossy.md section 6.7); "not evaluated" entries
+    /// without a `[lossy]` section.
+    pub lossy_watch: Vec<LossyWatchEntry>,
+    /// Chains, for a params file with `[lossy]`.
+    pub chains: Vec<ChainReport>,
 }
 
 /// Cache statistics per extraction fingerprint (generation.md section 4.2).

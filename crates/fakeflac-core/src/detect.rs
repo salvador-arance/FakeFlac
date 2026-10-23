@@ -355,6 +355,27 @@ pub fn lossy_unsupported(codec: AudioCodec, params: &DetectionParams) -> Option<
     lossy_table(codec, params).err()
 }
 
+/// The guards that come before any spectral rule (lossy-source.md section 4, after L1a): L0, then L1b
+/// (too short, then a long-enough lossy stream with no declared bitrate). Shared by `analyze_track` and
+/// the calibration tool so both sequence them the same way (ADR-0036).
+pub fn track_guard(
+    codec: Option<AudioCodec>,
+    duration_ms: u64,
+    declared_bitrate_kbps: Option<u32>,
+    params: &DetectionParams,
+) -> Option<TrackError> {
+    if let Some(e) = codec.and_then(|c| lossy_unsupported(c, params)) {
+        return Some(e);
+    }
+    if (duration_ms as f64) < params.input.min_duration_s * 1000.0 {
+        return Some(TrackError::TooShort);
+    }
+    if codec.is_some_and(AudioCodec::is_lossy) && declared_bitrate_kbps.is_none() {
+        return Some(TrackError::CorruptStream("no bitrate".into()));
+    }
+    None
+}
+
 fn unsupported(error: TrackError) -> TrackDecision {
     TrackDecision {
         verdict: Verdict::Error,

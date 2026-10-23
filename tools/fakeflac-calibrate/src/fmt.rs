@@ -32,6 +32,15 @@ pub fn hz(x: f64) -> String {
     no_negative_zero(format!("{x:.0}"))
 }
 
+/// Hz with 2 decimals: the lossy columns of `tracks.csv`, where margins are differences of Hz values.
+pub fn hz2(x: f64) -> String {
+    no_negative_zero(format!("{x:.2}"))
+}
+
+pub fn opt_hz2(x: Option<f64>) -> String {
+    x.map(hz2).unwrap_or_default()
+}
+
 pub fn secs3(x: f64) -> String {
     no_negative_zero(format!("{x:.3}"))
 }

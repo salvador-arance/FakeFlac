@@ -194,7 +194,7 @@ fn rp11_invalid_location_contains_the_corpus() {
 fn rp11_ffmpeg_missing_when_a_transcode_is_needed() {
     let sample = Sample::new("ffmpeg-missing");
     let missing = sample.scratch.join("no-such-ffmpeg.exe");
-    // Default config: the 9 settings of calibration.v1.toml (encoder lame, aac, opus), empty features folder.
+    // Default config: calibration.v2.toml (the 9 settings of v1, encoders lame, aac and opus, plus the lossy entries), empty features folder.
     let out = binary(
         Some(&sample.corpus),
         Some(&sample.calibration),

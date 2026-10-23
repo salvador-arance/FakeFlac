@@ -123,6 +123,7 @@ pub fn check(args: &PrivacyArgs, env: &Env) -> Result<Outcome, ToolError> {
         .iter()
         .map(|t| t.track.rel.clone())
         .chain(loaded.fakes.iter().map(|f| f.track.rel.clone()))
+        .chain(loaded.reals.iter().map(|f| f.track.rel.clone()))
         .collect();
     let skip = exceptions(&[repo.as_path(), roots.calibration.as_path()]);
     let names: Vec<String> = corpus_names(&tracks)

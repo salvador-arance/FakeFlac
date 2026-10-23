@@ -12,7 +12,7 @@ use fakeflac_calibrate::config::Setting;
 use fakeflac_calibrate::error::{ExitKind, ToolError};
 use fakeflac_calibrate::run::{AcceptArgs, CalibrateArgs, Command, Outcome, PrivacyArgs};
 use fakeflac_calibrate::transcode::{
-    TranscodeError, TranscodeOutput, TranscodeRequest, Transcoder,
+    LossyOutput, LossyRequest, TranscodeError, TranscodeOutput, TranscodeRequest, Transcoder,
 };
 use fakeflac_calibrate::{run, Env};
 use rand::{RngExt, SeedableRng};
@@ -20,6 +20,11 @@ use rand_chacha::ChaCha8Rng;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
+
+// The bitstream writers of the lossy fixtures (specs/detection/lossy-fixtures.md, ADR-0040, ADR-0036):
+// included by path, they depend only on `rand` and `rand_chacha`. No encoder runs, no ffmpeg.
+#[path = "../../../../crates/fakeflac-audio/tests/common/lossy.rs"]
+pub mod lossy;
 
 // ---------------------------------------------------------------------------------------------
 // Paths
@@ -74,6 +79,16 @@ pub fn next_free_version() -> u32 {
 
 pub fn spec_config() -> PathBuf {
     repo_root().join("specs/calibration/calibration.v1.toml")
+}
+
+/// `calibration.v2.toml`: v1 plus the lossy entries and `[labels.upstream_by_rate]` (RF-15).
+pub fn spec_config_v2() -> PathBuf {
+    repo_root().join("specs/calibration/calibration.v2.toml")
+}
+
+/// Detection v5: v4 plus the `[lossy]` section (lossy-source.md, ADR-0041).
+pub fn v5_params() -> PathBuf {
+    repo_root().join("specs/detection/detection-params.v5.toml")
 }
 
 pub fn read(path: &Path) -> String {
@@ -317,10 +332,64 @@ fn fnv(bytes: &[u8]) -> u64 {
 
 /// Fixture folder; its name depends on this file, so a change of the generator starts from scratch.
 fn fixture_dir() -> PathBuf {
-    base_dir().join(format!(
-        "fixtures-{:016x}",
-        fnv(include_str!("mod.rs").as_bytes())
-    ))
+    let mut text = include_str!("mod.rs").to_string();
+    text.push_str(include_str!(
+        "../../../../crates/fakeflac-audio/tests/common/lossy.rs"
+    ));
+    base_dir().join(format!("fixtures-{:016x}", fnv(text.as_bytes())))
+}
+
+/// Path to the lossy fixture `name` (ids of `specs/detection/lossy-fixtures.md`; `.mp3` or `.m4a`),
+/// written once from its bitstream writer. `m4a_alac_full_band` holds the samples of `full_band`.
+pub fn lossy_fixture(name: &str) -> PathBuf {
+    type Cells = Mutex<HashMap<String, Arc<OnceLock<PathBuf>>>>;
+    static CACHE: OnceLock<Cells> = OnceLock::new();
+    let cell = {
+        let mut map = CACHE
+            .get_or_init(|| Mutex::new(HashMap::new()))
+            .lock()
+            .unwrap();
+        map.entry(name.to_string()).or_default().clone()
+    };
+    cell.get_or_init(|| {
+        let dir = fixture_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        let ext = if name.starts_with("mp3_") {
+            "mp3"
+        } else {
+            "m4a"
+        };
+        let path = dir.join(format!("{name}.{ext}"));
+        if !path.exists() {
+            let tmp = dir.join(format!("{name}.{}.{ext}.tmp", std::process::id()));
+            std::fs::write(&tmp, lossy_bytes(name)).unwrap();
+            let _ = std::fs::hard_link(&tmp, &path);
+            let _ = std::fs::remove_file(&tmp);
+            assert!(path.exists(), "fixture {} missing", path.display());
+        }
+        path
+    })
+    .clone()
+}
+
+fn lossy_bytes(name: &str) -> Vec<u8> {
+    if name == "m4a_alac_full_band" {
+        let (samples, bits, dither) = signal("full_band");
+        let ints: Vec<i16> = quantize(&samples, bits, dither)
+            .into_iter()
+            .map(|v| v as i16)
+            .collect();
+        return lossy::write_m4a_alac(&ints, 44_100);
+    }
+    lossy::fixture_bytes(name).unwrap_or_else(|| panic!("unknown lossy fixture {name}"))
+}
+
+/// Copies the lossy fixture `name` to `dest` (new modification time), creating parent folders.
+pub fn place_lossy(name: &str, dest: &Path) {
+    if let Some(parent) = dest.parent() {
+        std::fs::create_dir_all(parent).unwrap();
+    }
+    std::fs::copy(lossy_fixture(name), dest).unwrap();
 }
 
 /// Path to the fixture `name` (ids of fixtures.md) in the given container, generating it once.
@@ -626,6 +695,35 @@ impl Transcoder for FixtureTranscoder {
             encoder_version: "fixture".to_string(),
         })
     }
+
+    fn transcode_lossy(&self, request: &LossyRequest<'_>) -> Result<LossyOutput, TranscodeError> {
+        self.lossy(request)
+    }
+}
+
+impl FixtureTranscoder {
+    /// Lossy entries (lossy.md section 9): the fixture of the LAST stage, `args[0]`, written as
+    /// `<generated_dir>/<id>.<ext>`; the source and the earlier stages are ignored.
+    fn lossy(&self, request: &LossyRequest<'_>) -> Result<LossyOutput, TranscodeError> {
+        let last = request
+            .stages
+            .last()
+            .ok_or_else(|| TranscodeError::Failed("no stage".into()))?;
+        let name = last
+            .args
+            .first()
+            .ok_or_else(|| TranscodeError::Failed("no fixture named".into()))?;
+        std::fs::create_dir_all(request.generated_dir).unwrap();
+        let file = request
+            .generated_dir
+            .join(format!("{}.{}", request.id, last.ext));
+        std::fs::copy(lossy_fixture(name), &file)
+            .map_err(|e| TranscodeError::Failed(e.to_string()))?;
+        Ok(LossyOutput {
+            file,
+            encoder_version: "fixture".to_string(),
+        })
+    }
 }
 
 /// A transcoder that must never be called: runs where every entry is cached.
@@ -644,6 +742,9 @@ impl Transcoder for NoTranscoder {
     fn transcode(&self, _r: &TranscodeRequest<'_>) -> Result<TranscodeOutput, TranscodeError> {
         panic!("no transcode expected");
     }
+    fn transcode_lossy(&self, _r: &LossyRequest<'_>) -> Result<LossyOutput, TranscodeError> {
+        panic!("no transcode expected");
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -660,6 +761,31 @@ pub const TRACK_8: &str = "Revisión/Ørsted/02 – Roto.flac";
 pub const TRACK_9: &str = "Revisión/Ørsted/03 – Corto.flac";
 pub const TRACK_10: &str = "Sueltas/Mixto/05 – Cuatro.flac";
 pub const TRACK_11: &str = "Sueltas/Mixto/06 – Falso.flac";
+
+/// The lossy corpus files of the lossy variant (lossy.md section 9, files 12 to 15).
+pub const TRACK_12: &str = "Pérdidas/Vídeo/07 – Falso 320.mp3";
+pub const TRACK_13: &str = "Pérdidas/Vídeo/08 – Señal ’AAC’.m4a";
+pub const TRACK_14: &str = "Pérdidas/Vídeo/09 – Ópera.opus";
+pub const TRACK_15: &str = "Cadena/MP3 – Ørsted/01 – Tres.mp3";
+/// Added by the scenario "A real label on a lossless file is excluded after extraction".
+pub const ALAC_TRACK: &str = "Pérdidas/Vídeo/10 – Sin pérdida.m4a";
+
+/// Folder names, file stems and notes of the lossy variant that the base corpus lacks: none may
+/// appear in `summary.md` either.
+pub const LOSSY_PRIVATE_NAMES: [&str; 12] = [
+    "Pérdidas",
+    "Vídeo",
+    "07 – Falso 320",
+    "08 – Señal ’AAC’",
+    "09 – Ópera",
+    "Cadena",
+    "MP3 – Ørsted",
+    "01 – Tres",
+    "de AAC 128",
+    "copia sin recodificar",
+    "Pérdidas/Vídeo",
+    "Cadena/MP3 – Ørsted",
+];
 
 /// Every folder name, file name and file stem of the sample corpus, and every note of the lists:
 /// none may appear in `summary.md` (calibration.md section 6).
@@ -741,6 +867,138 @@ impl Sample {
         s.write_confirmed(&s.confirmed_lines());
         s.write_config(None);
         s
+    }
+
+    /// The lossy variant (lossy.md section 9): the base corpus plus the lossy files 12 to 15, the
+    /// lossy `trusted.txt` and `confirmed.txt` and the lossy configuration. Folders are removed on drop.
+    pub fn new_lossy(name: &str) -> Sample {
+        let mut s = Sample::new_lossy_shared(name);
+        s.cleanup = true;
+        s
+    }
+
+    /// Like `new_lossy`, but the folders stay: for runs shared by several tests of one process.
+    pub fn new_lossy_shared(name: &str) -> Sample {
+        let s = Sample::build(name);
+        s.add_lossy_files();
+        s.write_trusted(&s.lossy_trusted_lines());
+        s.write_confirmed(&s.lossy_confirmed_lines());
+        s.write_lossy_config(None);
+        s
+    }
+
+    /// Files 12 to 15 of lossy.md section 9.
+    pub fn add_lossy_files(&self) {
+        let c = &self.corpus;
+        place_lossy("mp3_320_lp17k", &c.join(TRACK_12));
+        place_lossy("m4a_aac_128_lp16k", &c.join(TRACK_13));
+        let opus = c.join(TRACK_14);
+        std::fs::create_dir_all(opus.parent().unwrap()).unwrap();
+        std::fs::write(opus, b"OggS not decoded: the Opus decoder is pending").unwrap();
+        place_lossy("mp3_320_lp17k", &c.join(TRACK_15));
+    }
+
+    /// The sample lossy `trusted.txt`: line 7 gains `chain=C1`.
+    pub fn lossy_trusted_lines(&self) -> Vec<String> {
+        let mut lines = self.trusted_lines();
+        lines[6] =
+            "Revisión/Ørsted/ | revisado chain=C1 | barras normales y separador final".to_string();
+        lines
+    }
+
+    /// The sample lossy `confirmed.txt`: lines 4 to 7 are the lossy corpus files.
+    pub fn lossy_confirmed_lines(&self) -> Vec<String> {
+        let mut lines = self.confirmed_lines();
+        lines.extend(
+            [
+                "Pérdidas\\Vídeo\\07 – Falso 320.mp3 | fake upstream=aac source_max_kbps=128 | de AAC 128",
+                "Pérdidas\\Vídeo\\08 – Señal ’AAC’.m4a | real | copia sin recodificar",
+                "Pérdidas\\Vídeo\\09 – Ópera.opus | fake upstream=opus",
+                "Cadena\\MP3 – Ørsted\\01 – Tres.mp3 | fake upstream=aac chain=C1",
+            ]
+            .map(str::to_string),
+        );
+        lines
+    }
+
+    /// The configuration of the lossy variant: the head, `[labels.upstream_by_rate]` and `[report]` of
+    /// `calibration.v2.toml`, the four fixture settings of the base sample, three more fixture
+    /// settings with `lossless_transcode = false` and the lossy entries `l128`, `l320` and `l128_320`.
+    pub fn write_lossy_config(&self, holdout_fraction: Option<f64>) -> PathBuf {
+        let spec = read(&spec_config_v2());
+        let head = &spec[..spec.find("[[generate.settings]]").unwrap()];
+        // Section headers start a line: the file's own comments mention them too.
+        let at = |header: &str| {
+            spec.find(&format!(
+                "
+{header}"
+            ))
+            .unwrap()
+                + 1
+        };
+        let labels = &spec[at("[labels.upstream_by_rate]")..at("[report]")];
+        let report = &spec[at("[report]")..at("[[targets]]")];
+        let mut text = match holdout_fraction {
+            Some(f) => head.replace(
+                "holdout_fraction = 0.30",
+                &format!("holdout_fraction = {f:?}"),
+            ),
+            None => head.to_string(),
+        };
+        // (id, bitrate_kbps, fixture, lossless_transcode, lowpass_hz)
+        let settings = [
+            ("fx128", Some(128), "lp16k_dither", true, None),
+            ("fxv0", None, "sfb21_gaps", true, None),
+            ("fx320", Some(320), "lp20k_floor", true, None),
+            ("fxweak", None, "sfb21_gaps_weak", true, None),
+            ("fxmp3_128", Some(128), "mp3_128_lp17k", false, Some(17000)),
+            ("fxmp3_320", Some(320), "mp3_320_lp20k5", false, Some(20500)),
+            (
+                "fxmp3_320_src128",
+                Some(320),
+                "mp3_320_lp17k",
+                false,
+                Some(20500),
+            ),
+        ];
+        for (id, bitrate, fixture, lossless, lowpass) in settings {
+            text.push_str(&format!(
+                "[[generate.settings]]\nid = \"{id}\"\nencoder = \"fixture\"\next = \"mp3\"\n"
+            ));
+            if let Some(b) = bitrate {
+                text.push_str(&format!("bitrate_kbps = {b}\n"));
+            }
+            if let Some(lp) = lowpass {
+                text.push_str(&format!("lowpass_hz = {lp}\n"));
+            }
+            if !lossless {
+                text.push_str("lossless_transcode = false\n");
+            }
+            text.push_str(&format!("args = [\"{fixture}\"]\n\n"));
+        }
+        for (id, stages) in [
+            ("l128", "\"fxmp3_128\""),
+            ("l320", "\"fxmp3_320\""),
+            ("l128_320", "\"fxmp3_128\", \"fxmp3_320_src128\""),
+        ] {
+            text.push_str(&format!(
+                "[[generate.lossy]]\nid = \"{id}\"\nstages = [{stages}]\n\n"
+            ));
+        }
+        text.push_str(labels);
+        text.push_str(report);
+        text.push_str(
+            "[[targets]]\nid = \"T1\"\ndescription = \"No primary track is Fake\"\nclasses = [\"primary\"]\nverdict = \"fake\"\nmax_count = 0\n\n\
+             [[targets]]\nid = \"T2\"\ndescription = \"No fx128 transcode is Real\"\nsettings = [\"fx128\"]\nverdict = \"real\"\nmax_count = 0\n",
+        );
+        let path = self.config_path();
+        std::fs::write(&path, text).unwrap();
+        path
+    }
+
+    /// `accept` with the params files of the lossy scenarios: v2, then v5.
+    pub fn accept_lossy(&self) -> Outcome {
+        self.accept(&[v2_params(), v5_params()])
     }
 
     /// The lines of the sample `trusted.txt` (line N is element N-1).
@@ -1031,6 +1289,28 @@ pub fn shared_v2_v3_and_v4() -> &'static SharedRun {
     CELL.get_or_init(|| {
         let sample = Sample::new_shared("shared-v2-v3-v4");
         let outcome = sample.accept(&[v2_params(), v3_params(), v4_params()]);
+        SharedRun { sample, outcome }
+    })
+}
+
+/// Cold run of the lossy variant with v2 and v5 (lossy.md section 9), shared by the tests that only
+/// read its result.
+pub fn shared_lossy() -> &'static SharedRun {
+    static CELL: OnceLock<SharedRun> = OnceLock::new();
+    CELL.get_or_init(|| {
+        let sample = Sample::new_lossy_shared("shared-lossy");
+        let outcome = sample.accept_lossy();
+        SharedRun { sample, outcome }
+    })
+}
+
+/// Cold run of the BASE sample corpus with v2 and v5, to compare its lossless tables with the lossy
+/// variant's.
+pub fn shared_base_v2_v5() -> &'static SharedRun {
+    static CELL: OnceLock<SharedRun> = OnceLock::new();
+    CELL.get_or_init(|| {
+        let sample = Sample::new_shared("shared-base-v2-v5");
+        let outcome = sample.accept(&[v2_params(), v5_params()]);
         SharedRun { sample, outcome }
     })
 }

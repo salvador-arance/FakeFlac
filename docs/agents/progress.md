@@ -2,6 +2,70 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-23 - RF-15 part 2 (lossy calibration): review round 1 done, round 2 waits for spec PR #57
+
+**Done**
+- #55 (RF-15 part 1) and #56 (spec follow-ups: L1a/L0/L1b order, MP3 duration tolerance, Q16 and Q17) are merged. Q16 and Q17 were accepted with their defaults: treat a tag frame count or bytes field of 0 as absent, and make free-format MP3 `unsupportedFormat`.
+- `feat/RF-15-calibration`, local only, not pushed, no PR:
+  - ab7ebb5 `test(RF-15)`: the 25 scenarios of `calibration-lossy.feature`, the C11 messages, the v2 default config. New files `tools/fakeflac-calibrate/tests/{lossy_inputs,lossy_acceptance,lossy_sample}.rs` plus `common/mod.rs` helpers.
+  - cf439c0 `feat(RF-15)`: the attribute grammar, `real`, cascades, split units with `lossy:*` strata, the lossy tables and chains, the v2 default. `just check` is green.
+- **Review round 1: 2 blocking findings.**
+  1. A `real` folder defaulted to `lossy` against spec 1.2. The owner chose `lossy`, and the spec now says so in #57.
+  2. `tools/fakeflac-calibrate/src/lossy.rs:89-99` re-sequences L0 and L1 itself and drops the "no declared bitrate" guard. The core's `analyze_track` does L1a (decode failed), then L0, then too short, then no bitrate. The tool must not reimplement this (ADR-0036).
+- Spec PR **#57** (`spec/RF-15-calibration-followups`) is open for G1, and the owner has answered its questions:
+  - `real` defaults to `lossy` and rejects `formats=lossless|all`;
+  - the split domain goes by extension;
+  - the album-in-several-units message lists `file:line` refs, `trusted.txt` first;
+  - checks and messages for `[labels.upstream_by_rate]`;
+  - 6.3 adds the median estimate of the Fake rows (B8) for positive groups only, and `within_source` applies to positive groups only;
+  - chain keys, with disc-number stems kept as a known limitation.
+
+**Pending: round 2 of `/feature RF-15` part 2, after #57 is merged**
+1. `git merge main` (or rebase) into `feat/RF-15-calibration` to bring in #57.
+2. **Stage `test`** (fresh test-author). Tests for the #57 changes:
+   - two new Examples rows;
+   - the exact album-units message;
+   - Fake-rows median 128 for `l128_320`;
+   - the `upstream_by_rate` checks;
+   - `real formats=all`.
+
+   Also tests that kill the mutants that survived round 1:
+   - `real` folder default;
+   - the source-limited threshold (`c − suspicious_shortfall`), with a unit test of `evaluate_lossy_row` placing the source cutoff between `c − fake_shortfall` and `c − suspicious_shortfall`;
+   - source-limited only on honest generated rows;
+   - weak fakes kept out of the strong `fake` row;
+   - a Suspicious lossy row not counted as Fake;
+   - cascade truth at equal bitrates (`low < last`);
+   - `weak=x` rejected;
+   - the "already listed" error for a track in both a `real` and a `fake` line, de-duplicated;
+   - a C7 legacy cache line without `stream` (`cache.rs:209`);
+   - "also trusted" on a `real` line;
+   - a lossy stream with no declared bitrate giving `Error`.
+3. **Stage `implement`** (fresh implementer):
+   - blocking 2: ideally one pure core function, used by both `analyze_track` and the tool, that takes the probe data and returns the decision, with no behaviour change in the app;
+   - the four #57 items not yet implemented: the album-units refs, the `upstream_by_rate` validation, the Fake-rows median and `within_source` on positives only, rejecting `real formats=all`.
+
+   Spec-backed improvements from the review:
+   - the lossy watch list for every params file (6.7);
+   - the `--no-generate` `not_generated` count (`extract.rs:336`);
+   - `real_excluded` lines repeated per extraction group (`render_lossy.rs:62-68`);
+   - the holdout warning per stratum, not per album class (`render.rs:796`);
+   - the "holds ALAC" text hard-coded (`render_lossy.rs:66`).
+4. **Review round 2** with a mutation check. Expect it to be slow: each mutation recompiles and reruns `lossy_acceptance` (round 1 took about 28 min). Then `just ci`, PR, `/handoff`.
+
+**Afterwards**
+- `/feature` round for **Q16 and Q17** in `fakeflac-audio` `mp3.rs`. It bumps `EXTRACTION_VERSION` to 3, so do it after part 2, since C7 assumes 2. Also check `find_first_frame` accepting a bitrate-index-0 header without the next-frame check.
+- From #55: a direct `detect_track` test for L0 before silence; `run_analysis_lossy_v5.rs` uses a WAV where the scenario says FLAC; `unwrap_or(AudioCodec::Pcm)` in `analysis.rs`; the alignment of the ColumnHeader bubble.
+- Acceptance B1–B11 on the real corpus (`just accept`) after part 2. The installer size against RNF-06. The `confirmed.txt` lines and the splitter leftovers.
+
+**Blockers / questions for the human**
+- G1 of #57.
+- Dependabot alert #1 (`glib`), the `specs/CLAUDE.md` line about `specs/pending/`, and the splitter accessibility gap: unchanged.
+- **Environment:** Git Bash prints a spurious "cwd: No such file or directory" and exit 1 after every command; read the real status with `echo $?`. Vitest from Git Bash fails with a lowercase `c:` cwd; use PowerShell (`Set-Location C:\Workspaces\FakeFlac`). Subagents without Bash (spec-writer) cannot `git show` another branch; give them the file paths in a checked-out tree.
+- **Harness:** a mutation check that disables checks in a scratch copy triggered a "Security Test Removal" warning. It was a false positive: the repo was untouched.
+
+**Next step:** once #57 is merged: check out `feat/RF-15-calibration`, `git merge main`, then round 2 as in "Pending", starting with the test stage.
+
 ## 2026-10-23 - RF-15 part 1 (detection v5, contract v3, lossy UI): PR #55 open (awaiting G2)
 
 **Done**
