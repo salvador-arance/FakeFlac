@@ -52,4 +52,30 @@ describe('ColumnHeader', () => {
     render(ColumnHeader, { props: { label: 'Duration' } })
     expect(screen.getByRole('columnheader').hasAttribute('title')).toBe(false)
   })
+
+  // @RF-15 specs/ui/components.md: the tooltip "is shown on hover and focus". Contract pinned: the
+  // focusable sort button exposes the tooltip as its accessible description (aria-describedby or
+  // aria-description); the mechanism is free. The header's text content does not gain the tooltip.
+  const describe_ = (el: HTMLElement): string => {
+    const ids = (el.getAttribute('aria-describedby') ?? '').split(/\s+/).filter(Boolean)
+    const fromIds = ids
+      .map((id) => el.ownerDocument.getElementById(id)?.textContent ?? '')
+      .join(' ')
+      .trim()
+    return fromIds || (el.getAttribute('aria-description') ?? '').trim()
+  }
+
+  it('exposes the tooltip as the accessible description of the focusable button', () => {
+    const tooltip = 'The real bitrate is an estimate from the cutoff.'
+    render(ColumnHeader, { props: { label: 'Real bitrate', tooltip } })
+    const header = screen.getByRole('columnheader')
+    expect(describe_(screen.getByRole('button'))).toBe(tooltip)
+    expect(header.getAttribute('title')).toBe(tooltip)
+    expect(header.textContent).not.toContain(tooltip)
+  })
+
+  it('has no accessible description without a tooltip', () => {
+    render(ColumnHeader, { props: { label: 'Duration' } })
+    expect(describe_(screen.getByRole('button'))).toBe('')
+  })
 })

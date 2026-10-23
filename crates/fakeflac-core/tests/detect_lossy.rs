@@ -752,3 +752,121 @@ fn rf15_analyze_track_of_a_lossless_codec_has_no_estimate() {
     assert_eq!(a.estimated_source_bitrate_kbps, None);
     assert_eq!(a.info.codec, Some(AudioCodec::Alac));
 }
+
+// ---------------------------------------------------------------------------------------------
+// Round 2: order of L0 and boundaries (@RF-15, specs/detection/lossy-source.md sections 3 and 4)
+// ---------------------------------------------------------------------------------------------
+
+fn no_lossy_section() -> DetectionParams {
+    DetectionParams {
+        algorithm_version: 4,
+        lossy: None,
+        ..v5()
+    }
+}
+
+fn unsupported_no_lossy() -> Option<TrackError> {
+    Some(TrackError::UnsupportedFormat(
+        "these DetectionParams have no [lossy] section".into(),
+    ))
+}
+
+// @RF-15 lossy-source.md section 4: L0 comes before L1 (too short).
+#[test]
+fn rf15_l0_comes_before_l1_a_too_short_lossy_track_without_lossy_section() {
+    let mut probe = mp3_probe(320, Some(20_500), Some(spectra_with_edge(17_000.0)));
+    probe.duration_ms = 1_000;
+    let a = analyze_track(&FakeProbe(Ok(probe)), &mp3_entry(), &no_lossy_section());
+    assert_eq!(a.verdict, Verdict::Error, "{a:#?}");
+    assert_eq!(a.error, unsupported_no_lossy(), "{a:#?}");
+}
+
+// @RF-15 lossy-source.md section 4: L0 comes before the no-bitrate guard.
+#[test]
+fn rf15_l0_comes_before_the_no_bitrate_guard_without_lossy_section() {
+    let mut probe = mp3_probe(320, Some(20_500), Some(spectra_with_edge(17_000.0)));
+    probe.declared_bitrate_kbps = None;
+    let a = analyze_track(&FakeProbe(Ok(probe)), &mp3_entry(), &no_lossy_section());
+    assert_eq!(a.verdict, Verdict::Error, "{a:#?}");
+    assert_eq!(a.error, unsupported_no_lossy(), "{a:#?}");
+}
+
+// @RF-15 lossy-source.md section 4: L0 comes before silence (line 128).
+#[test]
+fn rf15_l0_comes_before_silence_without_lossy_section() {
+    let a = analyze_track(
+        &FakeProbe(Ok(mp3_probe(320, None, None))),
+        &mp3_entry(),
+        &no_lossy_section(),
+    );
+    assert_eq!(a.verdict, Verdict::Error, "{a:#?}");
+    assert_eq!(a.error, unsupported_no_lossy(), "{a:#?}");
+    assert!(a.reasons.is_empty());
+}
+
+// @RF-15 lossy-source.md section 3: the tag low-pass is honoured when it equals the first row's
+// cutoff (inclusive lower bound). MP3 first row: 32 kbps at 5500 Hz.
+#[test]
+fn rf15_the_tag_low_pass_equal_to_the_first_row_cutoff_is_honoured() {
+    let p = v5();
+    let first = p.lossy.as_ref().expect("v5 has [lossy]").cutoffs.mp3[0].cutoff_hz;
+    let tag = Some(first as u32);
+    let with = stream(AudioCodec::Mp3, 44_100, Some(320), tag);
+    let without = stream(AudioCodec::Mp3, 44_100, Some(320), None);
+    assert_eq!(expected_cutoff_hz(&with, &p), Some(first));
+    assert_eq!(expected_cutoff_hz(&without, &p), Some(20_500.0));
+    // Content to the tag's cutoff: Real with the tag, a 320 made from a low bitrate without it.
+    let m = measurements(-20.0, 0.0, 40.0, Some(first + 50.0), 22_050.0);
+    assert_eq!(decide_track(&with, &m, &p).verdict, Verdict::Real);
+    assert_eq!(decide_track(&without, &m, &p).verdict, Verdict::Fake);
+}
+
+// @RF-15 lossy-source.md section 4, L2: strict `<`; H equal to the threshold does not fire.
+#[test]
+fn rf15_l2_h_equal_to_low_hf_threshold_db_does_not_fire() {
+    let p = v5();
+    let h = p.verdict.low_hf_threshold_db;
+    let s = stream(AudioCodec::Mp3, 44_100, Some(320), None);
+    let d = decide_track(
+        &s,
+        &measurements(h, 0.0, 40.0, Some(20_450.0), 22_050.0),
+        &p,
+    );
+    assert_eq!(d.verdict, Verdict::Real, "{d:?}");
+    assert_eq!(d.estimated_source_bitrate_kbps, Some(320));
+}
+
+// @RF-15 lossy-source.md section 4: D against step_suspicious_db is the literal `>=`, for fc and
+// for L4. D just below: the step is not counted, fc = fe, and the reason is gradualRolloff.
+#[test]
+fn rf15_d_just_below_step_suspicious_db_is_a_gradual_rolloff_with_fc_equal_to_fe() {
+    let p = v5();
+    let d = p.verdict.step_suspicious_db - 1e-10;
+    let s = stream(AudioCodec::Mp3, 44_100, Some(320), None);
+    // c_exp 20500, fe 19000: shortfall 1500 (>= suspicious, < fake); a step is present at 17050.
+    let r = decide_track(
+        &s,
+        &measurements(-20.0, 0.0, d, Some(17_050.0), 19_000.0),
+        &p,
+    );
+    assert_eq!(r.verdict, Verdict::Suspicious, "{r:?}");
+    assert_eq!(r.reasons, vec![GradualRolloff], "{r:?}");
+}
+
+// @RF-15 lossy-source.md section 4, L3: D just below fake_min_step_db is not Fake.
+#[test]
+fn rf15_l3_d_just_below_fake_min_step_db_is_not_fake() {
+    let p = v5();
+    let l = p.lossy.as_ref().expect("v5 has [lossy]");
+    let d = l.fake_min_step_db - 1e-10;
+    let s = stream(AudioCodec::Mp3, 44_100, Some(320), None);
+    // shortfall exactly fake_shortfall_hz (20500 - 18000), a clear step.
+    let r = decide_track(
+        &s,
+        &measurements(-20.0, 0.0, d, Some(18_000.0), 22_050.0),
+        &p,
+    );
+    assert_ne!(r.verdict, Verdict::Fake, "{r:?}");
+    assert_eq!(r.verdict, Verdict::Suspicious, "{r:?}");
+    assert_eq!(r.reasons, vec![CutoffBelowDeclared], "{r:?}");
+}
