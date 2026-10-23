@@ -1,7 +1,7 @@
 //! Use case: analyse one track (RF-03, RF-04). Combines the scanner's `FileEntry`,
 //! the analyzer port and the pure detection rules into a `TrackAnalysis`.
 
-use crate::detect::{detect_track, StreamInfo};
+use crate::detect::{detect_track, lossy_unsupported, StreamInfo};
 use crate::domain::{AudioCodec, TrackAnalysis, TrackError, TrackInfo, Verdict};
 use crate::params::DetectionParams;
 use crate::ports::{FileEntry, SpectrumAnalyzer};
@@ -47,6 +47,14 @@ pub fn analyze_track(
     info.declared_bitrate_kbps = probe.declared_bitrate_kbps;
     info.bitrate_mode = probe.bitrate_mode;
 
+    // lossy-source.md section 4, L0 first: a lossy codec these params cannot judge is reported as
+    // such before the too-short (L1) and no-bitrate guards.
+    if let Some(e) = info
+        .codec
+        .and_then(|codec| lossy_unsupported(codec, params))
+    {
+        return error(info, e);
+    }
     if (probe.duration_ms as f64) < params.input.min_duration_s * 1000.0 {
         return error(info, TrackError::TooShort);
     }
