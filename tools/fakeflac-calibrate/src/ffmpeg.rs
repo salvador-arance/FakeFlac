@@ -64,13 +64,45 @@ pub fn decode_args(input: &Path, decode_args: &[String], out: &Path) -> Vec<Stri
 /// stage 1 is [`encode_args`] into `<generated>/<id>.s1.<ext>`, stage `k` > 1 encodes the output of
 /// stage `k - 1` (no `-ss`/`-t`), and the last stage writes `<generated>/<id>.<ext>`.
 pub fn lossy_args(
-    _source: &Path,
-    _fragment: Option<Fragment>,
-    _stages: &[&Setting],
-    _generated_dir: &Path,
-    _id: &str,
+    source: &Path,
+    fragment: Option<Fragment>,
+    stages: &[&Setting],
+    generated_dir: &Path,
+    id: &str,
 ) -> Vec<Vec<String>> {
-    todo!("RF-15 lossy.md section 4.3")
+    let outputs = stage_files(stages, generated_dir, id);
+    let mut calls = Vec::new();
+    for (k, stage) in stages.iter().enumerate() {
+        let out = &outputs[k];
+        if k == 0 {
+            calls.push(encode_args(source, fragment, stage, out));
+        } else {
+            let mut args = base_args();
+            args.push("-i".to_string());
+            args.push(text(&outputs[k - 1]));
+            args.extend(["-map", "0:a:0", "-map_metadata", "-1"].map(str::to_string));
+            args.extend(stage.args.iter().cloned());
+            args.push("-y".to_string());
+            args.push(text(out));
+            calls.push(args);
+        }
+    }
+    calls
+}
+
+/// The file each stage writes: `<id>.s<k>.<ext>` for the intermediates, `<id>.<ext>` for the last.
+fn stage_files(stages: &[&Setting], generated_dir: &Path, id: &str) -> Vec<PathBuf> {
+    stages
+        .iter()
+        .enumerate()
+        .map(|(k, s)| {
+            if k + 1 == stages.len() {
+                generated_dir.join(format!("{id}.{}", s.ext))
+            } else {
+                generated_dir.join(format!("{id}.s{}.{}", k + 1, s.ext))
+            }
+        })
+        .collect()
 }
 
 /// `FAKEFLAC_FFMPEG`, or `ffmpeg` on `PATH` when `None`.
@@ -122,9 +154,48 @@ impl FfmpegTranscoder {
 impl Transcoder for FfmpegTranscoder {
     fn transcode_lossy(
         &self,
-        _request: &crate::transcode::LossyRequest<'_>,
+        request: &crate::transcode::LossyRequest<'_>,
     ) -> Result<crate::transcode::LossyOutput, TranscodeError> {
-        todo!("RF-15 lossy.md section 4.3")
+        let ffmpeg_version = self.version().map_err(|_| TranscodeError::NotFound)?;
+        std::fs::create_dir_all(request.generated_dir)
+            .map_err(|e| TranscodeError::Failed(e.to_string()))?;
+        let files = stage_files(request.stages, request.generated_dir, request.id);
+        let calls = lossy_args(
+            request.source,
+            request.fragment,
+            request.stages,
+            request.generated_dir,
+            request.id,
+        );
+        let mut versions: Vec<String> = Vec::new();
+        let mut result: Result<(), TranscodeError> = Ok(());
+        for (k, call) in calls.iter().enumerate() {
+            result = self.run(call, request.generated_dir);
+            if result.is_err() {
+                break;
+            }
+            versions.push(encoder_version(
+                &ffmpeg_version,
+                &request.stages[k].encoder,
+                &files[k],
+            ));
+            if k > 0 {
+                let _ = std::fs::remove_file(&files[k - 1]);
+            }
+        }
+        match (result, files.last()) {
+            (Ok(()), Some(last)) => Ok(crate::transcode::LossyOutput {
+                file: last.clone(),
+                encoder_version: versions.join(" > "),
+            }),
+            (Ok(()), None) => Err(TranscodeError::Failed("no stage".to_string())),
+            (Err(e), _) => {
+                for f in &files {
+                    let _ = std::fs::remove_file(f);
+                }
+                Err(e)
+            }
+        }
     }
 
     fn supports(&self, encoder: &str) -> bool {

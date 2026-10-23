@@ -6,8 +6,9 @@
 
 use crate::hash::id16;
 use fakeflac_audio::EXTRACTION_VERSION;
+use fakeflac_core::detect::StreamInfo;
 use fakeflac_core::ports::AudioProbe;
-use fakeflac_core::{BandSpectra, DetectionParams, TrackError};
+use fakeflac_core::{AudioCodec, BandSpectra, BitrateMode, DetectionParams, TrackError};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -31,6 +32,70 @@ pub struct ProbeData {
     pub duration_ms: u64,
     /// `None`: every analysed frame was silent.
     pub spectrum: Option<BandSpectra>,
+    /// What the stream declares (lossy.md section 5, `stream`).
+    pub stream: StreamData,
+}
+
+/// The `stream` information of a cache entry (lossy.md section 5).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct StreamData {
+    pub codec: Option<AudioCodec>,
+    pub declared_bitrate_kbps: Option<u32>,
+    pub bitrate_mode: Option<BitrateMode>,
+    pub encoder: Option<String>,
+    pub encoder_lowpass_hz: Option<u32>,
+}
+
+pub fn codec_name(codec: AudioCodec) -> &'static str {
+    match codec {
+        AudioCodec::Pcm => "pcm",
+        AudioCodec::Flac => "flac",
+        AudioCodec::Alac => "alac",
+        AudioCodec::Mp3 => "mp3",
+        AudioCodec::Aac => "aac",
+        AudioCodec::Opus => "opus",
+    }
+}
+
+fn codec_from_name(name: &str) -> Option<AudioCodec> {
+    Some(match name {
+        "pcm" => AudioCodec::Pcm,
+        "flac" => AudioCodec::Flac,
+        "alac" => AudioCodec::Alac,
+        "mp3" => AudioCodec::Mp3,
+        "aac" => AudioCodec::Aac,
+        "opus" => AudioCodec::Opus,
+        _ => return None,
+    })
+}
+
+pub fn bitrate_mode_name(mode: BitrateMode) -> &'static str {
+    match mode {
+        BitrateMode::Cbr => "cbr",
+        BitrateMode::Vbr => "vbr",
+        BitrateMode::Abr => "abr",
+    }
+}
+
+fn bitrate_mode_from_name(name: &str) -> Option<BitrateMode> {
+    Some(match name {
+        "cbr" => BitrateMode::Cbr,
+        "vbr" => BitrateMode::Vbr,
+        "abr" => BitrateMode::Abr,
+        _ => return None,
+    })
+}
+
+impl ProbeData {
+    /// What the core's lossy functions need (`None` for a probe without a codec).
+    pub fn stream_info(&self) -> Option<StreamInfo> {
+        Some(StreamInfo {
+            codec: self.stream.codec?,
+            sample_rate: self.sample_rate,
+            declared_bitrate_kbps: self.stream.declared_bitrate_kbps,
+            encoder_lowpass_hz: self.stream.encoder_lowpass_hz,
+        })
+    }
 }
 
 impl Extracted {
@@ -43,6 +108,13 @@ impl Extracted {
                 channels: p.channels,
                 duration_ms: p.duration_ms,
                 spectrum: p.spectrum,
+                stream: StreamData {
+                    codec: p.codec,
+                    declared_bitrate_kbps: p.declared_bitrate_kbps,
+                    bitrate_mode: p.bitrate_mode,
+                    encoder: p.encoder,
+                    encoder_lowpass_hz: p.encoder_lowpass_hz,
+                },
             }),
             Err(e) => Extracted::Error(e),
         }
@@ -113,12 +185,37 @@ struct SpectrumJson {
 }
 
 #[derive(Serialize, Deserialize)]
+struct StreamJson {
+    codec: Option<String>,
+    declared_bitrate_kbps: Option<u32>,
+    bitrate_mode: Option<String>,
+    encoder: Option<String>,
+    encoder_lowpass_hz: Option<u32>,
+}
+
+#[derive(Serialize, Deserialize)]
 struct ProbeJson {
     sample_rate: u32,
     bit_depth: Option<u8>,
     channels: u8,
     duration_ms: u64,
     spectrum: Option<SpectrumJson>,
+    /// Absent in lines written before RF-15 (EXTRACTION_VERSION stays 2, lossy.md C7).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    stream: Option<StreamJson>,
+}
+
+/// The codec of a line without `stream`: a FLAC or WAV entry, by the extension of its path.
+fn legacy_codec(key: &Value) -> AudioCodec {
+    let wav = key
+        .get("path")
+        .and_then(Value::as_str)
+        .is_some_and(|p| p.to_ascii_lowercase().ends_with(".wav"));
+    if wav {
+        AudioCodec::Pcm
+    } else {
+        AudioCodec::Flac
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -208,6 +305,13 @@ impl FeatureCache {
                         mean_db: s.mean_db.clone(),
                         median_db: s.median_db.clone(),
                     }),
+                    stream: Some(StreamJson {
+                        codec: p.stream.codec.map(|c| codec_name(c).to_string()),
+                        declared_bitrate_kbps: p.stream.declared_bitrate_kbps,
+                        bitrate_mode: p.stream.bitrate_mode.map(|m| bitrate_mode_name(m).into()),
+                        encoder: p.stream.encoder.clone(),
+                        encoder_lowpass_hz: p.stream.encoder_lowpass_hz,
+                    }),
                 }),
                 Extracted::Error(_) => None,
             },
@@ -261,6 +365,19 @@ fn parse_line(line: &str) -> Option<(String, CachedEntry)> {
             bit_depth: p.bit_depth,
             channels: p.channels,
             duration_ms: p.duration_ms,
+            stream: match p.stream {
+                Some(s) => StreamData {
+                    codec: s.codec.as_deref().and_then(codec_from_name),
+                    declared_bitrate_kbps: s.declared_bitrate_kbps,
+                    bitrate_mode: s.bitrate_mode.as_deref().and_then(bitrate_mode_from_name),
+                    encoder: s.encoder,
+                    encoder_lowpass_hz: s.encoder_lowpass_hz,
+                },
+                None => StreamData {
+                    codec: Some(legacy_codec(&parsed.key)),
+                    ..StreamData::default()
+                },
+            },
             spectrum: p.spectrum.map(|s| BandSpectra {
                 sample_rate: p.sample_rate,
                 band_hz: s.band_hz,
@@ -321,6 +438,13 @@ mod tests {
             channels: 2,
             duration_ms: 1234,
             spectrum: Some(spectra),
+            stream: StreamData {
+                codec: Some(AudioCodec::Mp3),
+                declared_bitrate_kbps: Some(320),
+                bitrate_mode: Some(BitrateMode::Cbr),
+                encoder: Some("LAME3.100".to_string()),
+                encoder_lowpass_hz: Some(20_500),
+            },
         });
         let dir = std::env::temp_dir().join(format!("fakeflac-cache-unit-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);

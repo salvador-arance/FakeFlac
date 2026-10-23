@@ -164,6 +164,29 @@ pub struct LossyGroupRow {
     /// For rows with a source bitrate: (estimates at most that bitrate, rows with a source bitrate
     /// and an estimate).
     pub within_source: Option<(u32, u32)>,
+    /// Median and 5th percentile of the shortfall `s`.
+    pub s_median_hz: Option<f64>,
+    pub s_p5_hz: Option<f64>,
+    /// The group holds positives (rate shown: caught) rather than negatives (rate shown: FP).
+    pub positive: bool,
+}
+
+/// A lossy `false-positive` track (lossy.md section 6.7).
+#[derive(Debug, Clone, PartialEq)]
+pub struct LossyWatchEntry {
+    pub watch_id: String,
+    /// Relative to `FAKEFLAC_CORPUS`, `/` separators.
+    pub path: String,
+    pub evaluated: bool,
+    pub verdict: Verdict,
+    pub reasons: Vec<fakeflac_core::SuspicionReason>,
+    pub codec: Option<String>,
+    pub declared_bitrate_kbps: Option<u32>,
+    pub fc_hz: Option<f64>,
+    pub c_exp_hz: Option<f64>,
+    pub shortfall_hz: Option<f64>,
+    pub step_db: Option<f64>,
+    pub estimate_kbps: Option<u32>,
 }
 
 /// The lossy tables of one params file with a `[lossy]` section.
@@ -171,6 +194,7 @@ pub struct LossyGroupRow {
 pub struct LossyEvaluation {
     pub matrix: BTreeMap<SplitSel, LossyMatrix>,
     pub groups: Vec<LossyGroupRow>,
+    pub watch: Vec<LossyWatchEntry>,
 }
 
 /// One track of a chain (lossy.md section 6.5).
@@ -182,7 +206,12 @@ pub struct ChainEntry {
     pub version: String,
     pub key: String,
     pub verdict: Verdict,
+    pub reasons: Vec<fakeflac_core::SuspicionReason>,
     pub estimate_kbps: Option<u32>,
+    /// The reported cutoff `fc`.
+    pub fc_hz: Option<f64>,
+    pub declared_bitrate_kbps: Option<u32>,
+    pub watch_id: String,
 }
 
 /// One chain id with its keys and pair groups.

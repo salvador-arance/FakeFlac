@@ -1,12 +1,14 @@
-//! `trusted.txt` and `confirmed.txt` (inputs.md sections 1 and 2).
+//! `trusted.txt` and `confirmed.txt` (inputs.md sections 1 and 2, lossy.md section 1).
 //!
 //! One parser for both files: they share the grammar and differ in the second field (origin or
-//! kind). Every error of a file is reported, as `<file>:<line>: <message>`, sorted by line.
+//! kind, then attributes). Every error of a file is reported, as `<file>:<line>: <message>`, sorted
+//! by line.
 
 use crate::error::ToolError;
 use fakeflac_core::ports::{FileEntry, FileScanner};
+use fakeflac_core::AudioFormat;
 use fakeflac_fs::WalkDirScanner;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
 
 /// Origins of `trusted.txt` with their class (inputs.md 1.5), in the order the error message lists them.
@@ -21,6 +23,27 @@ pub const ORIGINS: [(&str, &str); 9] = [
     ("analisis-limpio", "clean"),
     ("analisis", "reference"),
 ];
+
+const NOT_SUPPORTED: &str = "not a supported audio file (FLAC, WAV, MP3, M4A or Opus)";
+
+/// The attributes of the line that gives a track its label (lossy.md section 1.2).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Attrs {
+    pub group: Option<String>,
+    pub chain: Option<String>,
+    /// `aac`, `opus`, `mp3`, `unknown` or `by-rate` (resolved after extraction).
+    pub upstream: Option<String>,
+    pub source_max_kbps: Option<u32>,
+    pub weak: bool,
+}
+
+/// Which files a folder entry includes (lossy.md section 1.1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Formats {
+    Lossless,
+    Lossy,
+    All,
+}
 
 /// A track of the corpus.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,6 +67,7 @@ pub struct Trusted {
     pub line: usize,
     /// `W1`, `W2`… when `confirmed.txt` lists it as a false positive.
     pub watch_id: String,
+    pub attrs: Attrs,
 }
 
 /// A confirmed fake (`confirmed.txt`, kind `fake`).
@@ -51,6 +75,15 @@ pub struct Trusted {
 pub struct ConfirmedFake {
     pub track: Track,
     pub line: usize,
+    pub attrs: Attrs,
+}
+
+/// An honest lossy file of `confirmed.txt` (kind `real`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConfirmedReal {
+    pub track: Track,
+    pub line: usize,
+    pub attrs: Attrs,
 }
 
 /// Both lists, resolved.
@@ -60,6 +93,8 @@ pub struct Lists {
     pub trusted: Vec<Trusted>,
     /// Sorted by relative path.
     pub fakes: Vec<ConfirmedFake>,
+    /// Sorted by relative path.
+    pub reals: Vec<ConfirmedReal>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -74,10 +109,12 @@ struct Item {
     exclusion: bool,
     /// Origin or kind (empty for exclusions).
     field: String,
+    attrs: Attrs,
     canon: PathBuf,
     is_dir: bool,
-    /// FLAC and WAV files covered by the path.
+    /// The files covered by the path (for a folder, those its `formats=` selects).
     files: Vec<FileEntry>,
+    covered: HashSet<PathBuf>,
 }
 
 struct Raw {
@@ -92,6 +129,18 @@ struct Parsed {
     errors: Vec<(usize, String)>,
 }
 
+/// A track with the line that decides it.
+#[derive(Clone)]
+struct Won {
+    file: FileEntry,
+    /// `fake`, `real`, `false-positive` (confirmed) or empty (trusted).
+    kind: String,
+    class: String,
+    origin: String,
+    line: usize,
+    attrs: Attrs,
+}
+
 /// Reads and resolves `trusted.txt` and, when it exists, `confirmed.txt`.
 pub fn load(calibration: &Path, corpus: &Path) -> Result<Lists, ToolError> {
     let trusted_bytes = std::fs::read(calibration.join("trusted.txt"))
@@ -102,13 +151,14 @@ pub fn load(calibration: &Path, corpus: &Path) -> Result<Lists, ToolError> {
         return Err(ToolError::input_lines(errors));
     }
     let mut trusted_list: Vec<Trusted> = Vec::new();
-    for (entry, class, origin, line) in trusted_tracks.values() {
+    for won in &trusted_tracks {
         trusted_list.push(Trusted {
-            track: to_track(entry, corpus),
-            origin: origin.clone(),
-            class: class.clone(),
-            line: *line,
+            track: to_track(&won.file, corpus),
+            origin: won.origin.clone(),
+            class: won.class.clone(),
+            line: won.line,
             watch_id: String::new(),
+            attrs: won.attrs.clone(),
         });
     }
     if trusted_list.is_empty() {
@@ -116,10 +166,11 @@ pub fn load(calibration: &Path, corpus: &Path) -> Result<Lists, ToolError> {
     }
 
     let mut fakes: Vec<ConfirmedFake> = Vec::new();
+    let mut reals: Vec<ConfirmedReal> = Vec::new();
     if let Ok(bytes) = std::fs::read(calibration.join("confirmed.txt")) {
         let lines_by_track: BTreeMap<PathBuf, usize> = trusted_tracks
             .iter()
-            .map(|(path, (_, _, _, line))| (path.clone(), *line))
+            .map(|w| (w.file.path.clone(), w.line))
             .collect();
         let parsed = parse_list(&bytes, corpus, ListKind::Confirmed, Some(&lines_by_track));
         let (confirmed_tracks, errors) = finish(
@@ -131,16 +182,21 @@ pub fn load(calibration: &Path, corpus: &Path) -> Result<Lists, ToolError> {
         if !errors.is_empty() {
             return Err(ToolError::input_lines(errors));
         }
-        // `confirmed_tracks`: fakes (class `fake`) and watch tracks (class `false-positive`).
+        // Fakes, honest lossy files and watch tracks.
         let mut watch_lines: Vec<(usize, PathBuf)> = Vec::new();
-        for (path, (entry, kind, _, line)) in &confirmed_tracks {
-            if kind == "fake" {
-                fakes.push(ConfirmedFake {
-                    track: to_track(entry, corpus),
-                    line: *line,
-                });
-            } else {
-                watch_lines.push((*line, path.clone()));
+        for won in &confirmed_tracks {
+            match won.kind.as_str() {
+                "fake" => fakes.push(ConfirmedFake {
+                    track: to_track(&won.file, corpus),
+                    line: won.line,
+                    attrs: won.attrs.clone(),
+                }),
+                "real" => reals.push(ConfirmedReal {
+                    track: to_track(&won.file, corpus),
+                    line: won.line,
+                    attrs: won.attrs.clone(),
+                }),
+                _ => watch_lines.push((won.line, won.file.path.clone())),
             }
         }
         watch_lines.sort();
@@ -152,9 +208,11 @@ pub fn load(calibration: &Path, corpus: &Path) -> Result<Lists, ToolError> {
     }
     trusted_list.sort_by(|a, b| a.track.rel.cmp(&b.track.rel));
     fakes.sort_by(|a, b| a.track.rel.cmp(&b.track.rel));
+    reals.sort_by(|a, b| a.track.rel.cmp(&b.track.rel));
     Ok(Lists {
         trusted: trusted_list,
         fakes,
+        reals,
     })
 }
 
@@ -177,8 +235,49 @@ fn to_track(entry: &FileEntry, corpus: &Path) -> Track {
     }
 }
 
-/// Track path -> (file entry, class or kind, origin, deciding line).
-type Resolved = BTreeMap<PathBuf, (FileEntry, String, String, usize)>;
+/// The winner of every file among the entries selected by `take` (and every exclusion): the most
+/// specific line wins.
+fn resolve(items: &[Item], take: impl Fn(&Item) -> bool) -> BTreeMap<PathBuf, Won> {
+    let contest: Vec<&Item> = items.iter().filter(|i| i.exclusion || take(i)).collect();
+    let mut resolved: BTreeMap<PathBuf, Won> = BTreeMap::new();
+    for item in items.iter().filter(|i| !i.exclusion && take(i)) {
+        for file in &item.files {
+            let Some(winner) = contest
+                .iter()
+                .filter(|c| {
+                    if c.exclusion {
+                        file.path.starts_with(&c.canon)
+                    } else {
+                        c.covered.contains(&file.path)
+                    }
+                })
+                .max_by_key(|c| c.canon.components().count())
+            else {
+                continue;
+            };
+            if winner.exclusion {
+                continue;
+            }
+            let (class, origin) = if winner.field == "fake" || winner.field == "real" {
+                (winner.field.clone(), String::new())
+            } else {
+                (class_of(&winner.field).to_string(), winner.field.clone())
+            };
+            resolved.insert(
+                file.path.clone(),
+                Won {
+                    file: file.clone(),
+                    kind: String::new(),
+                    class,
+                    origin,
+                    line: winner.line,
+                    attrs: winner.attrs.clone(),
+                },
+            );
+        }
+    }
+    resolved
+}
 
 /// Turns the parsed items into the included tracks and the final sorted error lines.
 fn finish(
@@ -186,7 +285,7 @@ fn finish(
     name: &str,
     kind: ListKind,
     trusted: Option<&BTreeMap<PathBuf, usize>>,
-) -> (Resolved, Vec<String>) {
+) -> (Vec<Won>, Vec<String>) {
     let Parsed { items, mut errors } = parsed;
     // Exclusions: strictly inside a listed folder, and covering at least one file.
     let folders: Vec<&Item> = items
@@ -210,53 +309,64 @@ fn finish(
         }
     }
 
-    // The most specific line wins.
-    let mut resolved: Resolved = BTreeMap::new();
-    let contest: Vec<&Item> = items
-        .iter()
-        .filter(|i| i.exclusion || contests(kind, i))
-        .collect();
-    for item in items.iter().filter(|i| !i.exclusion) {
-        if kind == ListKind::Confirmed && item.field == "false-positive" {
-            if let Some(file) = item.files.first() {
-                resolved.insert(
-                    item.canon.clone(),
-                    (file.clone(), item.field.clone(), String::new(), item.line),
-                );
+    let mut result: Vec<Won> = Vec::new();
+    match kind {
+        ListKind::Trusted => {
+            for (_, won) in resolve(&items, |_| true) {
+                result.push(won);
             }
-            continue;
         }
-        for file in &item.files {
-            let Some(winner) = contest
-                .iter()
-                .filter(|c| file.path.starts_with(&c.canon))
-                .max_by_key(|c| c.canon.components().count())
-            else {
-                continue;
-            };
-            if winner.exclusion {
-                continue;
+        ListKind::Confirmed => {
+            let fakes = resolve(&items, |i| i.field == "fake");
+            let reals = resolve(&items, |i| i.field == "real");
+            // A track in both: the later line is the error.
+            for (path, real) in &reals {
+                if let Some(fake) = fakes.get(path) {
+                    let (first, later) = if fake.line <= real.line {
+                        (fake.line, real.line)
+                    } else {
+                        (real.line, fake.line)
+                    };
+                    errors.push((later, format!("already listed at line {first}")));
+                }
             }
-            let (class, origin) = match kind {
-                ListKind::Trusted => (class_of(&winner.field).to_string(), winner.field.clone()),
-                ListKind::Confirmed => ("fake".to_string(), String::new()),
-            };
-            resolved.insert(
-                file.path.clone(),
-                (file.clone(), class, origin, winner.line),
-            );
-        }
-    }
-
-    // A confirmed fake that is also trusted.
-    if kind == ListKind::Confirmed {
-        if let Some(trusted) = trusted {
-            let mut reported: Vec<usize> = Vec::new();
-            for (path, (_, class, _, line)) in &resolved {
-                if class == "fake" && !reported.contains(line) {
-                    if let Some(tline) = trusted.get(path) {
-                        reported.push(*line);
-                        errors.push((*line, format!("also trusted (trusted.txt line {tline})")));
+            // A confirmed fake or real that is also trusted.
+            if let Some(trusted) = trusted {
+                let mut reported: Vec<usize> = Vec::new();
+                for (path, won) in fakes.iter().chain(reals.iter()) {
+                    if !reported.contains(&won.line) {
+                        if let Some(tline) = trusted.get(path) {
+                            reported.push(won.line);
+                            errors.push((
+                                won.line,
+                                format!("also trusted (trusted.txt line {tline})"),
+                            ));
+                        }
+                    }
+                }
+            }
+            for (_, mut won) in fakes {
+                won.kind = "fake".to_string();
+                result.push(won);
+            }
+            for (path, mut won) in reals {
+                if result.iter().any(|w| w.file.path == path) {
+                    continue;
+                }
+                won.kind = "real".to_string();
+                result.push(won);
+            }
+            for item in items.iter().filter(|i| !i.exclusion) {
+                if item.field == "false-positive" {
+                    if let Some(file) = item.files.first() {
+                        result.push(Won {
+                            file: file.clone(),
+                            kind: "false-positive".to_string(),
+                            class: "false-positive".to_string(),
+                            origin: String::new(),
+                            line: item.line,
+                            attrs: Attrs::default(),
+                        });
                     }
                 }
             }
@@ -279,12 +389,12 @@ fn finish(
             }
         })
         .collect();
-    (resolved, lines)
+    (result, lines)
 }
 
 /// Whether an entry takes part in the "most specific line wins" contest of its file.
 fn contests(kind: ListKind, item: &Item) -> bool {
-    kind == ListKind::Trusted || item.field == "fake"
+    kind == ListKind::Trusted || item.field == "fake" || item.field == "real"
 }
 
 fn class_of(origin: &str) -> &'static str {
@@ -378,13 +488,25 @@ fn parse_list(
                 continue;
             }
         };
-        let field = raw.field.clone().unwrap_or_default();
-        if !raw.exclusion {
-            if let Err(message) = check_field(kind, &field) {
+        let field_text = raw.field.clone().unwrap_or_default();
+        let mut words = field_text.split_whitespace();
+        let word = words.next().unwrap_or("").to_string();
+        let tokens: Vec<&str> = words.collect();
+        let (attrs, formats) = if raw.exclusion {
+            (Attrs::default(), Formats::All)
+        } else {
+            if let Err(message) = check_field(kind, &word) {
                 errors.push((raw.line, message));
                 continue;
             }
-        }
+            match parse_attrs(kind, &word, is_dir, &tokens) {
+                Ok(parsed) => parsed,
+                Err(message) => {
+                    errors.push((raw.line, message));
+                    continue;
+                }
+            }
+        };
         if let Some((first, was_exclusion)) = seen.get(&canon) {
             let message = if *was_exclusion == raw.exclusion {
                 format!("already listed at line {first}")
@@ -396,29 +518,156 @@ fn parse_list(
         }
         seen.insert(canon.clone(), (raw.line, raw.exclusion));
 
-        let files = if is_dir {
-            scanner.scan(&canon).unwrap_or_default()
-        } else if has_lossless_extension(&canon) {
-            single_file_entry(&canon).into_iter().collect()
+        let files: Vec<FileEntry> = if is_dir {
+            scanner
+                .scan(&canon)
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|f| selects(formats, f.format))
+                .collect()
         } else {
-            Vec::new()
+            single_file_entry(&canon).into_iter().collect()
         };
         if !raw.exclusion {
-            if let Some(message) = entry_problem(kind, &field, is_dir, &files, &canon, trusted) {
+            if let Some(message) = entry_problem(
+                kind, &word, &attrs, formats, is_dir, &files, &canon, trusted,
+            ) {
                 errors.push((raw.line, message));
                 continue;
             }
         }
+        let covered = files.iter().map(|f| f.path.clone()).collect();
         items.push(Item {
             line: raw.line,
             exclusion: raw.exclusion,
-            field: if raw.exclusion { String::new() } else { field },
+            field: if raw.exclusion { String::new() } else { word },
+            attrs,
             canon,
             is_dir,
             files,
+            covered,
         });
     }
     Parsed { items, errors }
+}
+
+/// Whether a folder entry with these `formats=` includes a file of this format. Opus files are never
+/// enumerated under folders.
+fn selects(formats: Formats, format: AudioFormat) -> bool {
+    match (formats, format) {
+        (_, AudioFormat::Opus) => false,
+        (Formats::All, _) => true,
+        (Formats::Lossless, f) => matches!(f, AudioFormat::Flac | AudioFormat::Wav),
+        (Formats::Lossy, f) => matches!(f, AudioFormat::Mp3 | AudioFormat::M4a),
+    }
+}
+
+fn is_lossy_format(format: AudioFormat) -> bool {
+    matches!(
+        format,
+        AudioFormat::Mp3 | AudioFormat::M4a | AudioFormat::Opus
+    )
+}
+
+fn valid_id(id: &str) -> bool {
+    (1..=16).contains(&id.chars().count())
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+}
+
+/// The attributes of field 2 (lossy.md section 1.2). The error is the first problem.
+fn parse_attrs(
+    kind: ListKind,
+    word: &str,
+    is_dir: bool,
+    tokens: &[&str],
+) -> Result<(Attrs, Formats), String> {
+    let mut attrs = Attrs::default();
+    let mut formats = if word == "real" {
+        Formats::Lossy
+    } else {
+        Formats::Lossless
+    };
+    if tokens.is_empty() {
+        return Ok((attrs, formats));
+    }
+    if kind == ListKind::Confirmed && word == "false-positive" {
+        return Err(
+            "false-positive lines take no attributes; write them on the trusted.txt line"
+                .to_string(),
+        );
+    }
+    let mut seen: BTreeSet<&str> = BTreeSet::new();
+    for token in tokens {
+        let (name, value) = match token.split_once('=') {
+            Some((n, v)) => (n, Some(v)),
+            None => (*token, None),
+        };
+        let known = matches!(
+            name,
+            "formats" | "group" | "chain" | "upstream" | "source_max_kbps"
+        ) || (name == "weak" && value.is_none());
+        if !known {
+            return Err(format!("unknown attribute '{name}'"));
+        }
+        if !seen.insert(name) {
+            return Err(format!("attribute '{name}' given twice"));
+        }
+        let value = value.unwrap_or("");
+        match name {
+            "formats" => {
+                formats = match value {
+                    "lossless" => Formats::Lossless,
+                    "lossy" => Formats::Lossy,
+                    "all" => Formats::All,
+                    other => {
+                        return Err(format!(
+                            "invalid value '{other}' for formats (expected lossless, lossy or all)"
+                        ))
+                    }
+                };
+                if !is_dir {
+                    return Err("formats= applies to folders only".to_string());
+                }
+            }
+            "group" | "chain" => {
+                if !valid_id(value) {
+                    return Err(format!(
+                        "invalid id '{value}' for {name} (1 to 16 letters, digits, '_' or '-')"
+                    ));
+                }
+                if name == "group" {
+                    attrs.group = Some(value.to_string());
+                } else {
+                    attrs.chain = Some(value.to_string());
+                }
+            }
+            _ => {
+                match name {
+                    "upstream" => {
+                        if !["aac", "opus", "mp3", "unknown", "by-rate"].contains(&value) {
+                            return Err(format!(
+                                "invalid value '{value}' for upstream (expected aac, opus, mp3, unknown or by-rate)"
+                            ));
+                        }
+                        attrs.upstream = Some(value.to_string());
+                    }
+                    "source_max_kbps" => match value.parse::<u32>() {
+                        Ok(n) if (8..=640).contains(&n) => attrs.source_max_kbps = Some(n),
+                        _ => return Err("source_max_kbps must be an integer from 8 to 640".into()),
+                    },
+                    _ => attrs.weak = true,
+                }
+                if word != "fake" {
+                    return Err(
+                        "upstream=, source_max_kbps= and weak apply to fake lines only".to_string(),
+                    );
+                }
+            }
+        }
+    }
+    Ok((attrs, formats))
 }
 
 /// `library_root = value` (the value, untrimmed), or `None` when the line is something else.
@@ -442,29 +691,29 @@ fn check_root(value: &str, corpus: &Path) -> Result<(), String> {
     }
 }
 
-fn check_field(kind: ListKind, field: &str) -> Result<(), String> {
+fn check_field(kind: ListKind, word: &str) -> Result<(), String> {
     match kind {
         ListKind::Trusted => {
-            if field.is_empty() {
+            if word.is_empty() {
                 Err("missing origin".to_string())
-            } else if ORIGINS.iter().any(|(o, _)| *o == field) {
+            } else if ORIGINS.iter().any(|(o, _)| *o == word) {
                 Ok(())
             } else {
                 let expected: Vec<&str> = ORIGINS.iter().map(|(o, _)| *o).collect();
                 Err(format!(
-                    "unknown origin '{field}' (expected one of: {})",
+                    "unknown origin '{word}' (expected one of: {})",
                     expected.join(", ")
                 ))
             }
         }
         ListKind::Confirmed => {
-            if field.is_empty() {
+            if word.is_empty() {
                 Err("missing kind".to_string())
-            } else if field == "fake" || field == "false-positive" {
+            } else if word == "fake" || word == "real" || word == "false-positive" {
                 Ok(())
             } else {
                 Err(format!(
-                    "unknown kind '{field}' (expected fake or false-positive)"
+                    "unknown kind '{word}' (expected fake, real or false-positive)"
                 ))
             }
         }
@@ -472,20 +721,23 @@ fn check_field(kind: ListKind, field: &str) -> Result<(), String> {
 }
 
 /// The problem of an entry once its path exists and its field is valid.
+#[allow(clippy::too_many_arguments)]
 fn entry_problem(
     kind: ListKind,
-    field: &str,
+    word: &str,
+    attrs: &Attrs,
+    formats: Formats,
     is_dir: bool,
     files: &[FileEntry],
     canon: &Path,
     trusted: Option<&BTreeMap<PathBuf, usize>>,
 ) -> Option<String> {
-    if kind == ListKind::Confirmed && field == "false-positive" {
+    if kind == ListKind::Confirmed && word == "false-positive" {
         if is_dir {
             return Some("must be a file".to_string());
         }
         if files.is_empty() {
-            return Some("not a FLAC or WAV file".to_string());
+            return Some(NOT_SUPPORTED.to_string());
         }
         let known = trusted.is_some_and(|t| t.contains_key(canon));
         if !known {
@@ -495,23 +747,38 @@ fn entry_problem(
     }
     if is_dir {
         if files.is_empty() {
-            return Some("no FLAC or WAV files under this folder".to_string());
+            return Some(
+                match formats {
+                    Formats::Lossless => "no FLAC or WAV files under this folder",
+                    Formats::Lossy => "no MP3 or M4A files under this folder",
+                    Formats::All => "no supported audio files under this folder",
+                }
+                .to_string(),
+            );
         }
     } else if files.is_empty() {
-        return Some("not a FLAC or WAV file".to_string());
+        return Some(NOT_SUPPORTED.to_string());
+    } else if word == "real" && files.iter().any(|f| !is_lossy_format(f.format)) {
+        return Some("real applies to lossy files only".to_string());
+    }
+    let lossy_attrs = attrs.upstream.is_some() || attrs.source_max_kbps.is_some() || attrs.weak;
+    if kind == ListKind::Confirmed
+        && word == "fake"
+        && lossy_attrs
+        && !files.iter().any(|f| is_lossy_format(f.format))
+    {
+        return Some("upstream=, source_max_kbps= and weak apply to lossy files only".to_string());
     }
     None
 }
 
-fn has_lossless_extension(path: &Path) -> bool {
-    path.extension()
-        .and_then(|e| e.to_str())
-        .is_some_and(|e| matches!(e.to_ascii_lowercase().as_str(), "flac" | "wav"))
-}
-
 fn single_file_entry(path: &Path) -> Option<FileEntry> {
     let meta = std::fs::metadata(path).ok()?;
-    let format = fakeflac_core::AudioFormat::from_extension(path.extension()?.to_str()?)?;
+    let ext = path.extension()?.to_str()?;
+    let format = AudioFormat::from_extension(ext).or_else(|| {
+        ext.eq_ignore_ascii_case("opus")
+            .then_some(AudioFormat::Opus)
+    })?;
     let modified_unix =
         meta.modified()
             .ok()
@@ -594,5 +861,30 @@ mod tests {
         assert_eq!(class_of("usuario"), "reviewed");
         assert_eq!(class_of("analisis-limpio"), "clean");
         assert_eq!(class_of("analisis"), "reference");
+    }
+
+    #[test]
+    fn attributes_of_a_line() {
+        let ok = |kind, word, dir, tokens: &[&str]| parse_attrs(kind, word, dir, tokens);
+        let (attrs, _) = ok(
+            ListKind::Confirmed,
+            "fake",
+            false,
+            &["upstream=aac", "source_max_kbps=128", "weak", "chain=C1"],
+        )
+        .unwrap();
+        assert_eq!(attrs.upstream.as_deref(), Some("aac"));
+        assert_eq!(attrs.source_max_kbps, Some(128));
+        assert!(attrs.weak);
+        assert_eq!(attrs.chain.as_deref(), Some("C1"));
+        assert_eq!(
+            ok(ListKind::Trusted, "tienda", false, &["weak"]).unwrap_err(),
+            "upstream=, source_max_kbps= and weak apply to fake lines only"
+        );
+        assert_eq!(
+            ok(ListKind::Confirmed, "fake", false, &["source_max_kbps=7"]).unwrap_err(),
+            "source_max_kbps must be an integer from 8 to 640"
+        );
+        assert!(valid_id("C1") && !valid_id("") && !valid_id("a b") && !valid_id(&"x".repeat(17)));
     }
 }

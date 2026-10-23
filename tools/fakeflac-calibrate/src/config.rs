@@ -114,6 +114,71 @@ pub struct Target {
 pub const ENCODERS: [&str; 4] = ["lame", "aac", "opus", "fixture"];
 
 impl Config {
+    /// The settings that get a FLAC transcode (`lossless_transcode`, lossy.md section 4.1): the
+    /// rows of every lossless table.
+    pub fn lossless_settings(&self) -> impl Iterator<Item = &Setting> {
+        self.generate
+            .settings
+            .iter()
+            .filter(|s| s.lossless_transcode)
+    }
+
+    /// The settings of a lossy entry, in stage order (a stage id that does not exist is skipped).
+    pub fn stages_of(&self, entry: &LossyEntry) -> Vec<&Setting> {
+        entry
+            .stages
+            .iter()
+            .filter_map(|id| self.generate.settings.iter().find(|s| &s.id == id))
+            .collect()
+    }
+
+    /// Lossy.md section 4.1: checks on `[[generate.lossy]]`, before any ffmpeg call.
+    fn validate_lossy(&self, errors: &mut Vec<String>) {
+        let mut seen = std::collections::BTreeSet::new();
+        for entry in &self.generate.lossy {
+            let id = &entry.id;
+            if !seen.insert(id.as_str()) {
+                errors.push(format!("lossy entry {id} is defined twice"));
+            }
+            if entry.stages.is_empty() {
+                errors.push(format!("lossy entry {id}: no stages"));
+                continue;
+            }
+            let mut stages: Vec<&Setting> = Vec::new();
+            for stage in &entry.stages {
+                match self.generate.settings.iter().find(|s| &s.id == stage) {
+                    Some(s) => stages.push(s),
+                    None => errors.push(format!("lossy entry {id}: unknown stage {stage}")),
+                }
+            }
+            if stages.len() != entry.stages.len() {
+                continue;
+            }
+            if stages.len() >= 2 {
+                for s in &stages {
+                    if s.bitrate_kbps.is_none() {
+                        errors.push(format!(
+                            "lossy entry {id}: stage {} has no bitrate_kbps",
+                            s.id
+                        ));
+                    }
+                }
+            }
+            if let Some(last) = stages.last() {
+                let ext = last.ext.to_ascii_lowercase();
+                if ext == "opus" {
+                    errors.push(format!(
+                        "lossy entry {id}: Opus output is not supported yet"
+                    ));
+                } else if ext != "mp3" && ext != "m4a" {
+                    errors.push(format!(
+                        "lossy entry {id}: the last stage's ext must be mp3 or m4a"
+                    ));
+                }
+            }
+        }
+    }
+
     /// Parses the text of a config file. Errors are exit 2.
     pub fn parse(text: &str) -> Result<Config, ToolError> {
         let config: Config = toml::from_str(text).map_err(|e| {
@@ -168,6 +233,7 @@ impl Config {
                 ));
             }
         }
+        self.validate_lossy(&mut errors);
         for t in &self.targets {
             if !["real", "suspicious", "fake"].contains(&t.verdict.as_str()) {
                 errors.push(format!(

@@ -8,18 +8,18 @@ use crate::extract::{extract_group, worker_threads, Context, CorpusItem, GroupRe
 use crate::fsutil::write_atomic;
 use crate::grid::{self, GridFile, RowKind, SearchRow};
 use crate::hash::id16;
-use crate::lists::{self, Lists};
+use crate::lists::{self, Attrs, Lists, Track};
 use crate::model::{album_class_of, LabelRow, Truth};
 use crate::render::{self, GridReport, ReportData};
 use crate::report::{CacheStats, Evaluation, GridOutcome, PointScore};
 use crate::split::{album_id, assign_class, Split};
 use crate::transcode::Transcoder;
 use fakeflac_core::{DetectionParams, Verdict};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 const DEFAULT_PARAMS: &str = "specs/detection/detection-params.v2.toml";
-const DEFAULT_CONFIG: &str = "specs/calibration/calibration.v1.toml";
+const DEFAULT_CONFIG: &str = "specs/calibration/calibration.v2.toml";
 const DEFAULT_GRID: &str = "specs/calibration/calibrate-grid.v1.toml";
 
 /// `accept [--params FILE]… [--config FILE] [--no-generate]`
@@ -331,65 +331,184 @@ fn load_params(paths: &[PathBuf]) -> Result<Vec<Loaded>, ToolError> {
     }
 }
 
-/// The labelled corpus tracks with album and split (inputs.md section 4).
-fn build_items(lists: &Lists, config: &Config) -> Vec<CorpusItem> {
-    let prefixes = &config.split.disc_folder_prefixes;
-    let mut classes: BTreeMap<String, Vec<&str>> = BTreeMap::new();
-    for t in &lists.trusted {
-        classes
-            .entry(album_id(&t.track.rel, prefixes))
-            .or_default()
-            .push(t.class.as_str());
-    }
-    for f in &lists.fakes {
-        classes
-            .entry(album_id(&f.track.rel, prefixes))
-            .or_default()
-            .push("positive");
-    }
-    let album_class: BTreeMap<String, &'static str> = classes
-        .into_iter()
-        .map(|(album, c)| (album, album_class_of(c.into_iter())))
-        .collect();
-    let mut by_class: BTreeMap<&str, Vec<String>> = BTreeMap::new();
-    for (album, class) in &album_class {
-        by_class.entry(class).or_default().push(album.clone());
-    }
-    let mut split: BTreeMap<String, Split> = BTreeMap::new();
-    for albums in by_class.values() {
-        split.extend(assign_class(albums, &config.split));
-    }
-    let split_of = |album: &str| split.get(album).copied().unwrap_or(Split::Tune);
+/// One labelled track with the line that labels it, before units are resolved.
+struct Labelled<'a> {
+    track: &'a Track,
+    truth: Truth,
+    origin: &'static str,
+    trust_origin: &'a str,
+    class: &'a str,
+    watch_id: &'a str,
+    attrs: &'a Attrs,
+    line: usize,
+}
 
-    let mut items: Vec<CorpusItem> = Vec::new();
+/// A unit of the stratified split (lossy.md section 3): the `group=` of the line that labels the
+/// track, else `chain:<id>`, else its album id.
+fn unit_of(attrs: &Attrs, album: &str) -> String {
+    match (&attrs.group, &attrs.chain) {
+        (Some(group), _) => group.clone(),
+        (None, Some(chain)) => format!("chain:{chain}"),
+        (None, None) => album.to_string(),
+    }
+}
+
+fn is_lossy_path(rel: &str) -> bool {
+    rel.rsplit_once('.').is_some_and(|(_, e)| {
+        ["mp3", "m4a", "opus"]
+            .iter()
+            .any(|x| e.eq_ignore_ascii_case(x))
+    })
+}
+
+/// The labelled corpus tracks with album, split unit and split (inputs.md section 4, lossy.md
+/// section 3), and the units per stratum with their `tune` and `holdout` counts.
+#[allow(clippy::type_complexity)]
+fn build_items(
+    lists: &Lists,
+    config: &Config,
+) -> Result<(Vec<CorpusItem>, BTreeMap<String, (u32, u32)>), ToolError> {
+    let prefixes = &config.split.disc_folder_prefixes;
+    let mut labelled: Vec<Labelled<'_>> = Vec::new();
     for t in &lists.trusted {
-        let album = album_id(&t.track.rel, prefixes);
-        items.push(CorpusItem {
-            track: t.track.clone(),
+        labelled.push(Labelled {
+            track: &t.track,
             truth: Truth::Real,
             origin: "trusted",
-            trust_origin: t.origin.clone(),
-            class: t.class.clone(),
-            split: split_of(&album),
-            album_id: album,
-            watch_id: t.watch_id.clone(),
+            trust_origin: &t.origin,
+            class: &t.class,
+            watch_id: &t.watch_id,
+            attrs: &t.attrs,
+            line: t.line,
         });
     }
     for f in &lists.fakes {
-        let album = album_id(&f.track.rel, prefixes);
-        items.push(CorpusItem {
-            track: f.track.clone(),
+        labelled.push(Labelled {
+            track: &f.track,
             truth: Truth::Fake,
             origin: "confirmed_fake",
-            trust_origin: String::new(),
-            class: "positive".to_string(),
-            split: split_of(&album),
-            album_id: album,
-            watch_id: String::new(),
+            trust_origin: "",
+            class: "positive",
+            watch_id: "",
+            attrs: &f.attrs,
+            line: f.line,
         });
     }
-    items.sort_by(|a, b| a.track.rel.cmp(&b.track.rel));
-    items
+    for r in &lists.reals {
+        labelled.push(Labelled {
+            track: &r.track,
+            truth: Truth::Real,
+            origin: "confirmed_real",
+            trust_origin: "",
+            class: "reviewed",
+            watch_id: "",
+            attrs: &r.attrs,
+            line: r.line,
+        });
+    }
+    labelled.sort_by(|a, b| a.track.rel.cmp(&b.track.rel));
+
+    // Every album and every chain must resolve to one unit.
+    let mut errors: Vec<String> = Vec::new();
+    let mut album_units: BTreeMap<String, BTreeMap<String, usize>> = BTreeMap::new();
+    let mut chain_units: BTreeMap<&str, BTreeSet<String>> = BTreeMap::new();
+    for l in &labelled {
+        let album = album_id(&l.track.rel, prefixes);
+        let unit = unit_of(l.attrs, &album);
+        if let Some(chain) = &l.attrs.chain {
+            chain_units
+                .entry(chain.as_str())
+                .or_default()
+                .insert(unit.clone());
+        }
+        album_units
+            .entry(album)
+            .or_default()
+            .entry(unit)
+            .or_insert(l.line);
+    }
+    for units in album_units.values().filter(|u| u.len() > 1) {
+        let mut lines = units.values();
+        if let (Some(a), Some(b)) = (lines.next(), lines.next()) {
+            errors.push(format!(
+                "album has tracks in several split units (lines {a} and {b})"
+            ));
+        }
+    }
+    for (chain, units) in &chain_units {
+        if units.len() > 1 {
+            let list: Vec<&str> = units.iter().map(String::as_str).collect();
+            let (last, head) = list.split_last().map_or(("", &[][..]), |(l, h)| (*l, h));
+            errors.push(format!(
+                "chain {chain} spans split units {} and {last}",
+                head.join(", ")
+            ));
+        }
+    }
+    if !errors.is_empty() {
+        return Err(ToolError::input_lines(errors));
+    }
+
+    // The class of a unit comes from all its tracks; units of lossy tracks only have their own strata.
+    struct Unit<'a> {
+        classes: Vec<&'a str>,
+        all_lossy: bool,
+    }
+    let mut units: BTreeMap<String, Unit<'_>> = BTreeMap::new();
+    for l in &labelled {
+        let album = album_id(&l.track.rel, prefixes);
+        let unit = units.entry(unit_of(l.attrs, &album)).or_insert(Unit {
+            classes: Vec::new(),
+            all_lossy: true,
+        });
+        unit.classes.push(l.class);
+        unit.all_lossy &= is_lossy_path(&l.track.rel);
+    }
+    let mut by_stratum: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for (name, unit) in &units {
+        let class = album_class_of(unit.classes.iter().copied());
+        let stratum = if unit.all_lossy {
+            format!("lossy:{class}")
+        } else {
+            class.to_string()
+        };
+        by_stratum.entry(stratum).or_default().push(name.clone());
+    }
+    let mut split: BTreeMap<String, Split> = BTreeMap::new();
+    let mut strata: BTreeMap<String, (u32, u32)> = BTreeMap::new();
+    for (stratum, names) in &by_stratum {
+        let assigned = assign_class(names, &config.split);
+        let counts = strata.entry(stratum.clone()).or_default();
+        for s in assigned.values() {
+            match s {
+                Split::Tune => counts.0 += 1,
+                Split::Holdout => counts.1 += 1,
+            }
+        }
+        split.extend(assigned);
+    }
+
+    let items = labelled
+        .iter()
+        .map(|l| {
+            let album = album_id(&l.track.rel, prefixes);
+            let unit = unit_of(l.attrs, &album);
+            CorpusItem {
+                track: l.track.clone(),
+                truth: l.truth,
+                origin: l.origin,
+                trust_origin: l.trust_origin.to_string(),
+                class: l.class.to_string(),
+                split: split.get(&unit).copied().unwrap_or(Split::Tune),
+                album_id: album,
+                watch_id: l.watch_id.to_string(),
+                unit,
+                attrs: l.attrs.clone(),
+                line: l.line,
+            }
+        })
+        .collect();
+    Ok((items, strata))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -529,12 +648,7 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
             )));
         }
     }
-    let setting_ids: Vec<String> = config
-        .generate
-        .settings
-        .iter()
-        .map(|s| s.id.clone())
-        .collect();
+    let setting_ids: Vec<String> = config.lossless_settings().map(|s| s.id.clone()).collect();
     let grid_file: Option<GridFile> = match job.grid {
         Some(path) => {
             let text = read_text(path)?;
@@ -598,7 +712,7 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
         }
     }
     let lists = lists::load(&roots.calibration, &roots.corpus)?;
-    let items = build_items(&lists, &config);
+    let (items, unit_strata) = build_items(&lists, &config)?;
 
     // 2. Extraction, one pass per extraction fingerprint.
     let mut fingerprints: Vec<(crate::cache::Fingerprint, usize)> = Vec::new();
@@ -623,14 +737,16 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
     let mut groups: Vec<GroupResult> = Vec::new();
     for (fp, first) in &fingerprints {
         let mut group = extract_group(&ctx, &items, &loaded[*first].params, fp)?;
-        group.rows.sort_by(|a, b| {
-            (&a.album_id, a.root, &a.path, &a.setting).cmp(&(
-                &b.album_id,
-                b.root,
-                &b.path,
-                &b.setting,
-            ))
-        });
+        for rows in [&mut group.rows, &mut group.lossy_rows] {
+            rows.sort_by(|a, b| {
+                (&a.album_id, a.root, &a.path, &a.setting).cmp(&(
+                    &b.album_id,
+                    b.root,
+                    &b.path,
+                    &b.setting,
+                ))
+            });
+        }
         groups.push(group);
     }
 
@@ -646,6 +762,7 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
             .iter()
             .map(|r| evaluate_row(&r.extracted, &l.params))
             .collect(),
+        lossy_evals: crate::lossy::evaluate_group(&groups[group], &l.params),
     };
     let mut runs: Vec<ParamsRun> = loaded
         .iter()
@@ -699,7 +816,14 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
         let mut evaluations: Vec<Evaluation> = Vec::new();
         for (i, run) in runs.iter().enumerate() {
             let baseline = (i > 0).then(|| (&runs[0], groups[runs[0].group].rows.as_slice()));
-            evaluations.push(evaluation(run, &groups[run.group].rows, &config, baseline));
+            let mut eval = evaluation(run, &groups[run.group].rows, &config, baseline);
+            let group = &groups[run.group];
+            eval.lossy_not_evaluated = crate::lossy::not_evaluated_count(&run.lossy_evals);
+            if run.params.lossy.is_some() {
+                eval.lossy = Some(crate::lossy::lossy_tables(group, &run.lossy_evals, &config));
+                eval.chains = crate::lossy::chains(group, run, &run.lossy_evals);
+            }
+            evaluations.push(eval);
         }
 
         // 6. Files: the report folder, then labels.csv last, so that an exit 1 leaves only cache lines.
@@ -740,6 +864,7 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
             groups: &groups,
             runs: &runs,
             evaluations: &evaluations,
+            unit_strata: &unit_strata,
             grid: match (&grid_file, &search_result) {
                 (Some(file), Some(result)) => Some(GridReport {
                     file,
@@ -768,7 +893,7 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
         if !job.no_generate {
             write_atomic(
                 &roots.calibration.join("labels.csv"),
-                render::labels_csv(&groups[group_of[0]].rows).as_bytes(),
+                render::labels_csv(&groups[group_of[0]]).as_bytes(),
             )?;
         }
 
@@ -853,7 +978,7 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
             cache: groups.iter().map(|g| g.stats.clone()).collect(),
             evaluations,
             grid: grid_outcome,
-            unit_strata: BTreeMap::new(),
+            unit_strata: unit_strata.clone(),
         })
     })();
     if outcome.is_err() {
@@ -916,13 +1041,31 @@ fn cleanup_generated(config: &Config, groups: &[GroupResult], runs: &[ParamsRun]
     if config.generate.keep_misclassified {
         for (g, group) in groups.iter().enumerate() {
             for (identity, path) in &group.kept {
-                let Some(ri) = group.rows.iter().position(|r| &r.identity() == identity) else {
-                    continue;
+                let lossless = group.rows.iter().position(|r| &r.identity() == identity);
+                let lossy = group
+                    .lossy_rows
+                    .iter()
+                    .position(|r| &r.identity() == identity);
+                let (truth, verdicts): (Truth, Vec<Verdict>) = match (lossless, lossy) {
+                    (Some(ri), _) => (
+                        group.rows[ri].truth,
+                        runs.iter()
+                            .filter(|r| r.group == g)
+                            .map(|r| r.evals[ri].verdict)
+                            .collect(),
+                    ),
+                    (None, Some(li)) => (
+                        group.lossy_rows[li].truth,
+                        runs.iter()
+                            .filter(|r| r.group == g)
+                            .map(|r| r.lossy_evals[li].verdict)
+                            .collect(),
+                    ),
+                    (None, None) => continue,
                 };
-                let truth = group.rows[ri].truth;
-                let bad = runs.iter().filter(|r| r.group == g).any(|r| {
+                let bad = verdicts.iter().any(|v| {
                     matches!(
-                        (truth, r.evals[ri].verdict),
+                        (truth, v),
                         (Truth::Fake, Verdict::Real) | (Truth::Real, Verdict::Fake)
                     )
                 });

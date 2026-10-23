@@ -90,6 +90,45 @@ impl LabelRow {
     }
 }
 
+/// What the lossy extension adds to a row of `labels.csv` (lossy.md section 2). Kept apart from
+/// [`LabelRow`] and found through [`LabelRow::identity`], so lossless rows are built as before.
+#[derive(Debug, Clone, Default)]
+pub struct RowMeta {
+    /// `stages`: the stage setting ids joined with `>` (generated lossy rows).
+    pub stages: String,
+    /// Generated cascades: the lowest bitrate before the last stage; confirmed lossy fakes: the bound.
+    pub source_bitrate_kbps: Option<u32>,
+    /// `aac`, `opus`, `mp3`, `unknown` (confirmed lossy fakes and generated cascades).
+    pub upstream: String,
+    pub weak: bool,
+    pub chain_id: String,
+    pub chain_key: String,
+    pub split_unit: String,
+    /// `opus decoder pending` for Opus tracks.
+    pub not_evaluated: String,
+    /// The lossless source of a generated lossy row (for the source-limited test).
+    pub source: Option<Arc<Extracted>>,
+    /// Honest generated encodes (the rows the source-limited test applies to).
+    pub honest_generated: bool,
+}
+
+/// The key of a chain: the leading run of 1 to 3 digits of the file stem as an integer, else the
+/// stem lower-cased with only its letters and digits kept (lossy.md section 6.5).
+pub fn chain_key(path: &str) -> String {
+    let file = path.rsplit('/').next().unwrap_or(path);
+    let stem = file.rsplit_once('.').map_or(file, |(s, _)| s);
+    let digits: String = stem.chars().take_while(char::is_ascii_digit).collect();
+    if (1..=3).contains(&digits.len()) {
+        if let Ok(n) = digits.parse::<u32>() {
+            return n.to_string();
+        }
+    }
+    stem.chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
 /// Order of the classes in every table.
 pub const CLASSES: [&str; 5] = ["primary", "reviewed", "clean", "reference", "positive"];
 

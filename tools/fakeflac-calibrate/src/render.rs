@@ -4,7 +4,7 @@
 //! `summary.md` holds aggregate figures only: no album id, folder or file name, note or path.
 //! `report.md` adds the per-track lists, with paths relative to the roots, never absolute.
 
-use crate::cache::error_code;
+use crate::cache::{bitrate_mode_name, codec_name, error_code, Extracted};
 use crate::config::Config;
 use crate::env::Roots;
 use crate::evaluate::{
@@ -14,6 +14,8 @@ use crate::evaluate::{
 use crate::extract::GroupResult;
 use crate::fmt;
 use crate::grid::{GridFile, Proposal, SearchResult};
+use crate::lossy::LossyRowEval;
+use crate::model::RowMeta;
 use crate::model::{album_class_of, LabelRow, Truth, CLASSES};
 use crate::report::{ConfusionMatrix, Evaluation, SettingRow, SplitSel};
 use fakeflac_core::detect::{is_full_band, Measurements};
@@ -42,7 +44,7 @@ fn csv_row(fields: &[String]) -> String {
     line
 }
 
-pub const LABELS_HEADER: [&str; 17] = [
+pub const LABELS_HEADER: [&str; 29] = [
     "path",
     "root",
     "truth",
@@ -60,12 +62,40 @@ pub const LABELS_HEADER: [&str; 17] = [
     "album_id",
     "split",
     "watch_id",
+    "domain",
+    "codec",
+    "declared_bitrate_kbps",
+    "bitrate_mode",
+    "stages",
+    "source_bitrate_kbps",
+    "upstream",
+    "label_strength",
+    "chain_id",
+    "chain_key",
+    "split_unit",
+    "not_evaluated",
 ];
 
-/// `labels.csv` (inputs.md section 3). `rows` are already sorted.
-pub fn labels_csv(rows: &[LabelRow]) -> String {
+/// `labels.csv` (inputs.md section 3, lossy.md section 2): the rows of both domains, in the sort
+/// order of the rows (`album_id`, root, path, setting).
+pub fn labels_csv(group: &GroupResult) -> String {
     let mut out = csv_row(&LABELS_HEADER.map(str::to_string));
-    for r in rows {
+    let mut rows: Vec<(&LabelRow, bool)> = group
+        .rows
+        .iter()
+        .map(|r| (r, false))
+        .chain(group.lossy_rows.iter().map(|r| (r, true)))
+        .collect();
+    rows.sort_by(|(a, _), (b, _)| {
+        (&a.album_id, a.root, &a.path, &a.setting).cmp(&(&b.album_id, b.root, &b.path, &b.setting))
+    });
+    let default_meta = RowMeta::default();
+    for (r, lossy) in rows {
+        let meta = group.meta.get(&r.identity()).unwrap_or(&default_meta);
+        let stream = match r.extracted.as_ref() {
+            Extracted::Probe(p) => Some(&p.stream),
+            Extracted::Error(_) => None,
+        };
         out.push_str(&csv_row(&[
             r.path.clone(),
             r.root.as_str().to_string(),
@@ -88,12 +118,37 @@ pub fn labels_csv(rows: &[LabelRow]) -> String {
             r.album_id.clone(),
             r.split.as_str().to_string(),
             r.watch_id.clone(),
+            if lossy { "lossy" } else { "lossless" }.to_string(),
+            stream
+                .and_then(|s| s.codec)
+                .map(|c| codec_name(c).to_string())
+                .unwrap_or_default(),
+            stream
+                .filter(|_| lossy)
+                .and_then(|s| s.declared_bitrate_kbps)
+                .map(|b| b.to_string())
+                .unwrap_or_default(),
+            stream
+                .filter(|_| lossy)
+                .and_then(|s| s.bitrate_mode)
+                .map(|m| bitrate_mode_name(m).to_string())
+                .unwrap_or_default(),
+            meta.stages.clone(),
+            meta.source_bitrate_kbps
+                .map(|b| b.to_string())
+                .unwrap_or_default(),
+            meta.upstream.clone(),
+            if meta.weak { "weak" } else { "" }.to_string(),
+            meta.chain_id.clone(),
+            meta.chain_key.clone(),
+            meta.split_unit.clone(),
+            meta.not_evaluated.clone(),
         ]));
     }
     out
 }
 
-pub const TRACKS_HEADER: [&str; 37] = [
+pub const TRACKS_HEADER: [&str; 49] = [
     "params_file",
     "algorithm_version",
     "path",
@@ -131,6 +186,18 @@ pub const TRACKS_HEADER: [&str; 37] = [
     "full_band_margin_db",
     "m_full_band_step_db",
     "nearest_fake_margin_db",
+    "codec",
+    "declared_bitrate_kbps",
+    "bitrate_mode",
+    "encoder_lowpass_hz",
+    "fc_hz",
+    "c_exp_hz",
+    "shortfall_hz",
+    "m_lossy_suspicious_hz",
+    "m_lossy_fake_hz",
+    "m_lossy_step_db",
+    "estimate_kbps",
+    "source_limited",
 ];
 
 /// `true`, `false`, or empty when the file has no `[full_band]` section or `U` or `B` is undefined.
@@ -195,10 +262,117 @@ pub fn tracks_csv(runs: &[ParamsRun], groups: &[GroupResult]) -> String {
                 fmt::opt_db(g.and_then(|g| g.full_band_margin_db)),
                 fmt::opt_db(g.and_then(|g| g.m_full_band_step_db)),
                 fmt::opt_db(g.map(|g| g.nearest_fake_margin_db)),
+                String::new(),
+                String::new(),
+                String::new(),
+                String::new(),
+                String::new(),
+                String::new(),
+                String::new(),
+                String::new(),
+                String::new(),
+                String::new(),
+                String::new(),
+                String::new(),
             ]));
+        }
+        let group = &groups[run.group];
+        for (r, e) in group.lossy_rows.iter().zip(run.lossy_evals.iter()) {
+            let honest = group
+                .meta
+                .get(&r.identity())
+                .is_some_and(|m| m.honest_generated);
+            out.push_str(&csv_row(&lossy_track_cells(run, r, e, honest)));
         }
     }
     out
+}
+
+/// One row of `tracks.csv` for a lossy track (lossy.md section 6.4): the measurements fill the
+/// columns of evaluation.md section 8 and its margins stay empty.
+fn lossy_track_cells(run: &ParamsRun, r: &LabelRow, e: &LossyRowEval, honest: bool) -> Vec<String> {
+    let m = e.m.as_ref();
+    let lossy = run.params.lossy.as_ref().filter(|_| e.evaluated);
+    let stream = match r.extracted.as_ref() {
+        Extracted::Probe(p) => Some(&p.stream),
+        Extracted::Error(_) => None,
+    };
+    let mut cells = vec![
+        run.name.clone(),
+        run.params.algorithm_version.to_string(),
+        r.path.clone(),
+        r.root.as_str().to_string(),
+        r.truth.as_str().to_string(),
+        r.class.clone(),
+        r.trust_origin.clone(),
+        r.setting.clone(),
+        r.album_id.clone(),
+        r.split.as_str().to_string(),
+        r.watch_id.clone(),
+        if e.evaluated {
+            verdict_name(e.verdict).to_string()
+        } else {
+            String::new()
+        },
+        e.reasons
+            .iter()
+            .map(|x| reason_name(*x))
+            .collect::<Vec<_>>()
+            .join(";"),
+        e.error
+            .as_ref()
+            .map(|x| error_code(x).to_string())
+            .unwrap_or_default(),
+        fmt::opt_db(m.map(|m| m.high_frequency_db)),
+        fmt::opt_db(m.map(|m| m.noise_floor_db)),
+        fmt::opt_hz(m.map(|m| m.extent_hz)),
+        fmt::opt_db(m.map(|m| m.step_db)),
+        fmt::opt_hz(m.and_then(|m| m.step_hz)),
+        fmt::opt_db(m.map(|m| m.gap_db)),
+        fmt::opt_db(m.and_then(|m| m.upper_level_db)),
+        fmt::opt_db(m.and_then(|m| m.upper_burst_db)),
+    ];
+    // `full_band` and the 14 lossless margin columns.
+    cells.extend(std::iter::repeat_n(String::new(), 15));
+    cells.extend([
+        stream
+            .and_then(|s| s.codec)
+            .map(|c| codec_name(c).to_string())
+            .unwrap_or_default(),
+        stream
+            .and_then(|s| s.declared_bitrate_kbps)
+            .map(|b| b.to_string())
+            .unwrap_or_default(),
+        stream
+            .and_then(|s| s.bitrate_mode)
+            .map(|b| bitrate_mode_name(b).to_string())
+            .unwrap_or_default(),
+        stream
+            .and_then(|s| s.encoder_lowpass_hz)
+            .map(|b| b.to_string())
+            .unwrap_or_default(),
+        fmt::opt_hz2(e.fc_hz),
+        fmt::opt_hz2(e.c_exp_hz),
+        fmt::opt_hz2(e.shortfall_hz),
+        fmt::opt_hz2(
+            lossy
+                .zip(e.shortfall_hz)
+                .map(|(l, s)| l.suspicious_shortfall_hz - s),
+        ),
+        fmt::opt_hz2(
+            lossy
+                .zip(e.shortfall_hz)
+                .map(|(l, s)| l.fake_shortfall_hz - s),
+        ),
+        fmt::opt_db(lossy.zip(m).map(|(l, m)| m.step_db - l.fake_min_step_db)),
+        e.estimate_kbps.map(|k| k.to_string()).unwrap_or_default(),
+        if honest && e.evaluated {
+            e.source_limited.to_string()
+        } else {
+            String::new()
+        },
+    ]);
+    cells
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -226,23 +400,25 @@ pub struct ReportData<'a> {
     pub groups: &'a [GroupResult],
     pub runs: &'a [ParamsRun],
     pub evaluations: &'a [Evaluation],
+    /// Split units per stratum with their (tune, holdout) counts (lossy.md section 3).
+    pub unit_strata: &'a BTreeMap<String, (u32, u32)>,
     pub grid: Option<GridReport<'a>>,
 }
 
 #[derive(Default)]
-struct Md(String);
+pub(crate) struct Md(pub(crate) String);
 
 impl Md {
-    fn line(&mut self, s: impl AsRef<str>) {
+    pub(crate) fn line(&mut self, s: impl AsRef<str>) {
         self.0.push_str(s.as_ref());
         self.0.push('\n');
     }
 
-    fn blank(&mut self) {
+    pub(crate) fn blank(&mut self) {
         self.0.push('\n');
     }
 
-    fn table(&mut self, header: &[&str], rows: &[Vec<String>]) {
+    pub(crate) fn table(&mut self, header: &[&str], rows: &[Vec<String>]) {
         let cell = |s: &str| s.replace('|', "\\|");
         self.line(format!(
             "| {} |",
@@ -540,9 +716,7 @@ fn side_by_side(md: &mut Md, data: &ReportData<'_>) {
     });
     let settings: Vec<String> = data
         .config
-        .generate
-        .settings
-        .iter()
+        .lossless_settings()
         .map(|s| s.id.clone())
         .chain(std::iter::once("confirmed_fake".to_string()))
         .collect();
@@ -727,7 +901,7 @@ fn header(md: &mut Md, data: &ReportData<'_>, full: bool) {
     md.blank();
     let base = &data.groups[data.runs[0].group];
     let mut rows = Vec::new();
-    for s in &data.config.generate.settings {
+    for s in data.config.lossless_settings() {
         let versions: BTreeSet<&str> = base
             .rows
             .iter()
@@ -740,6 +914,28 @@ fn header(md: &mut Md, data: &ReportData<'_>, full: bool) {
             versions.into_iter().collect::<Vec<_>>().join(" / ")
         };
         rows.push(vec![s.id.clone(), s.encoder.clone(), text]);
+    }
+    for entry in &data.config.generate.lossy {
+        let versions: BTreeSet<&str> = base
+            .lossy_rows
+            .iter()
+            .filter(|r| r.origin == "generated" && r.setting == entry.id)
+            .map(|r| r.encoder_version.as_str())
+            .collect();
+        let text = if versions.is_empty() {
+            "(not generated)".to_string()
+        } else {
+            versions.into_iter().collect::<Vec<_>>().join(" / ")
+        };
+        rows.push(vec![
+            format!("lossy {}", entry.id),
+            data.config
+                .stages_of(entry)
+                .last()
+                .map(|s| s.encoder.clone())
+                .unwrap_or_default(),
+            text,
+        ]);
     }
     md.table(&["setting", "encoder", "encoder_version"], &rows);
 
@@ -772,12 +968,13 @@ fn header(md: &mut Md, data: &ReportData<'_>, full: bool) {
         &rows,
     );
     let mut per_setting = Vec::new();
-    for s in &data.config.generate.settings {
+    for s in data.config.lossless_settings() {
         let n = base.rows.iter().filter(|r| r.setting == s.id).count();
         per_setting.push(format!("{} {n}", s.id));
     }
     md.line(format!("Generated entries: {}", per_setting.join(", ")));
     md.blank();
+    crate::render_lossy::header_lossy(md, data);
 
     md.line("## Cache statistics");
     md.blank();
@@ -917,6 +1114,7 @@ fn params_section(md: &mut Md, data: &ReportData<'_>, idx: usize, full: bool) {
     full_band_table(md, eval);
 
     watch_section(md, eval, full);
+    crate::render_lossy::lossy_section(md, data, idx, full);
 
     md.line("### Clean albums that turn Fake");
     md.blank();
