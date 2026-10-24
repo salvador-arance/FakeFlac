@@ -101,10 +101,7 @@ pub fn edge_margins(m: &Measurements, params: &DetectionParams) -> Option<EdgeMa
     let m_edge_median_db = m.median_step_db.map(|d_q| edge.max_median_step_db - d_q);
     let m_edge_residual_db = m.residual_db.map(|r| r - edge.min_residual_db);
     let m_edge_step_db = in_range.then_some(edge.max_step_db - m.step_db);
-    let edge_step = in_range
-        && m_edge_median_db.is_some_and(|x| x > 0.0)
-        && m_edge_residual_db.is_some_and(|x| x >= 0.0)
-        && m_edge_step_db.is_some_and(|x| x > 0.0);
+    let edge_step = fakeflac_core::detect::is_edge_step(m, params);
     Some(EdgeMargins {
         m_edge_median_db,
         m_edge_residual_db,
@@ -829,6 +826,26 @@ pub struct MarginSummary {
 
 /// Whether a row is near a threshold (evaluation.md section 8).
 pub fn is_near(row: &LabelRow, eval: &RowEval, config: &Config) -> bool {
+    is_near_with(row, eval, config, None)
+}
+
+/// `is_near` for a params file: the v6 rule for edge steps needs the `[edge]` margins.
+pub fn is_near_in(
+    row: &LabelRow,
+    eval: &RowEval,
+    config: &Config,
+    params: &DetectionParams,
+) -> bool {
+    let edge = eval.m.as_ref().and_then(|m| edge_margins(m, params));
+    is_near_with(row, eval, config, edge.as_ref())
+}
+
+fn is_near_with(
+    row: &LabelRow,
+    eval: &RowEval,
+    config: &Config,
+    edge: Option<&EdgeMargins>,
+) -> bool {
     let Some(m) = &eval.margins else {
         return false;
     };
@@ -839,16 +856,30 @@ pub fn is_near(row: &LabelRow, eval: &RowEval, config: &Config) -> bool {
         Truth::Fake => nearest > -near_db && nearest <= 0.0,
     };
     // A negative kept from `Fake` only by the guard, at its threshold (v4: and no lossy step).
+    let edge_step = edge.is_some_and(|e| e.edge_step);
+    let a = match m.m_step_fake_db {
+        Some(s) if !edge_step => s.min(m.m_gap_fake_db),
+        _ => m.m_gap_fake_db,
+    };
     let by_guard = row.truth == Truth::Real
         && m.full_band_margin_db == Some(0.0)
         && m.m_full_band_step_db.is_none_or(|s| s > 0.0)
-        && m.m_step_fake_db
-            .map_or(m.m_gap_fake_db, |s| s.min(m.m_gap_fake_db))
-            <= 0.0;
+        && a <= 0.0;
+    // v6: kept from `Fake` only by `EdgeStep`, near one of its thresholds.
+    let by_edge = row.truth == Truth::Real
+        && edge.is_some_and(|e| {
+            e.edge_step
+                && m.m_step_fake_db.is_some_and(|s| s <= 0.0)
+                && [e.m_edge_median_db, e.m_edge_residual_db, e.m_edge_step_db]
+                    .into_iter()
+                    .flatten()
+                    .fold(f64::INFINITY, f64::min)
+                    <= near_db
+        });
     let by_step = m
         .fs_fake_range_hz
         .is_some_and(|r| r.abs() <= config.report.near_hz);
-    by_margin || by_step || by_guard
+    by_margin || by_step || by_guard || by_edge
 }
 
 pub fn margin_summary(run: &ParamsRun, rows: &[LabelRow], config: &Config) -> Vec<MarginSummary> {
@@ -873,7 +904,7 @@ pub fn margin_summary(run: &ParamsRun, rows: &[LabelRow], config: &Config) -> Ve
             let near = |truth: Truth| {
                 group
                     .iter()
-                    .filter(|(r, e)| r.truth == truth && is_near(r, e, config))
+                    .filter(|(r, e)| r.truth == truth && is_near_in(r, e, config, &run.params))
                     .count() as u32
             };
             Some(MarginSummary {

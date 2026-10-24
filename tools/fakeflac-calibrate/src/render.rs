@@ -8,7 +8,7 @@ use crate::cache::{bitrate_mode_name, codec_name, error_code, Extracted};
 use crate::config::Config;
 use crate::env::Roots;
 use crate::evaluate::{
-    changed_rows, class_totals, clean_fakes, edge_margins, edge_report, figure, is_near,
+    changed_rows, class_totals, clean_fakes, edge_margins, edge_report, figure, is_near_in,
     margin_summary, reason_name, small_sample_warning, verdict_name, ParamsRun, RowEval, Totals,
     SPLITS,
 };
@@ -1348,7 +1348,7 @@ fn full_lists(md: &mut Md, data: &ReportData<'_>, idx: usize) {
     md.blank();
     let mut table = Vec::new();
     for (r, e) in rows.iter().zip(run.evals.iter()) {
-        if is_near(r, e, data.config) {
+        if is_near_in(r, e, data.config, &run.params) {
             let mut cells = vec![
                 r.path.clone(),
                 r.truth.as_str().to_string(),

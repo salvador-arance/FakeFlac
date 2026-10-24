@@ -604,7 +604,7 @@ pub fn search(baseline: &DetectionParams, rows: &[SearchRow<'_>], grid: &GridFil
         for (k, v) in grid.keys.iter().zip(values.iter()) {
             set_value(&mut params, &k.key, *v);
         }
-        if invariant_violations(&params).is_empty() {
+        if invariant_violations(&params).is_empty() && params.validate().is_ok() {
             let changed = values
                 .iter()
                 .zip(baseline_values.iter())

@@ -1,5 +1,5 @@
-//! Detection rules (RF-03, RF-04, RF-15): the v4 rules for lossless files
-//! (`specs/detection/rules.md`) and the v5 rules L0 to L6 for lossy files, which estimate the source
+//! Detection rules (RF-03, RF-04, RF-15): the v6 rules for lossless files (v4 plus the edge step,
+//! `specs/detection/rules.md`) and the v5 rules L0 to L6 for lossy files, which estimate the source
 //! bitrate (`specs/detection/lossy-source.md`). Pure functions: no I/O, every number comes from
 //! `DetectionParams`.
 
