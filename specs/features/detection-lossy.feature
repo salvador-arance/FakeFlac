@@ -156,7 +156,7 @@ Feature: Source bitrate of lossy files (detection v5)
   @RF-15 @RF-04
   Scenario: v5 gives the v4 lossless verdicts
     Given every synthetic signal of specs/detection/fixtures.md saved as FLAC
-    When each one is analysed with the parameters of specs/detection/detection-params.v4.toml and with DetectionParams v5
+    When each one is analysed with the parameters of specs/detection/detection-params.v4.toml and with DetectionParams v5 (the parameters of specs/detection/detection-params.v5.toml, not the v6 defaults: edge_bump19k3 differs with v6)
     Then the two results have the same verdict, reasons and cutoff for every signal
     And they carry algorithmVersion 4 and 5
 

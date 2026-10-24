@@ -4,7 +4,8 @@ Feature: Edge step on the step rule V4 (detection v6)
   DetectionParams v6 (the defaults, detection-params.v6.toml), and the
   edge-step fixtures of specs/detection/fixtures.md. The thresholds are:
   edge.max_median_step_db = 3, edge.min_residual_db = 15, edge.max_step_db = 16,
-  edge.floor_min_db = -104 (absolute), floor window [20900, 22000) Hz,
+  edge.floor_min_db = -104 (absolute; F_top is never below it, whatever the
+  bit depth), floor window [20900, 22000) Hz,
   step_fake_db = 10, step_suspicious_db = 7, gap_fake_db = 6,
   gap_suspicious_db = 4, lossy range [14500, 20300) Hz.
   A track is an edge step when fs is in the lossy range, D_Q < 3, R >= 15 and
@@ -20,7 +21,7 @@ Feature: Edge step on the step rule V4 (detection v6)
   Scenario: Median step, top floor and post-step residual at the step of the mean spectrum
     Levels in this scenario are absolute dB, before L_ref is subtracted. The
     deepest step of M is at 19450 Hz; the smaller drop at 20.9 kHz is not fs.
-    Given band spectra at 44.1 kHz with 100 Hz bands and bit depth 16
+    Given band spectra at 44.1 kHz with 100 Hz bands
     And M = -30 dB on every band centred below 19450 Hz, -45 dB at 19450 Hz, -55 dB from 19550 to 20850 Hz and -70 dB from 20950 Hz up
     And Q = -50 dB on the bands centred from 18850 to 19350 Hz and -51 dB on the bands centred from 19550 to 19750 Hz
     When the measurements of DetectionParams v6 are taken
@@ -32,23 +33,25 @@ Feature: Edge step on the step rule V4 (detection v6)
     And the track is not an edge step
 
   @RF-04
-  Scenario Outline: Above 16 bits the top floor is never below the 16-bit rounding floor
+  Scenario Outline: The top floor is never below the 16-bit rounding floor
     Levels in this scenario are absolute dB. -104 dB absolute is -74 dB
-    relative to L_ref = -30 dB.
-    Given band spectra at 44.1 kHz with 100 Hz bands and bit depth <bit depth>
-    And M = -30 dB on every band centred below 19450 Hz, -75 dB at 19450 Hz, -120 dB from 19550 to 20850 Hz and -140 dB from 20950 Hz up
+    relative to L_ref = -30 dB. The floor window is at <floor> dB absolute: at
+    -140 dB (a 24-bit residue: without the clamp F_top would be -110 dB and
+    R 45 dB) the clamp acts; at -100 dB (a 16-bit floor or higher) it does not.
+    No band above the step rebounds (all are at most 6 dB above the -95 dB
+    after the step). The measurement does not read the bit depth.
+    Given band spectra at 44.1 kHz with 100 Hz bands
+    And M = -30 dB on every band centred below 19450 Hz, -60 dB at 19450 Hz, -95 dB from 19550 to 20850 Hz and <floor> dB from 20950 Hz up
     When the measurements of DetectionParams v6 are taken
-    Then D = 90 dB at fs = 19450 Hz
+    Then D = 65 dB at fs = 19450 Hz
     And F_top = <F_top> dB
     And R = <R> dB
 
     Examples:
-      | bit depth | F_top | R   |
-      | 16        | -110  | 20  |
-      | 8         | -110  | 20  |
-      | 24        | -74   | -16 |
-      | 32        | -74   | -16 |
-      | undefined | -74   | -16 |
+      | floor | F_top | R |
+      | -140  | -74   | 9 |
+      | -104  | -74   | 9 |
+      | -100  | -70   | 5 |
 
   @RF-04
   Scenario Outline: The edge measurements are undefined without a step, a floor window or an [edge] section
@@ -138,7 +141,7 @@ Feature: Edge step on the step rule V4 (detection v6)
 
   @RF-04
   Scenario: The content-edge fixture meets the three conditions
-    Derived in fixtures.md (D about 11.8 dB, D_Q about 1.2 dB, R about 20.7 dB).
+    Derived in fixtures.md (D about 12 dB, D_Q about 2 dB, R about 20.7 dB).
     The test stage confirms it first; if it does not hold, it stops for G1.
     Given the synthetic signal "edge_bump19k3" saved as FLAC
     When it is analysed with DetectionParams v6

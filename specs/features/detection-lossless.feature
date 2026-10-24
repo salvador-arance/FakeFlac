@@ -8,9 +8,12 @@ Feature: Verdict for lossless files (WAV, FLAC)
   "DetectionParams v4" below means those values, and the tests may use the
   defaults for them; only "Parameters come from the versioned file" checks
   the version. Since detection v6 the defaults are detection-params.v6.toml,
-  which adds [edge]; no fixture of this feature is an edge step
-  (detection-edge-step.feature, "v6 gives the v5 verdicts on every other
-  fixture"), so the defaults still give these results.
+  which adds [edge]. Every fixture named in this feature gives the same result
+  with the defaults, but edge_bump19k3 (fixtures.md, "Edge step") does not: it
+  is "suspicious" with v6 and "fake" with v4 and v5. So in the two scenarios
+  that analyse every synthetic signal, "DetectionParams v4" means the
+  parameters of specs/detection/detection-params.v5.toml (the defaults without
+  [edge]), not the defaults (rules.md Q22 (b)).
   Changed for v4 (the test author updates the derived tests listed in ADR-0039,
   "Consequences"): sfb21_gaps and shelf19k5_bursts are fake again (their deepest
   step lies in the lossy range, so they are not full band); only
@@ -183,14 +186,14 @@ Feature: Verdict for lossless files (WAV, FLAC)
   @RF-04
   Scenario: A v2 params file changes only the guarded verdicts
     Given every synthetic signal of specs/detection/fixtures.md saved as FLAC
-    When each one is analysed with the parameters of specs/detection/detection-params.v2.toml and with DetectionParams v4
+    When each one is analysed with the parameters of specs/detection/detection-params.v2.toml and with DetectionParams v4 (the parameters of specs/detection/detection-params.v5.toml)
     Then the two results have the same verdict, reasons and cutoff for every signal except "sfb21_gaps_aa21k"
     And that one is "fake" with no reasons with the v2 parameters and "suspicious" with "highBandGaps" with v4, with the same cutoff
 
   @RF-04
   Scenario: A v3 params file differs only where a lossy-range step removes the guard
     Given every synthetic signal of specs/detection/fixtures.md saved as FLAC
-    When each one is analysed with the parameters of specs/detection/detection-params.v3.toml and with DetectionParams v4
+    When each one is analysed with the parameters of specs/detection/detection-params.v3.toml and with DetectionParams v4 (the parameters of specs/detection/detection-params.v5.toml)
     Then the two results have the same verdict, reasons and cutoff for every signal except "sfb21_gaps" and "shelf19k5_bursts"
     And those two are "suspicious" with the v3 parameters and "fake" with no reasons with v4, with the same cutoff
 

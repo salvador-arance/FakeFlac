@@ -109,21 +109,21 @@ args = ["-c:a", "libmp3lame", "-b:a", "192k"]
 decode_args = ["-c:a", "flac", "-sample_fmt", "s32", "-bits_per_raw_sample", "24"]
 
 [[generate.settings]]
+id = "cbr256_s24"
+encoder = "lame"
+ext = "mp3"
+bitrate_kbps = 256
+lowpass_hz = 19500
+args = ["-c:a", "libmp3lame", "-b:a", "256k"]
+decode_args = ["-c:a", "flac", "-sample_fmt", "s32", "-bits_per_raw_sample", "24"]
+
+[[generate.settings]]
 id = "cbr320_s24"
 encoder = "lame"
 ext = "mp3"
 bitrate_kbps = 320
 lowpass_hz = 20500
 args = ["-c:a", "libmp3lame", "-b:a", "320k"]
-decode_args = ["-c:a", "flac", "-sample_fmt", "s32", "-bits_per_raw_sample", "24"]
-
-[[generate.settings]]
-id = "aac128_s24"
-encoder = "aac"
-ext = "m4a"
-bitrate_kbps = 128
-lowpass_hz = 17000
-args = ["-c:a", "aac", "-b:a", "128k"]
 decode_args = ["-c:a", "flac", "-sample_fmt", "s32", "-bits_per_raw_sample", "24"]
 
 # --- Lossy entries (RF-15, lossy.md section 4). The lossy file itself is the labelled track. ---------------

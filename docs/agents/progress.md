@@ -9,19 +9,23 @@
   - values chosen on `tune` only, then checked on `holdout`: `EdgeStep` = `InRange(fs)` ∧ `D_Q < 3` ∧ `R ≥ 15` ∧ `D < 16`;
   - `holdout` passes E6 with a thin margin: worst cbr192 0.41 pp (2/484);
   - W4 not `Fake`, 15/15 confirmed fakes `Fake`, `primary` 0 `Fake`.
-- **24-bit correction:** for files above 16 bits, `F_top` is never below −104 dB absolute (the 16-bit floor).
-  - Tested on 267 corpus transcodes decoded to both 16 and 24 bits (scratch only).
-  - It recovers the one 24-bit-only release, and W4 is still released.
+- **24-bit correction:** `F_top` is never below −104 dB absolute (the 16-bit floor), whatever the bit depth (owner, Q20).
+  - Tested on 773 corpus transcodes decoded to both 16 and 24 bits (scratch only): no 24-bit-only release with it (4 without), W4 still released, no 16-bit verdict changes.
 - **#62 (`spec/RF-04-detection-v6`, debdc6b):**
   - rules.md v6 (sections 2–4, 6, and 8: E1–E7; Q12–Q18 resolved, owner delegated; Q19–Q22 open);
   - `detection-params.v6.toml` (default, `[edge]`), fixtures `edge_bump19k3`, `edge_bump19k3_lp19k5` and `holes_lp19k5`, `detection-edge-step.feature`;
   - evaluation.md edge report, per-setting `decode_args`, `calibration.v3.toml` (4 settings `_s24`), version references (next free 7);
   - ADR-0042 amended; pending file removed.
+- **G1 review by a subagent** (album bootstrap, segment-shift variability, 773 pairs at 24 bits, numpy synthesis of the fixtures; scripts in `target/v6-analysis/g1/`). Applied to #62:
+  - `edge_bump19k3` as first written failed `D_Q < 3` (2.97–3.48 dB); it now uses a 0.25 s gate at +15 dB (6/6 seeds pass);
+  - the all-fixture scenarios of `detection-lossless`/`detection-lossy` use `detection-params.v5.toml`;
+  - Q20 and Q21 resolved by the owner (floor always at −104 dB; `_s24` settings cbr128, cbr192, cbr256, cbr320);
+  - rules.md 8.2 statistical caveats (about a 30 % chance that a new corpus of this size fails E6), the selection grid, corrected figures, dual-mono.
   - `just check`, `just trace` and `privacy-check` are green.
 - Throwaway scripts (aggregates only, not versioned): `target/v6-analysis/` (git-ignored). Copy them to the calibration folder if they should be kept.
 
 **Pending**
-- G1 on #62 (Q19–Q22).
+- G1 on #62 (Q19 and Q22 still open, default yes).
 - Then `/feature RF-04` (detection v6).
 - Then `just accept --config specs/calibration/calibration.v3.toml --params specs/detection/detection-params.v5.toml --params specs/detection/detection-params.v6.toml`. The first run generates about 5,700 new 24-bit transcodes.
 - Owner, before the run: add W5 and W6 (the proposal's N1 and N2) as `false-positive` lines of `confirmed.txt` after W4.
@@ -29,9 +33,8 @@
 
 **Blockers / questions for the human**
 - Q19: the values rest on `tune`, and `holdout` cbr192 is one transcode from the 0.5 pp gate.
-- Q20: the −104 dB floor.
-- Q21: the 24-bit settings gated in E6.
 - Q22: the list of changed approved specs and protected tests.
+- Owner, before the run: the rewritten `confirmed.txt` (W5, W6 and the RF-15 rips) is in `target/v6-analysis/confirmed.txt`; check that the rip `.m4a` files are stream copies (`real`).
 - Environment: the `guard-protected` hook blocks Write/Edit outside the repo, the scratchpad included. Put throwaway scripts in `target/` (ignored), and write audio outside the repo only through ffmpeg.
 
 **Next step:** after G1 merges #62, run `/feature RF-04`.
