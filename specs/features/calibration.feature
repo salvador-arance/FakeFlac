@@ -13,6 +13,9 @@ Feature: Calibration and acceptance against a labelled corpus
   detection-params.v5.toml in the repository, proposals take
   algorithm_version 6; two error messages of trusted.txt and confirmed.txt
   name the lossy formats and the kind "real" (specs/calibration/lossy.md, C11).
+  Changed for detection v6 (specs/detection/rules.md, Q22 (d)): with
+  detection-params.v6.toml in the repository, proposals take
+  algorithm_version 7.
   Lossy rows: calibration-lossy.feature.
 
   # --- Environment -------------------------------------------------------
@@ -420,8 +423,8 @@ Feature: Calibration and acceptance against a labelled corpus
     When "calibrate" runs on the sample corpus
     Then the exit code is 0
     And the baseline cost is 1.1 and the cost of "gap_fake_db = 4.0" is 0.5
-    And the report folder holds detection-params.v6.toml
-    And that file parses to detection-params.v2.toml with algorithm_version 6 and gap_fake_db 4.0
+    And the report folder holds detection-params.v7.toml
+    And that file parses to detection-params.v2.toml with algorithm_version 7 and gap_fake_db 4.0
     And its first two lines are the "PROPOSAL" and "Changed: verdict.gap_fake_db 6.0 -> 4.0" comments
     And no file in the repository has changed
 
@@ -458,7 +461,7 @@ Feature: Calibration and acceptance against a labelled corpus
     When "calibrate" runs on the sample corpus
     Then the exit code is 0
     And with the point "full_band.min_burst_db = 100.0" the fxv0 entries are "fake" instead of "suspicious", and its cost is lower than the baseline cost
-    And the report folder holds detection-params.v6.toml with algorithm_version 6 and full_band.min_burst_db 100.0
+    And the report folder holds detection-params.v7.toml with algorithm_version 7 and full_band.min_burst_db 100.0
     And its second line is the comment "# Changed: full_band.min_burst_db 3.0 -> 100.0"
 
   @RP-11 @RF-04

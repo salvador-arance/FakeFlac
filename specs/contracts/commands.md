@@ -83,7 +83,7 @@ type TrackAnalysis = {
   estimatedSourceBitrateKbps: number | null          // RF-15: lossy codecs only (specs/detection/lossy-source.md section 5)
   reasons: SuspicionReason[]
   error: TrackError | null
-  algorithmVersion: number                           // 5 with the default DetectionParams (detection v5: lossless rules of rules.md, lossy rules of lossy-source.md)
+  algorithmVersion: number                           // 6 with the default DetectionParams (detection v6: lossless rules of rules.md, lossy rules of lossy-source.md)
 }
 
 type AnalysisSummary = {
@@ -112,6 +112,8 @@ Per-track problems never become an `AppError`: they travel inside `TrackAnalysis
 Detection v3 (ADR-0038) does not change these types: a track that the full-band guard keeps from `fake` is `suspicious` with the existing reasons `highBandGaps` or `ambiguousCutoff`. Its new measurements (`U`, `B`, `FullBand`) and its new `DetectionParams` section `[full_band]` are internal to the backend (schema and semantics: `specs/detection/rules.md` sections 2 and 4, values: `specs/detection/detection-params.v3.toml`), so `just gen` produces the same bindings.
 
 Detection v4 (ADR-0039) does not change them either. It adds the optional field `full_band.max_lossy_step_db` to `DetectionParams` (internal to the backend; values: `specs/detection/detection-params.v4.toml`) and narrows `FullBand`, so with the defaults a guarded track is always `suspicious` with `highBandGaps`. The only visible change is `algorithmVersion` = 4, which invalidates cached results (ADR-0008).
+
+Detection v6 (ADR-0042) does not change them either. It adds the optional section `edge` to `DetectionParams` (internal to the backend; values: `specs/detection/detection-params.v6.toml`), which can only turn a lossless `fake` into `suspicious` with `ambiguousCutoff` (or `highBandGaps`). The only visible change is `algorithmVersion` = 6 with the defaults, which invalidates cached results (ADR-0008); lossy results equal version 5's.
 
 ## Lossy formats (version 3)
 

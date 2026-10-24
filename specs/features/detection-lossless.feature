@@ -7,7 +7,13 @@ Feature: Verdict for lossless files (WAV, FLAC)
   detection-params.v5.toml, whose lossless sections and values are v4's:
   "DetectionParams v4" below means those values, and the tests may use the
   defaults for them; only "Parameters come from the versioned file" checks
-  the version.
+  the version. Since detection v6 the defaults are detection-params.v6.toml,
+  which adds [edge]. Every fixture named in this feature gives the same result
+  with the defaults, but edge_bump19k3 (fixtures.md, "Edge step") does not: it
+  is "suspicious" with v6 and "fake" with v4 and v5. So in the two scenarios
+  that analyse every synthetic signal, "DetectionParams v4" means the
+  parameters of specs/detection/detection-params.v5.toml (the defaults without
+  [edge]), not the defaults (rules.md Q22 (b)).
   Changed for v4 (the test author updates the derived tests listed in ADR-0039,
   "Consequences"): sfb21_gaps and shelf19k5_bursts are fake again (their deepest
   step lies in the lossy range, so they are not full band); only
@@ -180,14 +186,14 @@ Feature: Verdict for lossless files (WAV, FLAC)
   @RF-04
   Scenario: A v2 params file changes only the guarded verdicts
     Given every synthetic signal of specs/detection/fixtures.md saved as FLAC
-    When each one is analysed with the parameters of specs/detection/detection-params.v2.toml and with DetectionParams v4
+    When each one is analysed with the parameters of specs/detection/detection-params.v2.toml and with DetectionParams v4 (the parameters of specs/detection/detection-params.v5.toml)
     Then the two results have the same verdict, reasons and cutoff for every signal except "sfb21_gaps_aa21k"
     And that one is "fake" with no reasons with the v2 parameters and "suspicious" with "highBandGaps" with v4, with the same cutoff
 
   @RF-04
   Scenario: A v3 params file differs only where a lossy-range step removes the guard
     Given every synthetic signal of specs/detection/fixtures.md saved as FLAC
-    When each one is analysed with the parameters of specs/detection/detection-params.v3.toml and with DetectionParams v4
+    When each one is analysed with the parameters of specs/detection/detection-params.v3.toml and with DetectionParams v4 (the parameters of specs/detection/detection-params.v5.toml)
     Then the two results have the same verdict, reasons and cutoff for every signal except "sfb21_gaps" and "shelf19k5_bursts"
     And those two are "suspicious" with the v3 parameters and "fake" with no reasons with v4, with the same cutoff
 
@@ -213,10 +219,13 @@ Feature: Verdict for lossless files (WAV, FLAC)
   Scenario: Parameters come from the versioned file
     Changed for detection v5 (specs/detection/lossy-source.md, Q13 (b)): the
     defaults are v5, which keeps every lossless value of v4 and adds [lossy].
+    Changed for detection v6 (specs/detection/rules.md, Q22 (b)): the defaults
+    are v6, which keeps every section of v5 and adds [edge].
     Given the default DetectionParams of the code
-    Then they are equal to specs/detection/detection-params.v5.toml
-    And their lossless sections are equal to those of specs/detection/detection-params.v4.toml
-    And every TrackAnalysis carries algorithmVersion 5
+    Then they are equal to specs/detection/detection-params.v6.toml
+    And their sections other than [edge] are equal to those of specs/detection/detection-params.v5.toml
+    And their lossless sections other than [edge] are equal to those of specs/detection/detection-params.v4.toml
+    And every TrackAnalysis carries algorithmVersion 6
 
   @RF-03 @RNF-04
   Scenario: Stream without a declared length

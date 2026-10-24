@@ -1,7 +1,10 @@
 @RF-15
 Feature: Source bitrate of lossy files (detection v5)
   The lossy rules of specs/detection/lossy-source.md with DetectionParams v5
-  (the defaults, detection-params.v5.toml): the content edge fc (the reported
+  (detection-params.v5.toml; since detection v6 the defaults are
+  detection-params.v6.toml, whose [lossy] section and every other value used
+  here are v5's, rules.md Q22 (c); the tests may use the defaults for v5's
+  values, and only the algorithmVersion they carry differs): the content edge fc (the reported
   cutoff: fs when D >= step_suspicious_db = 7, otherwise fe), the expected
   cutoff c_exp = min(table row of the declared bitrate, LAME tag low-pass,
   nyquist - 400), the shortfall s = c_exp - fc, and rules L0-L6:
@@ -153,7 +156,7 @@ Feature: Source bitrate of lossy files (detection v5)
   @RF-15 @RF-04
   Scenario: v5 gives the v4 lossless verdicts
     Given every synthetic signal of specs/detection/fixtures.md saved as FLAC
-    When each one is analysed with the parameters of specs/detection/detection-params.v4.toml and with DetectionParams v5
+    When each one is analysed with the parameters of specs/detection/detection-params.v4.toml and with DetectionParams v5 (the parameters of specs/detection/detection-params.v5.toml, not the v6 defaults: edge_bump19k3 differs with v6)
     Then the two results have the same verdict, reasons and cutoff for every signal
     And they carry algorithmVersion 4 and 5
 
