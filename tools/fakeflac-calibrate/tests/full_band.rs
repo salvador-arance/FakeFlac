@@ -874,6 +874,9 @@ fn measured(g: f64, d: f64, fs: Option<f64>) -> Measurements {
         gap_db: g,
         upper_level_db: Some(-40.0),
         upper_burst_db: Some(8.0),
+        median_step_db: None,
+        top_floor_db: None,
+        residual_db: None,
     }
 }
 

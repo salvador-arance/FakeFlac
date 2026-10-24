@@ -187,14 +187,16 @@ fn rf15_deterministic_result() {
     assert_eq!(first.estimated_source_bitrate_kbps, Some(128), "{first:#?}");
 }
 
-// The defaults of the code are the v5 file, so "analysed with DetectionParams v5" and
+// The defaults of the code are the v6 file (v5's lossy values), so "analysed with DetectionParams v5" and
 // "analysed by the app" agree (scenario "Parameters come from the versioned file").
 #[test]
 fn rf15_the_default_params_give_the_same_analysis_as_the_v5_file() {
-    assert_eq!(
-        analyze_with("mp3_320_lp17k", &DetectionParams::default()),
-        analyze_with("mp3_320_lp17k", &v5())
-    );
+    // Since detection v6 the defaults are the v6 file, whose lossy values are v5's: the analysis
+    // is the same but for the algorithmVersion it carries (detection-lossy.feature, header).
+    let mut by_default = analyze_with("mp3_320_lp17k", &DetectionParams::default());
+    assert_eq!(by_default.algorithm_version, 6);
+    by_default.algorithm_version = 5;
+    assert_eq!(by_default, analyze_with("mp3_320_lp17k", &v5()));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -266,6 +268,9 @@ fn rf15_v5_gives_the_v4_lossless_verdicts() {
         "sfb21_gaps_aa21k",
         "shelf19k5",
         "shelf19k5_bursts",
+        "edge_bump19k3",
+        "edge_bump19k3_lp19k5",
+        "holes_lp19k5",
         "short",
         "corrupt",
     ];

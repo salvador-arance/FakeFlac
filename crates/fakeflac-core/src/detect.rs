@@ -30,6 +30,12 @@ pub struct Measurements {
     pub upper_level_db: Option<f64>,
     /// `B`: upper burstiness (median of `M - Q` in the upper window); `None` when undefined.
     pub upper_burst_db: Option<f64>,
+    /// `D_Q` (v6): the step on the median spectrum at `fs`; `None` when undefined.
+    pub median_step_db: Option<f64>,
+    /// `F_top` (v6): the top floor; `None` when undefined.
+    pub top_floor_db: Option<f64>,
+    /// `R` (v6): the post-step residual; `None` when undefined.
+    pub residual_db: Option<f64>,
 }
 
 /// Outcome of the rules for one analysed (decodable, long enough) track.
@@ -180,7 +186,15 @@ pub fn measure(spectra: &BandSpectra, params: &DetectionParams) -> Measurements 
         gap_db,
         upper_level_db,
         upper_burst_db,
+        median_step_db: None,
+        top_floor_db: None,
+        residual_db: None,
     }
+}
+
+/// Section 2, `EdgeStep` (v6): signature only, not implemented yet.
+pub fn is_edge_step(_m: &Measurements, _params: &DetectionParams) -> bool {
+    todo!("EdgeStep (RF-04, detection v6)")
 }
 
 /// Section 2, "Reported cutoff": `fs` and its steepness when `D >= step_suspicious_db`,

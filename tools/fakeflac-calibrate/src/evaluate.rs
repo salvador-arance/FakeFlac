@@ -77,6 +77,24 @@ pub struct Margins {
     pub nearest_fake_margin_db: f64,
 }
 
+/// The v6 margins of evaluation.md section 8 and the `edge_step` column.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EdgeMargins {
+    /// `edge.max_median_step_db - D_Q`; `EdgeStep` needs `> 0`.
+    pub m_edge_median_db: Option<f64>,
+    /// `R - edge.min_residual_db`; `EdgeStep` needs `>= 0`.
+    pub m_edge_residual_db: Option<f64>,
+    /// `edge.max_step_db - D` when `InRange(fs)`; `EdgeStep` needs `> 0`.
+    pub m_edge_step_db: Option<f64>,
+    /// `EdgeStep`.
+    pub edge_step: bool,
+}
+
+/// `None` for params without an `[edge]` section. Signature only (RF-04, detection v6).
+pub fn edge_margins(_m: &Measurements, _params: &DetectionParams) -> Option<EdgeMargins> {
+    None
+}
+
 pub fn margins(m: &Measurements, params: &DetectionParams) -> Margins {
     let v = &params.verdict;
     let fs = m.step_hz;

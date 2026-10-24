@@ -23,7 +23,7 @@ fn lossy(p: &DetectionParams) -> &LossyParams {
 #[test]
 fn rf15_the_defaults_hold_the_v5_lossy_values() {
     let p = DetectionParams::default();
-    assert_eq!(p.algorithm_version, 5);
+    assert_eq!(p.algorithm_version, 6);
     let l = lossy(&p);
     assert_eq!(l.suspicious_shortfall_hz, 1000.0);
     assert_eq!(l.fake_shortfall_hz, 2500.0);

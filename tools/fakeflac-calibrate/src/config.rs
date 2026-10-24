@@ -107,6 +107,18 @@ pub struct Setting {
     #[serde(default = "default_true")]
     pub lossless_transcode: bool,
     pub args: Vec<String>,
+    /// Decode arguments of this setting instead of `generate.decode_args` (config v3, generation.md
+    /// section 2). `None` uses `generate.decode_args`.
+    #[serde(default)]
+    pub decode_args: Option<Vec<String>>,
+}
+
+impl GenerateConfig {
+    /// The decode arguments used for `setting`: its own, or `generate.decode_args`.
+    pub fn decode_args_for(&self, _setting: &Setting) -> &[String] {
+        // Signature only (RF-04, detection v6): the per-setting decode is not implemented yet.
+        &self.decode_args
+    }
 }
 
 fn default_true() -> bool {

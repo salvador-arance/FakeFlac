@@ -33,6 +33,9 @@ pub struct DetectionParams {
     /// are not judged.
     #[serde(default)]
     pub lossy: Option<LossyParams>,
+    /// Edge step on V4 (v6, ADR-0042). `None` (a v2-v5 file): `EdgeStep` never holds.
+    #[serde(default)]
+    pub edge: Option<EdgeParams>,
     pub verdict: VerdictParams,
     pub spectrogram: SpectrogramParams,
 }
@@ -107,6 +110,18 @@ pub struct FullBandParams {
     /// not full band. `None` (a v3 file) disables the condition.
     #[serde(default)]
     pub max_lossy_step_db: Option<f64>,
+}
+
+/// The `[edge]` section (rules.md sections 2 and 4, ADR-0042).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EdgeParams {
+    pub floor_low_hz: f64,
+    pub floor_high_hz: f64,
+    pub floor_min_db: f64,
+    pub max_median_step_db: f64,
+    pub min_residual_db: f64,
+    pub max_step_db: f64,
 }
 
 /// The `[lossy]` section (lossy-source.md section 6).
@@ -309,6 +324,7 @@ impl Default for DetectionParams {
                     opus: None,
                 },
             }),
+            edge: None,
             verdict: VerdictParams {
                 low_hf_threshold_db: -60.0,
                 gap_fake_db: 6.0,

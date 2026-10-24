@@ -300,6 +300,7 @@ fn rf15_v5_is_v4_plus_the_lossy_section() {
         DetectionParams {
             algorithm_version: 4,
             lossy: None,
+            edge: None, // the defaults are v6 since ADR-0042
             ..DetectionParams::default()
         }
     );

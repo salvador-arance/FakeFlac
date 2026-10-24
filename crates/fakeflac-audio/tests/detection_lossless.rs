@@ -1,6 +1,6 @@
 //! Tests derived from `specs/features/detection-lossless.feature` (@RF-03 @RF-04 @RF-14 @RNF-04).
-//! Spec: `specs/detection/rules.md` (lossless rules of v4, unchanged in v5), parameters v5 (the
-//! defaults, ADR-0041; the file and `algorithm_version` 5 in the tests of "Parameters come from the
+//! Spec: `specs/detection/rules.md` (lossless rules of v4, v6 adds the edge step), parameters v6 (the
+//! defaults, ADR-0042; the file and `algorithm_version` 6 in the tests of "Parameters come from the
 //! versioned file"), fixtures of
 //! `specs/detection/fixtures.md`. One test per example row of each Scenario Outline.
 //! Protected after the `test(RF-03,RF-04)` commit; updated for detection v3 in the `test(RF-04)`
@@ -39,6 +39,15 @@ fn v2_params() -> DetectionParams {
 fn v3_params() -> DetectionParams {
     let file = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../specs/detection/detection-params.v3.toml");
+    toml::from_str(&std::fs::read_to_string(file).unwrap()).unwrap()
+}
+
+/// The parameters of `specs/detection/detection-params.v5.toml`: the defaults without `[edge]`.
+/// "DetectionParams v4" of the all-fixture scenarios means these since detection v6 (the defaults
+/// differ on `edge_bump19k3`, rules.md Q22 (b)).
+fn v5_params() -> DetectionParams {
+    let file = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../specs/detection/detection-params.v5.toml");
     toml::from_str(&std::fs::read_to_string(file).unwrap()).unwrap()
 }
 
@@ -412,7 +421,7 @@ fn v3_params_lp16k_dither_is_fake() {
 // ---- Scenario: A v3 params file differs only where a lossy-range step removes the guard --------
 #[test]
 fn v3_params_change_only_where_a_lossy_step_removes_the_guard() {
-    let (v3, v4) = (v3_params(), DetectionParams::default());
+    let (v3, v4) = (v3_params(), v5_params());
     for name in ALL_FIXTURES {
         let (a3, a4) = (analyze_with(name, Flac, &v3), analyze_with(name, Flac, &v4));
         assert_eq!(a3.cutoff, a4.cutoff, "{name}: cutoff");
@@ -428,7 +437,7 @@ fn v3_params_change_only_where_a_lossy_step_removes_the_guard() {
     }
 }
 
-const ALL_FIXTURES: [&str; 21] = [
+const ALL_FIXTURES: [&str; 24] = [
     "full_band",
     "lp16k",
     "lp19k",
@@ -450,6 +459,9 @@ const ALL_FIXTURES: [&str; 21] = [
     "sfb21_gaps_aa21k",
     "shelf19k5",
     "shelf19k5_bursts",
+    "edge_bump19k3",
+    "edge_bump19k3_lp19k5",
+    "holes_lp19k5",
 ];
 
 // ---- Scenario: A v2 params file changes only the guarded verdicts (@RF-04) ---------------------
@@ -457,7 +469,7 @@ const ALL_FIXTURES: [&str; 21] = [
 #[test]
 fn v2_params_change_only_the_guarded_verdicts() {
     const GUARDED: [&str; 1] = ["sfb21_gaps_aa21k"];
-    let (v2, v4) = (v2_params(), DetectionParams::default());
+    let (v2, v4) = (v2_params(), v5_params());
     for name in ALL_FIXTURES {
         let (a2, a4) = (analyze_with(name, Flac, &v2), analyze_with(name, Flac, &v4));
         assert_eq!(a2.cutoff, a4.cutoff, "{name}: cutoff");
@@ -532,19 +544,38 @@ fn deterministic() {
 #[test]
 fn default_params_equal_versioned_file() {
     let file = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../specs/detection/detection-params.v5.toml");
+        .join("../../specs/detection/detection-params.v6.toml");
     let text = std::fs::read_to_string(file).unwrap();
     let from_file: DetectionParams = toml::from_str(&text).unwrap();
     assert_eq!(DetectionParams::default(), from_file);
-    assert_eq!(from_file.algorithm_version, 5);
-    assert!(from_file.lossy.is_some(), "v5 has a [lossy] section");
+    assert_eq!(from_file.algorithm_version, 6);
+    assert!(from_file.lossy.is_some(), "v6 keeps the [lossy] section");
+    assert!(from_file.edge.is_some(), "v6 has an [edge] section");
+    // Their sections other than [edge] are those of v5 (and, for the lossless ones, v4).
+    let v5 = v5_params();
+    let without_edge = DetectionParams {
+        algorithm_version: 5,
+        edge: None,
+        ..DetectionParams::default()
+    };
+    assert_eq!(without_edge, v5);
+    let v4_file = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../specs/detection/detection-params.v4.toml");
+    let v4: DetectionParams = toml::from_str(&std::fs::read_to_string(v4_file).unwrap()).unwrap();
+    let lossless_only = DetectionParams {
+        algorithm_version: 4,
+        edge: None,
+        lossy: None,
+        ..DetectionParams::default()
+    };
+    assert_eq!(lossless_only, v4);
 }
 
 #[test]
-fn every_analysis_carries_algorithm_version_5() {
+fn every_analysis_carries_algorithm_version_6() {
     // Analysed, too short and corrupt tracks alike.
     for name in ["lp16k", "silence", "short", "corrupt"] {
-        assert_eq!(analyze(name, Flac).algorithm_version, 5, "{name}");
+        assert_eq!(analyze(name, Flac).algorithm_version, 6, "{name}");
     }
 }
 
