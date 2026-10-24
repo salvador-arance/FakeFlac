@@ -51,7 +51,7 @@ The verdict answers ADR-0031's question for lossy files: *is the content consist
 
 The cost: a change to a lossy value is a new version for lossless results too, so cached lossless results are recomputed once. Accepted.
 
-**Version numbering.** `algorithm_version` numbers are allocated by the files in `specs/detection/` (rules.md section 4). This spec allocates **5**. With `detection-params.v5.toml` in the repository, the **next free number is 6**: `/calibrate` proposals and the sample corpus's `candidate.toml` take 6 (Q13 (a), (c), (d)); the tool and its tests already compute it from the files (`next_free_version()`), so nothing in the code allocates it by hand. A later change to either part (lossless or lossy) takes 6, and both `rules.md` and this spec then cite the file that introduced it. **v5 becomes the default**: `DetectionParams::default()` equals `detection-params.v5.toml`.
+**Version numbering.** `algorithm_version` numbers are allocated by the files in `specs/detection/` (rules.md section 4). This spec allocates **5**. With `detection-params.v5.toml` in the repository, the **next free number is 6**: `/calibrate` proposals and the sample corpus's `candidate.toml` take 6 (Q13 (a), (c), (d)); the tool and its tests already compute it from the files (`next_free_version()`), so nothing in the code allocates it by hand. A later change to either part (lossless or lossy) takes 6, and both `rules.md` and this spec then cite the file that introduced it. **v5 becomes the default**: `DetectionParams::default()` equals `detection-params.v5.toml`. **Since detection v6** (rules.md, ADR-0042), which took 6, the default is `detection-params.v6.toml`: its `[lossy]` section and every value these rules read are v5's, so lossy files get exactly their v5 verdicts, reasons and estimates, with `algorithm_version` 6; the next free number is **7**.
 
 **v2, v3 and v4 stay loadable.** `[lossy]` is optional. Without it, lossless files get exactly their v2/v3/v4 verdicts (nothing in `rules.md` reads `[lossy]`), and lossy files are `Error(unsupportedFormat)` (Q8).
 
@@ -174,7 +174,7 @@ Examples with the v5 table: a 320 kbps MP3 with `fc` = 17000 Hz → `Fake`, esti
 
 **Order.** `validate()` runs the checks of rules.md section 4 first, then these in the order listed, codec by codec in the order `mp3`, `aac`, `opus`, and reports the **first** check that fails (so swapping the 112 and 128 kbps rows of `mp3`, which breaks both row checks, is reported as `lossy.cutoffs.mp3: bitrate_kbps increases`). A comparison with a NaN operand does not hold, so NaN is rejected. Every loader calls `validate()` (the calibration tool exits 2, evaluation.md section 9); a test checks that the defaults are valid.
 
-**Invariants.** Deterministic; read-only; `algorithm_version` of every `TrackAnalysis` = that of the params (5 with the defaults); the defaults equal `detection-params.v5.toml` (a test checks it); `[input]` and `[fft]` are unchanged, so the spectra of lossless files are the same as with v2–v4 (calibration/lossy.md section 5 on `EXTRACTION_VERSION`).
+**Invariants.** Deterministic; read-only; `algorithm_version` of every `TrackAnalysis` = that of the params (5 with v5; 6 with the defaults since detection v6); the defaults equal `detection-params.v6.toml` since detection v6, whose `[lossy]` section is v5's (a test checks it, rules.md section 4); `[input]` and `[fft]` are unchanged, so the spectra of lossless files are the same as with v2–v4 (calibration/lossy.md section 5 on `EXTRACTION_VERSION`).
 
 ## 7. Test signals and scenarios
 

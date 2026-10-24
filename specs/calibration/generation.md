@@ -43,6 +43,7 @@ decode: <ffmpeg> -nostdin -hide_banner -loglevel error -i <generated>/<id>.<ext>
 ```
 
 - `generate.decode_args` (version 1): `-c:a flac -sample_fmt s16`. The output is **16-bit FLAC** with no dither (ffmpeg's default requantisation), with the channels and the sample rate that the decoder delivers. **Opus stays at 48 kHz (OQ-8).** For a hi-res source, the rate is whatever the encoder accepted. The rate is recorded in `labels.csv` (`sample_rate_hz`).
+- **Per-setting decode (config version 3, detection v6).** A `[[generate.settings]]` entry may have its own `decode_args` (a list of strings, like `args`), used instead of `generate.decode_args` in its decode call; an entry without it uses `generate.decode_args`, so configs v1 and v2 behave exactly as before. The recipe's `decode_args` (section 3) is the list actually used, so such a setting gets its own cache entries, and the settings without it keep theirs. It applies to lossless transcodes only; a lossy stage never decodes. `calibration.v3.toml` uses it for four settings decoded to **24-bit FLAC** (`-c:a flac -sample_fmt s32 -bits_per_raw_sample 24`, no dither): `cbr128_s24`, `cbr192_s24`, `cbr320_s24` and `aac128_s24`, each with the encoder arguments, `ext`, `bitrate_kbps` and `lowpass_hz` of the setting it is named after (rules.md section 8, Q21). A fake lossless file is often written at 24 bits, where the decoder's residue above the low-pass can lie below the 16-bit rounding floor (rules.md section 2, `F_top`).
 - `<ffmpeg>` is `FAKEFLAC_FFMPEG` or `ffmpeg` on `PATH`. `ffmpeg_version` is the first line of `ffmpeg -version`, cut before ` Copyright`.
 - **Exact versions (OQ-17)** in `encoder_version`, read before the intermediate file is deleted:
   - `lame`: `<ffmpeg_version>; ` plus the encoder string of the LAME tag in the first frame of the MP3 (for example `LAME3.100`). Fallback: `libmp3lame (version not readable)`.
@@ -74,7 +75,7 @@ fingerprint id   = 16 hex digits of fmix64(fnv1a64(fingerprint JSON))
 
 - `EXTRACTION_VERSION` is a public integer of `fakeflac-audio` (2 today). It must be bumped in the same PR as any adapter change that alters the `AudioProbe` produced for the same file and parameters (ADR-0036).
 - **Decoder version bump:** `EXTRACTION_VERSION` **must also be bumped whenever the `symphonia` crate version is updated**, because decoder changes or bugfixes in symphonia can alter decoded audio samples and resulting spectra.
-- `algorithm_version` and every rule parameter (`[bands]`, `[extent]`, `[step]`, `[gaps]`, `[verdict]`) and `[spectrogram]` are **not** part of the fingerprint. Params files that differ only in those values share one cache, whatever their `algorithm_version`.
+- `algorithm_version` and every rule parameter (`[bands]`, `[extent]`, `[step]`, `[gaps]`, `[verdict]`, and the optional `[full_band]`, `[lossy]` and `[edge]`) and `[spectrogram]` are **not** part of the fingerprint. Params files that differ only in those values share one cache, whatever their `algorithm_version`.
 - Files: `features/<fingerprint id>.meta.json` (the fingerprint JSON) and `features/<fingerprint id>.jsonl` (entries). A params file with a different fingerprint gets its own extraction pass and its own files. The report says which params file used which fingerprint.
 
 ### 4.2 Entries

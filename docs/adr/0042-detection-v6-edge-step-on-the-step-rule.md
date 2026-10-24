@@ -1,34 +1,40 @@
 # ADR-0042: Detection v6: the step rule V4 does not apply to a content edge (median step and post-step residual)
 
-- Status: accepted (G1, #60: the direction; the values and Q1–Q7 of the proposal are settled by the follow-up spec PR and the corpus run)
-- Date: 2026-10-23
+- Status: accepted (G1, #60: the direction). Amended by the spec PR of detection v6 (`spec/RF-04-detection-v6`): the cap on `D`, the 24-bit floor, the values and the answers to Q1–Q7 of the proposal (rules.md Q12–Q22)
+- Date: 2026-10-23 (amended 2026-10-24)
 
 ## Context and rationale
 
 W4 (FP4), a purchased lossless track confirmed as a false positive, has been `Fake` since v2 through the step rule V4: `D` = 14.22 dB at `fs` = 19450 Hz, in the lossy range. v4 accepted it as a known limitation (rules.md Q7) because, with the measurements of v2–v4, its step "cannot be told from a cbr256 transcode's", and rules.md section 6 says clearing it "needs a new measurement, not a threshold", naming the continuity of the spectrum across the step as a candidate (RF-04, target T1).
 
-A local analysis of W4's album (aggregates and per-track measurements only, ADR-0022; details in `specs/pending/detection-v6-edge-step.md`) shows what makes the step. A short, narrow-band sound just below 19.45 kHz raises the **mean** spectrum `M` there by 8–12 dB, while the per-frame **median** `Q` is smooth across the step (it falls 0.32 dB). Above the step `M` keeps falling for another 17.5 dB before it reaches the floor near 21 kHz. A low-pass does the opposite: right above it the spectrum is at the floor. The same album bought as 320 kbps MP3 matches the lossless files up to 19.5 kHz, which rules out a lossy source cut at 19.5 kHz. A second track of the album (N1, `Suspicious` by V6, 0.12 dB below V4's threshold) shows the same pattern at 20.1 kHz.
+A local analysis of W4's album (aggregates and per-track measurements only, ADR-0022; details in `specs/detection/rules.md`, "Why v5's lossless rules were replaced") shows what makes the step. A short, narrow-band sound just below 19.45 kHz raises the **mean** spectrum `M` there by 8–12 dB, while the per-frame **median** `Q` is smooth across the step (it falls 0.32 dB). Above the step `M` keeps falling for another 17.5 dB before it reaches the floor near 21 kHz. A low-pass does the opposite: right above it the spectrum is at the floor. The same album bought as 320 kbps MP3 matches the lossless files up to 19.5 kHz, which rules out a lossy source cut at 19.5 kHz. A second track of the album (W5, `Suspicious` by V6, 0.12 dB below V4's threshold) shows the same pattern at 20.1 kHz.
 
-Neither the median step nor the residual separates W4 from transcodes on its own. Many transcodes have a median step ≤ 0, because the quantiser leaves holes below the low-pass, and a few have a large residual. Their conjunction separates W4 and N1 from all 78 transcodes of the album with a low-pass (seven `calibration.v2.toml` settings, 91 transcodes in all).
+Neither the median step nor the residual separates W4 from transcodes on its own. Many transcodes have a median step ≤ 0, because the quantiser leaves holes below the low-pass, and a few have a large residual. On W4's album their conjunction separated W4 and W5 from all 78 transcodes with a low-pass. **On the whole corpus it did not** (cache of the v4 run, 12,825 transcodes): the proposed conjunction (`D_Q < 3`, `R ≥ 12`) took `Fake` from 1.7 % of the cbr192 transcodes and 1.2 % of the aac128 ones, against a gate of 0.5 percentage points. The released transcodes are low-passes whose step is far deeper than W4's (most at `D` ≥ 17 dB, up to 44.5 dB): a content edge raises `M` by a moderate amount, a lossy low-pass removes everything.
 
-## Decision (proposed)
+A second gap: the residual depends on bit depth. The whole cache is decoded to 16 bits, where the rounding floor (about −104 dB absolute) bounds how low the spectrum above a low-pass can go. Decoded to 24 bits, the decoder's own residue can lie 15 dB lower, so `R` grows (up to 14 dB at the 95th percentile on a sample of 267 transcodes) and the rule can release a transcode at 24 bits that it keeps `Fake` at 16 bits.
 
-1. Two measurements of the existing spectra, defined only when `fs` is: the median step `D_Q` (the `d(i)` formula on `Q` at the band of `fs`) and the post-step residual `R` (the `above` level of `d(i)` minus the median of `M` in an absolute floor window [20900, 22000) Hz).
-2. `EdgeStep` = `InRange(fs)` ∧ `D_Q < edge.max_median_step_db` ∧ `R ≥ edge.min_residual_db`. V4 gains "and not `EdgeStep`"; such a track falls through to V5/V6 and is `Suspicious`. `LossyStep`, `FullBand` and every other rule are unchanged, so against v5 the only possible change is `Fake → Suspicious`, and the caught rate is unchanged by construction.
-3. Data, not code (ADR-0011): an optional `[edge]` section in `detection-params.v6.toml`, `algorithm_version` 6. Its indicative values are `max_median_step_db` 3 dB and `min_residual_db` 12 dB, decided by `just accept` on the real corpus. Without `[edge]`, files v2–v5 give exactly their own verdicts. No extraction change (`EXTRACTION_VERSION` stays) and no contract change.
-4. Acceptance against the v5 column of the same run: W4 not `Fake`; 15/15 confirmed fakes; `primary` 0 `Fake`; only `Fake → Suspicious`; and a gate of at most 0.5 percentage points of `Fake`-rate drop per protected setting.
+## Decision
+
+1. Three measurements of the existing spectra, defined only when `fs` is and the params have `[edge]`: the **median step `D_Q`** (the `d(i)` formula on `Q` at the band of `fs`), the **top floor `F_top`** (the median of `M` in an absolute floor window [20900, 22000) Hz) and the **post-step residual `R`** (the `above` level of `d(i)` minus `F_top`). For a file of more than 16 bits, or of undefined bit depth, `F_top` is never taken below `edge.floor_min_db` = −104 dB absolute, the 16-bit rounding floor of two averaged channels, so `R` is what it would be at 16 bits.
+2. `EdgeStep` = `InRange(fs)` ∧ `D_Q < edge.max_median_step_db` ∧ `R ≥ edge.min_residual_db` ∧ `D < edge.max_step_db`. V4 gains "and not `EdgeStep`"; such a track falls through to V5/V6 and is `Suspicious`. `LossyStep`, `FullBand`, V3 and every other rule are unchanged, so against v5 the only possible change is `Fake → Suspicious`, and the caught rate is unchanged by construction. No new reason (Q13), V4 only (Q12), not for lossy files (Q16).
+3. Data, not code (ADR-0011): an optional `[edge]` section in `detection-params.v6.toml`, `algorithm_version` 6, the new default. Values: `max_median_step_db` 3 dB, `min_residual_db` 15 dB, `max_step_db` 16 dB, chosen on split `tune` only (worst protected setting at most 0.25 pp, then the largest smallest margin of W4) and checked on `holdout` (worst protected setting 0.41 pp, cbr192). Without `[edge]`, files v2–v5 give exactly their own verdicts. No extraction change (`EXTRACTION_VERSION` stays; the bit depth is already in `AudioProbe` and in the calibration cache) and no contract change.
+4. Calibration: the tool reports `D_Q`, `F_top`, `R` and `EdgeStep`, with an edge report per setting on the high tail of `R` among the transcodes with a low `D_Q`; a per-setting `decode_args` lets `calibration.v3.toml` add four settings decoded to 24 bits.
+5. Acceptance (rules.md section 8) against the v5 column of the same run: W4 not `Fake`; 15/15 confirmed fakes, none `EdgeStep`; `primary` 0 `Fake`; only `Fake → Suspicious`; and at most 0.5 percentage points of `Fake`-rate drop per protected setting (the seven of v4 and the four 24-bit variants), on `all` and on `holdout`.
 
 ## Alternatives considered
 
-- **Median step alone** ("a low-pass must also show in `Q`"): many genuine transcodes have `D_Q` ≤ 0 (cbr192 median −2.83 dB on the album), so it would clear transcodes.
-- **Residual alone:** two V4-only transcodes of the album reach `R` = 12.05 and 14.24 dB. A threshold above them leaves W4 a 3.2 dB margin and no evidence that the corpus has no others.
+- **Median step alone** ("a low-pass must also show in `Q`"): many genuine transcodes have `D_Q` ≤ 0 (cbr192 median −2.83 dB on W4's album), so it would clear transcodes.
+- **Residual alone:** some transcodes keep a residue well above the floor right above the low-pass (on W4's album, two V4-only transcodes reach `R` = 12.05 and 14.24 dB).
+- **The conjunction without a cap on `D`** (the proposal of #60): fails the 0.5 pp gate on the corpus for every `x` ∈ {2, 3, 5} and `y` ∈ {12, …, 15}; at `y` = 16 it reaches 0.53 pp on `tune`.
+- **A larger `y` instead of a cap:** at `y` = 16.5–17 dB, within 1 dB of W4's own `R` (17.48 dB), the uncapped rule passes on `tune` (0.43 pp) but fails on `holdout` (aac128 1.24 pp).
+- **The 24-bit floor for every bit depth** (no bit-depth condition): at 16 bits it would move `F_top` by at most 0.2 dB on a few transcodes, but keeping 16-bit files exactly as measured keeps the calibration figures valid as they are.
 - **Ignore an `EdgeStep` everywhere** (V4, V6 and `LossyStep`): it re-enables the full-band guard on V3, and a v2 transcode with `G` = 29.42 dB lost its `Fake`. Rejected.
-- **Skip V4 and V6, keep `LossyStep`** (W4 and N1 become `Real`): no low-pass transcode of the album is lost, but a misread low-pass could become `Real`. Left to G1 as Q1 of the proposal; the default is V4 only.
+- **Skip V4 and V6, keep `LossyStep`** (W4 and W5 become `Real`): a misread low-pass could become `Real`. Rejected (Q12).
 - **A `(U, B)` guard on V4:** already simulated and rejected in rules.md section 6 (it costs up to 19.5 pp of `Fake` rate).
 
 ## Consequences
 
-- W4 is expected to become `Suspicious` (`AmbiguousCutoff`) and T1 to pass. N1 and N2 stay `Suspicious`: N2's verdict comes from the gap rule, outside this proposal.
-- The calibration tool must report `D_Q`, `R` and `EdgeStep` (a change to `specs/calibration/evaluation.md` in the same spec PR).
-- The evidence is one album. The values are indicative and the corpus run decides; if its gates fail, the figures go back to G1 and are not tuned in the implement stage.
-- The next free `algorithm_version` becomes 7.
+- W4 is expected to become `Suspicious` (`AmbiguousCutoff`) and T1 to pass. W5 and W6 stay `Suspicious`: W6's verdict comes from the gap rule, outside this decision (Q15).
+- The evidence for the content-edge side is one false positive; the values were chosen on `tune`, and on `holdout` cbr192 is one transcode away from the gate. If E1, E2, E3 or E6 fails in the corpus run, the figures go back to G1 and are not tuned in the implement stage.
+- The default `algorithmVersion` becomes 6 (cached app results are recomputed, ADR-0008) and the next free `algorithm_version` becomes 7.
+- Protected tests that change in the test stage: the default-params and `algorithmVersion` checks of `crates/fakeflac-audio/tests/{detection_lossless,detection_lossy,params_files}.rs`, `crates/fakeflac-core/tests/{detect_rules,detect_lossy,params_lossy}.rs` and `src-tauri/tests/run_analysis_lossy_v5.rs` (v5 → v6, 5 → 6); the frontend fixture `src/lib/testing/fixtures.ts` only if a test compares its `algorithmVersion` with the backend's. The calibration tool's tests compute the next free version from the files, so they need no change for it.

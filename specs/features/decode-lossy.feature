@@ -7,7 +7,8 @@ Feature: Decode MP3 and M4A files (H2)
   fixtures of specs/detection/lossy-fixtures.md, written inside the tests
   (ADR-0040); the test stage first confirms the checks of its section 3.
   Opus is specified in specs/pending/opus.feature and not tested yet.
-  Parameters: the default DetectionParams (detection-params.v5.toml).
+  Parameters: the default DetectionParams (detection-params.v6.toml since
+  detection v6, rules.md Q22 (c): v5's values plus [edge], algorithmVersion 6).
 
   # --- Scan ----------------------------------------------------------------
 
@@ -94,7 +95,7 @@ Feature: Decode MP3 and M4A files (H2)
   Scenario: A lossy row has the same fields as a lossless row
     Given a folder "Mixed" with "full_band.flac" and the lossy fixtures "mp3_320_lp17k.mp3" and "m4a_aac_128_lp16k.m4a"
     When I analyse "Mixed"
-    Then every trackDone event carries a complete TrackAnalysis with algorithmVersion 5
+    Then every trackDone event carries a complete TrackAnalysis with algorithmVersion 6
     And the table shows "mp3_320_lp17k.mp3" with format "MP3", bitrate "320 kbps", real bitrate "≈128 kbps" and state "Fake", and a cutoff within 200 Hz of 17.0 kHz
     And the table shows "m4a_aac_128_lp16k.m4a" with format "M4A", bitrate "128 kbps", real bitrate "128 kbps" and state "Real"
     And the table shows "full_band.flac" with "—" in its bitrate and real bitrate cells

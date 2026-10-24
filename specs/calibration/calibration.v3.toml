@@ -1,0 +1,220 @@
+# Calibration tool configuration v3 (RP-11, RF-04, RF-15, ADR-0036, ADR-0042). Specs: specs/calibration/calibration.md,
+# generation.md and lossy.md. v3 = every v2 value unchanged, plus four lossless settings decoded to 24 bits
+# (per-setting decode_args, generation.md section 2; rules.md section 8, Q21). The default of --config stays v2.
+# Changing a value means a new file version.
+config_version = 3
+
+[split]                               # inputs.md section 4; split units: lossy.md section 3
+seed = "fakeflac-calibration-1"
+holdout_fraction = 0.30
+min_holdout_albums = 2                # minimum holdout albums (units) per class (OQ-7)
+disc_folder_prefixes = ["cd", "disc", "disk", "disco"]   # CD1, Disc 2, Disco 3 -> merged into the parent album
+
+[generate]                            # generation.md
+# fragment_s = 60.0                   # duration in seconds (centred); omitted / not set = full track (default, OQ-10)
+keep_audio = false                    # delete the generated file once its spectra are cached (OQ-9)
+keep_misclassified = false            # retain generated audio only for misclassified tracks to inspect spectrograms (OQ-9)
+decode_args = ["-c:a", "flac", "-sample_fmt", "s16"]   # back to 16-bit FLAC, no dither; Opus stays at 48 kHz (lossless transcodes only)
+min_removed_hf_db = 12.0              # minimum drop in HF bands (>= lowpass_hz) for a transcode or cascade to be detectable
+
+[[generate.settings]]
+id = "cbr128"
+encoder = "lame"
+ext = "mp3"
+bitrate_kbps = 128
+lowpass_hz = 16000
+args = ["-c:a", "libmp3lame", "-b:a", "128k"]
+
+[[generate.settings]]
+id = "cbr192"
+encoder = "lame"
+ext = "mp3"
+bitrate_kbps = 192
+lowpass_hz = 19000
+args = ["-c:a", "libmp3lame", "-b:a", "192k"]
+
+[[generate.settings]]
+id = "cbr256"
+encoder = "lame"
+ext = "mp3"
+bitrate_kbps = 256
+lowpass_hz = 19500
+args = ["-c:a", "libmp3lame", "-b:a", "256k"]
+
+[[generate.settings]]
+id = "cbr320"
+encoder = "lame"
+ext = "mp3"
+bitrate_kbps = 320
+lowpass_hz = 20500
+args = ["-c:a", "libmp3lame", "-b:a", "320k"]
+
+[[generate.settings]]
+id = "v0"
+encoder = "lame"
+ext = "mp3"                           # VBR: no bitrate_kbps (so it can only be a single-stage lossy entry)
+lowpass_hz = 22050
+args = ["-c:a", "libmp3lame", "-q:a", "0"]
+
+[[generate.settings]]
+id = "v2"
+encoder = "lame"
+ext = "mp3"
+lowpass_hz = 19000
+args = ["-c:a", "libmp3lame", "-q:a", "2"]
+
+[[generate.settings]]
+id = "aac128"
+encoder = "aac"                       # ffmpeg's native AAC encoder
+ext = "m4a"
+bitrate_kbps = 128
+lowpass_hz = 17000
+args = ["-c:a", "aac", "-b:a", "128k"]
+
+[[generate.settings]]
+id = "aac256"
+encoder = "aac"
+ext = "m4a"
+bitrate_kbps = 256
+lowpass_hz = 20000
+args = ["-c:a", "aac", "-b:a", "256k"]
+
+[[generate.settings]]
+id = "opus128"
+encoder = "opus"                      # libopus, VBR by default; decodes at 48 kHz
+ext = "opus"
+bitrate_kbps = 128
+lowpass_hz = 20000
+args = ["-c:a", "libopus", "-b:a", "128k"]
+
+# --- 24-bit decodes (detection v6, rules.md section 8): same encode as the setting they are named after, decoded
+# to 24-bit FLAC instead of generate.decode_args. Lossless transcodes only; no lossy entry uses them as a stage.
+
+[[generate.settings]]
+id = "cbr128_s24"
+encoder = "lame"
+ext = "mp3"
+bitrate_kbps = 128
+lowpass_hz = 16000
+args = ["-c:a", "libmp3lame", "-b:a", "128k"]
+decode_args = ["-c:a", "flac", "-sample_fmt", "s32", "-bits_per_raw_sample", "24"]
+
+[[generate.settings]]
+id = "cbr192_s24"
+encoder = "lame"
+ext = "mp3"
+bitrate_kbps = 192
+lowpass_hz = 19000
+args = ["-c:a", "libmp3lame", "-b:a", "192k"]
+decode_args = ["-c:a", "flac", "-sample_fmt", "s32", "-bits_per_raw_sample", "24"]
+
+[[generate.settings]]
+id = "cbr320_s24"
+encoder = "lame"
+ext = "mp3"
+bitrate_kbps = 320
+lowpass_hz = 20500
+args = ["-c:a", "libmp3lame", "-b:a", "320k"]
+decode_args = ["-c:a", "flac", "-sample_fmt", "s32", "-bits_per_raw_sample", "24"]
+
+[[generate.settings]]
+id = "aac128_s24"
+encoder = "aac"
+ext = "m4a"
+bitrate_kbps = 128
+lowpass_hz = 17000
+args = ["-c:a", "aac", "-b:a", "128k"]
+decode_args = ["-c:a", "flac", "-sample_fmt", "s32", "-bits_per_raw_sample", "24"]
+
+# --- Lossy entries (RF-15, lossy.md section 4). The lossy file itself is the labelled track. ---------------
+# One stage: an honest encode (truth real). Several stages: a cascade; truth fake when an earlier stage has a
+# lower bitrate_kbps than the last. Opus cannot be the last stage until the Opus decoder lands (ADR-0030).
+
+[[generate.lossy]]
+id = "cbr128"
+stages = ["cbr128"]
+
+[[generate.lossy]]
+id = "cbr192"
+stages = ["cbr192"]
+
+[[generate.lossy]]
+id = "cbr256"
+stages = ["cbr256"]
+
+[[generate.lossy]]
+id = "cbr320"
+stages = ["cbr320"]
+
+[[generate.lossy]]
+id = "v0"
+stages = ["v0"]
+
+[[generate.lossy]]
+id = "v2"
+stages = ["v2"]
+
+[[generate.lossy]]
+id = "aac128"
+stages = ["aac128"]
+
+[[generate.lossy]]
+id = "aac256"
+stages = ["aac256"]
+
+[[generate.lossy]]
+id = "cbr128_cbr320"                  # B5 (gated): a 320 kbps MP3 made from a 128 kbps MP3
+stages = ["cbr128", "cbr320"]
+
+[[generate.lossy]]
+id = "aac128_cbr320"                  # B5 (gated): the streaming-site case, AAC 128 -> MP3 320 at 44.1 kHz
+stages = ["aac128", "cbr320"]
+
+[[generate.lossy]]
+id = "cbr192_cbr320"                  # B6 (reported)
+stages = ["cbr192", "cbr320"]
+
+[[generate.lossy]]
+id = "cbr128_aac256"                  # B6 (reported)
+stages = ["cbr128", "aac256"]
+
+[[generate.lossy]]
+id = "opus128_cbr320"                 # B6 (reported): Opus -> MP3 320 at 48 kHz, a known limitation
+stages = ["opus128", "cbr320"]
+
+[[generate.lossy]]
+id = "cbr320_cbr128"                  # B2 (gated): a negative cascade, honest at 128 kbps
+stages = ["cbr320", "cbr128"]
+
+# --- Label resolution (lossy.md section 1.5) -------------------------------------------------------------
+[labels.upstream_by_rate]             # upstream=by-rate: decoded sample rate -> upstream codec and source bound
+"44100" = { upstream = "aac", source_max_kbps = 128 }   # streaming-site rip of the AAC 128 stream
+"48000" = { upstream = "opus" }                          # streaming-site rip of the Opus stream (no bound)
+
+[report]                              # evaluation.md sections 3 and 8
+z = 1.96                              # 95 % Wilson interval
+small_sample_tracks = 100
+small_sample_albums = 10
+near_db = 1.0
+near_hz = 300.0
+
+[[targets]]                           # evaluation.md section 6; lossless rows only; reported, never change the exit code
+id = "T1"
+description = "No purchased or ripped track is Fake (planning 2.7)"
+classes = ["primary"]
+verdict = "fake"
+max_count = 0
+
+[[targets]]
+id = "T2"
+description = "No transcode from 128 or 192 kbps is Real (H1 delivery criterion)"
+settings = ["cbr128", "cbr192"]
+verdict = "real"
+max_count = 0
+
+[[targets]]
+id = "T3"
+description = "No transcode from 320 kbps is Real (planning 2.7)"
+settings = ["cbr320"]
+verdict = "real"
+max_count = 0

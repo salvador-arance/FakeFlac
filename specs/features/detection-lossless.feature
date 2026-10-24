@@ -7,7 +7,10 @@ Feature: Verdict for lossless files (WAV, FLAC)
   detection-params.v5.toml, whose lossless sections and values are v4's:
   "DetectionParams v4" below means those values, and the tests may use the
   defaults for them; only "Parameters come from the versioned file" checks
-  the version.
+  the version. Since detection v6 the defaults are detection-params.v6.toml,
+  which adds [edge]; no fixture of this feature is an edge step
+  (detection-edge-step.feature, "v6 gives the v5 verdicts on every other
+  fixture"), so the defaults still give these results.
   Changed for v4 (the test author updates the derived tests listed in ADR-0039,
   "Consequences"): sfb21_gaps and shelf19k5_bursts are fake again (their deepest
   step lies in the lossy range, so they are not full band); only
@@ -213,10 +216,13 @@ Feature: Verdict for lossless files (WAV, FLAC)
   Scenario: Parameters come from the versioned file
     Changed for detection v5 (specs/detection/lossy-source.md, Q13 (b)): the
     defaults are v5, which keeps every lossless value of v4 and adds [lossy].
+    Changed for detection v6 (specs/detection/rules.md, Q22 (b)): the defaults
+    are v6, which keeps every section of v5 and adds [edge].
     Given the default DetectionParams of the code
-    Then they are equal to specs/detection/detection-params.v5.toml
-    And their lossless sections are equal to those of specs/detection/detection-params.v4.toml
-    And every TrackAnalysis carries algorithmVersion 5
+    Then they are equal to specs/detection/detection-params.v6.toml
+    And their sections other than [edge] are equal to those of specs/detection/detection-params.v5.toml
+    And their lossless sections other than [edge] are equal to those of specs/detection/detection-params.v4.toml
+    And every TrackAnalysis carries algorithmVersion 6
 
   @RF-03 @RNF-04
   Scenario: Stream without a declared length
