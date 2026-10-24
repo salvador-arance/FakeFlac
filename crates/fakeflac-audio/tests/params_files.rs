@@ -81,10 +81,11 @@ fn v4_file_is_accepted_and_has_max_lossy_step_db() {
 // Built here because tests cannot be shared across crates.
 #[test]
 fn v3_file_equals_the_v4_defaults_without_max_lossy_step_db() {
-    // The defaults are v5 (ADR-0041); a v3 file has no [lossy] section.
+    // The defaults are v6 (ADR-0042); a v3 file has no [lossy] or [edge] section.
     let mut expected = DetectionParams {
         algorithm_version: 3,
         lossy: None,
+        edge: None,
         ..DetectionParams::default()
     };
     expected.full_band.as_mut().unwrap().max_lossy_step_db = None;
