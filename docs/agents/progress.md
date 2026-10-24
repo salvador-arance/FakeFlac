@@ -2,6 +2,40 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-24 - Detection v6 spec PR (#62, waiting for G1)
+
+**Done**
+- **Corpus analysis** (offline port of `measure()`/`decide()`, 0 mismatches on 14,241 rows; cache of run `20261019T141953Z`; detectable transcodes only):
+  - values chosen on `tune` only, then checked on `holdout`: `EdgeStep` = `InRange(fs)` ∧ `D_Q < 3` ∧ `R ≥ 15` ∧ `D < 16`;
+  - `holdout` passes E6 with a thin margin: worst cbr192 0.41 pp (2/484);
+  - W4 not `Fake`, 15/15 confirmed fakes `Fake`, `primary` 0 `Fake`.
+- **24-bit correction:** for files above 16 bits, `F_top` is never below −104 dB absolute (the 16-bit floor).
+  - Tested on 267 corpus transcodes decoded to both 16 and 24 bits (scratch only).
+  - It recovers the one 24-bit-only release, and W4 is still released.
+- **#62 (`spec/RF-04-detection-v6`, debdc6b):**
+  - rules.md v6 (sections 2–4, 6, and 8: E1–E7; Q12–Q18 resolved, owner delegated; Q19–Q22 open);
+  - `detection-params.v6.toml` (default, `[edge]`), fixtures `edge_bump19k3`, `edge_bump19k3_lp19k5` and `holes_lp19k5`, `detection-edge-step.feature`;
+  - evaluation.md edge report, per-setting `decode_args`, `calibration.v3.toml` (4 settings `_s24`), version references (next free 7);
+  - ADR-0042 amended; pending file removed.
+  - `just check`, `just trace` and `privacy-check` are green.
+- Throwaway scripts (aggregates only, not versioned): `target/v6-analysis/` (git-ignored). Copy them to the calibration folder if they should be kept.
+
+**Pending**
+- G1 on #62 (Q19–Q22).
+- Then `/feature RF-04` (detection v6).
+- Then `just accept --config specs/calibration/calibration.v3.toml --params specs/detection/detection-params.v5.toml --params specs/detection/detection-params.v6.toml`. The first run generates about 5,700 new 24-bit transcodes.
+- Owner, before the run: add W5 and W6 (the proposal's N1 and N2) as `false-positive` lines of `confirmed.txt` after W4.
+- Unchanged from the block below: the review-3 improvements of #58, Q16/Q17 in `mp3.rs`, the #55 leftovers, B1–B11 on the corpus, `clippy --all-targets` in `full_band.rs:892`.
+
+**Blockers / questions for the human**
+- Q19: the values rest on `tune`, and `holdout` cbr192 is one transcode from the 0.5 pp gate.
+- Q20: the −104 dB floor.
+- Q21: the 24-bit settings gated in E6.
+- Q22: the list of changed approved specs and protected tests.
+- Environment: the `guard-protected` hook blocks Write/Edit outside the repo, the scratchpad included. Put throwaway scripts in `target/` (ignored), and write audio outside the repo only through ffmpeg.
+
+**Next step:** after G1 merges #62, run `/feature RF-04`.
+
 ## 2026-10-23 - Detection v6 proposal (edge step on V4): merged at G1 (#60)
 
 **Done**
