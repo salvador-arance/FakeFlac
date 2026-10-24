@@ -2,6 +2,29 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-24 - #63 merged (G2); the corpus was reorganised
+
+**Done**
+- #63 merged (03fdfdc); `just prune-branches` run.
+- `confirmed.txt` checked (read-only):
+  - W5 and W6 are the 5th and 6th `false-positive` lines, after W4;
+  - they match the measurements of the v4 run: W5 `fs` 20150 and `D` 9.88, W6 `G` 5.65;
+  - `trusted.txt` covers them.
+- `.claude/agents/code-reviewer.md`: `model: opus` → `sonnet` (owner, to cut usage).
+
+**Correction to the block below: the next run is a cold run with a new split.**
+- **Paths changed.** The owner reorganised the library after the v4 run (`20261019T141953Z`). The relative paths changed, folders and file names included, and `trusted.txt` and `confirmed.txt` already use the new paths. No run has used them yet.
+- **Cold run.** Corpus cache entries are keyed by path, size and mtime, and transcode recipes contain the source path (generation.md sections 3 and 4). The next `just accept` re-extracts the whole corpus and regenerates every transcode, not only the 24-bit ones. Expect a run much longer than the earlier "about 5,700 transcodes".
+- **New split.** `album_id` is the folder path (inputs.md section 4), so `tune`/`holdout` is drawn again.
+  - Verdicts on `all` should not change, since the audio is the same.
+  - The `holdout` figures of rules.md section 8 (Q19) will not reproduce.
+  - The new `holdout` mixes in albums from the old `tune`, where the v6 values were chosen, so it is no longer a clean holdout for E6.
+
+**Blockers / questions for the human**
+- Before `just accept`: is E6 judged on `all` plus the new, contaminated `holdout`? Or does Q19's evaluation go back to G1, for example by pinning the old split or re-choosing on the new `tune`?
+
+**Next step:** answer the question above, then run `just accept --config specs/calibration/calibration.v3.toml --params specs/detection/detection-params.v5.toml --params specs/detection/detection-params.v6.toml`.
+
 ## 2026-10-24 - Detection v6 implemented (#63, waiting for G2)
 
 **Done**
