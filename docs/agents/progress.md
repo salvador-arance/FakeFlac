@@ -2,6 +2,34 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-24 - Detection v6 implemented (#63, waiting for G2)
+
+**Done**
+- #62 merged (G1). Q19 and Q22 were still "Open, default yes"; the merge was taken as approval of the defaults.
+- `/feature RF-04` on `feat/RF-04-detection-v6`, PR #63. `just ci`, `just trace` and `privacy-check` are green.
+  - Tests: 80e83f7 (with compile stubs) and c1da438 (rustfmt; the test stage skips `check-fast`, so fmt slipped through).
+  - Implementation: 6bd0830, covering v6 core, `[edge]` and calibration v3.
+  - e57e7f6: protected-test fix in `params_files.rs` (`edge: None`). Inside ADR-0042's list, but made after the feat commit; the PR says so.
+  - Review round 1 found one blocking issue: the v6 near-threshold rule (evaluation.md section 8) was missing. Fixed by 8c070ef (tests) and fcd3b93 (the near rule, grid points filtered by `validate()`, reuse of `is_edge_step`).
+  - Review round 2 approved.
+- `.claude/agents/code-reviewer.md`: `model: opus` → `sonnet` (owner, to cut usage). **Uncommitted** in the working tree, kept out of #63; commit it in its own docs/chore PR.
+
+**Pending**
+- G2 on #63.
+- Then the owner adds W5 and W6 to `confirmed.txt` (the draft is in `target/v6-analysis/confirmed.txt`; check that the rip `.m4a` files are stream copies).
+- Then `just accept --config specs/calibration/calibration.v3.toml --params specs/detection/detection-params.v5.toml --params specs/detection/detection-params.v6.toml`. The first run generates about 5,700 new 24-bit transcodes. If E1, E2, E3 or E6 fails, the figures go back to G1, not to tuning.
+- Follow-ups listed in #63:
+  - add a test for the edge-aware list in `render.rs`;
+  - add a test for the `validate()` grid filter;
+  - G1 clarifications: lossy rows' edge columns (lossy.md 6.4), the `floor_min_db` comment in `detection-params.v6.toml`, the p95 method;
+  - `clippy --all-targets` `unwrap_used` in the `fakeflac-audio` tests.
+- Unchanged from the block below: the review-3 improvements of #58, Q16/Q17 in `mp3.rs`, the #55 leftovers, B1–B11.
+
+**Blockers / questions for the human**
+- None for #63 itself. Before the corpus run: W5/W6 in `confirmed.txt`.
+
+**Next step:** after G2 merges #63, run `just prune-branches`, then the `just accept` run above.
+
 ## 2026-10-24 - Detection v6 spec PR (#62, waiting for G1)
 
 **Done**

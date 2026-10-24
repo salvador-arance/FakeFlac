@@ -371,6 +371,10 @@ pub fn parse_grid(text: &str, settings: &[String]) -> Result<GridFile, ToolError
             errors.push(format!("{name}: lossy parameters cannot be searched yet"));
             continue;
         }
+        if name.starts_with("edge.") {
+            errors.push(format!("{name}: edge parameters cannot be searched yet"));
+            continue;
+        }
         let extraction = name == "algorithm_version"
             || name.starts_with("input.")
             || name.starts_with("fft.")
@@ -600,7 +604,7 @@ pub fn search(baseline: &DetectionParams, rows: &[SearchRow<'_>], grid: &GridFil
         for (k, v) in grid.keys.iter().zip(values.iter()) {
             set_value(&mut params, &k.key, *v);
         }
-        if invariant_violations(&params).is_empty() {
+        if invariant_violations(&params).is_empty() && params.validate().is_ok() {
             let changed = values
                 .iter()
                 .zip(baseline_values.iter())

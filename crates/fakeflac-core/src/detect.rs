@@ -1,5 +1,5 @@
-//! Detection rules (RF-03, RF-04, RF-15): the v4 rules for lossless files
-//! (`specs/detection/rules.md`) and the v5 rules L0 to L6 for lossy files, which estimate the source
+//! Detection rules (RF-03, RF-04, RF-15): the v6 rules for lossless files (v4 plus the edge step,
+//! `specs/detection/rules.md`) and the v5 rules L0 to L6 for lossy files, which estimate the source
 //! bitrate (`specs/detection/lossy-source.md`). Pure functions: no I/O, every number comes from
 //! `DetectionParams`.
 
@@ -30,6 +30,12 @@ pub struct Measurements {
     pub upper_level_db: Option<f64>,
     /// `B`: upper burstiness (median of `M - Q` in the upper window); `None` when undefined.
     pub upper_burst_db: Option<f64>,
+    /// `D_Q` (v6): the step on the median spectrum at `fs`; `None` when undefined.
+    pub median_step_db: Option<f64>,
+    /// `F_top` (v6): the top floor; `None` when undefined.
+    pub top_floor_db: Option<f64>,
+    /// `R` (v6): the post-step residual; `None` when undefined.
+    pub residual_db: Option<f64>,
 }
 
 /// Outcome of the rules for one analysed (decodable, long enough) track.
@@ -171,6 +177,32 @@ pub fn measure(spectra: &BandSpectra, params: &DetectionParams) -> Measurements 
         _ => (None, None),
     };
 
+    // Edge measurements (v6): D_Q, F_top and R, only at the `fs` chosen on `M`.
+    let (median_step_db, top_floor_db, residual_db) = match (&params.edge, best, top) {
+        (Some(edge), Some((_, i)), top) => {
+            let mq = |from: usize, to: usize| {
+                spectra.median_db[from..=to].iter().sum::<f64>() / (to - from + 1) as f64
+            };
+            let below_q = mq(i - w, i - 1);
+            let above_q = mq(i + 1, i + w);
+            let slope_q = (mq(i - 2 * w, i - w - 1) - below_q).max(0.0);
+            let d_q = below_q - above_q - slope_q;
+            let window: Vec<f64> = top.map_or_else(Vec::new, |top| {
+                (0..=top)
+                    .filter(|&b| centre(b) >= edge.floor_low_hz && centre(b) < edge.floor_high_hz)
+                    .map(|b| m[b])
+                    .collect()
+            });
+            if window.is_empty() {
+                (Some(d_q), None, None)
+            } else {
+                let f_top = median(&window).max(edge.floor_min_db - l_ref);
+                (Some(d_q), Some(f_top), Some(mean_of(i + 1, i + w) - f_top))
+            }
+        }
+        _ => (None, None, None),
+    };
+
     Measurements {
         noise_floor_db,
         high_frequency_db,
@@ -180,7 +212,26 @@ pub fn measure(spectra: &BandSpectra, params: &DetectionParams) -> Measurements 
         gap_db,
         upper_level_db,
         upper_burst_db,
+        median_step_db,
+        top_floor_db,
+        residual_db,
     }
+}
+
+/// Section 2, `EdgeStep` (v6): the params have `[edge]`, `fs` is in the lossy range, `D_Q` and `R`
+/// are defined, `D_Q < max_median_step_db`, `R >= min_residual_db` and `D < max_step_db`.
+pub fn is_edge_step(m: &Measurements, params: &DetectionParams) -> bool {
+    let (Some(edge), Some(fs), Some(d_q), Some(r)) =
+        (&params.edge, m.step_hz, m.median_step_db, m.residual_db)
+    else {
+        return false;
+    };
+    let v = &params.verdict;
+    fs >= v.lossy_min_cutoff_hz
+        && fs < v.fake_max_cutoff_hz
+        && d_q < edge.max_median_step_db
+        && r >= edge.min_residual_db
+        && m.step_db < edge.max_step_db
 }
 
 /// Section 2, "Reported cutoff": `fs` and its steepness when `D >= step_suspicious_db`,
@@ -226,6 +277,7 @@ pub fn decide(m: &Measurements, params: &DetectionParams) -> (Verdict, Vec<Suspi
     let d = m.step_db;
     let fs = m.step_hz;
     let full_band = is_full_band(m, params);
+    let edge_step = is_edge_step(m, params);
     let in_range = fs.is_some_and(|f| f >= v.lossy_min_cutoff_hz && f < v.fake_max_cutoff_hz);
     if m.high_frequency_db < v.low_hf_threshold_db {
         // V2
@@ -233,7 +285,9 @@ pub fn decide(m: &Measurements, params: &DetectionParams) -> (Verdict, Vec<Suspi
             Verdict::Suspicious,
             vec![SuspicionReason::LowHighFrequencyContent],
         )
-    } else if !full_band && (m.gap_db >= v.gap_fake_db || (d >= v.step_fake_db && in_range)) {
+    } else if !full_band
+        && (m.gap_db >= v.gap_fake_db || (d >= v.step_fake_db && in_range && !edge_step))
+    {
         // V3, V4
         (Verdict::Fake, vec![])
     } else if m.gap_db >= v.gap_suspicious_db {

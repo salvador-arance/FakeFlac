@@ -107,6 +107,17 @@ pub struct Setting {
     #[serde(default = "default_true")]
     pub lossless_transcode: bool,
     pub args: Vec<String>,
+    /// Decode arguments of this setting instead of `generate.decode_args` (config v3, generation.md
+    /// section 2). `None` uses `generate.decode_args`.
+    #[serde(default)]
+    pub decode_args: Option<Vec<String>>,
+}
+
+impl GenerateConfig {
+    /// The decode arguments used for `setting`: its own, or `generate.decode_args`.
+    pub fn decode_args_for<'a>(&'a self, setting: &'a Setting) -> &'a [String] {
+        setting.decode_args.as_deref().unwrap_or(&self.decode_args)
+    }
 }
 
 fn default_true() -> bool {
@@ -240,9 +251,9 @@ impl Config {
 
     fn validate(&self) -> Result<(), ToolError> {
         let mut errors: Vec<String> = Vec::new();
-        if !(1..=2).contains(&self.config_version) {
+        if !(1..=3).contains(&self.config_version) {
             errors.push(format!(
-                "config_version {} is not supported (expected 1 or 2)",
+                "config_version {} is not supported (expected 1, 2 or 3)",
                 self.config_version
             ));
         }

@@ -1,4 +1,4 @@
-//! `DetectionParams` (S4, ADR-0011). Mirrors `specs/detection/detection-params.v5.toml`;
+//! `DetectionParams` (S4, ADR-0011). Mirrors `specs/detection/detection-params.v6.toml`;
 //! a test checks that `Default` equals that file. Values are data, never constants in the algorithm.
 
 use serde::{Deserialize, Serialize};
@@ -33,6 +33,9 @@ pub struct DetectionParams {
     /// are not judged.
     #[serde(default)]
     pub lossy: Option<LossyParams>,
+    /// Edge step on V4 (v6, ADR-0042). `None` (a v2-v5 file): `EdgeStep` never holds.
+    #[serde(default)]
+    pub edge: Option<EdgeParams>,
     pub verdict: VerdictParams,
     pub spectrogram: SpectrogramParams,
 }
@@ -109,6 +112,18 @@ pub struct FullBandParams {
     pub max_lossy_step_db: Option<f64>,
 }
 
+/// The `[edge]` section (rules.md sections 2 and 4, ADR-0042).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EdgeParams {
+    pub floor_low_hz: f64,
+    pub floor_high_hz: f64,
+    pub floor_min_db: f64,
+    pub max_median_step_db: f64,
+    pub min_residual_db: f64,
+    pub max_step_db: f64,
+}
+
 /// The `[lossy]` section (lossy-source.md section 6).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -165,11 +180,11 @@ pub struct SpectrogramParams {
 }
 
 impl Default for DetectionParams {
-    /// DetectionParams v5: the values of `specs/detection/detection-params.v5.toml`
+    /// DetectionParams v6: the values of `specs/detection/detection-params.v6.toml`
     /// (a test checks the equality).
     fn default() -> Self {
         DetectionParams {
-            algorithm_version: 5,
+            algorithm_version: 6,
             input: InputParams {
                 min_duration_s: 5.0,
                 edge_skip_percent: 5.0,
@@ -309,6 +324,14 @@ impl Default for DetectionParams {
                     opus: None,
                 },
             }),
+            edge: Some(EdgeParams {
+                floor_low_hz: 20900.0,
+                floor_high_hz: 22000.0,
+                floor_min_db: -104.0,
+                max_median_step_db: 3.0,
+                min_residual_db: 15.0,
+                max_step_db: 16.0,
+            }),
             verdict: VerdictParams {
                 low_hf_threshold_db: -60.0,
                 gap_fake_db: 6.0,
@@ -360,6 +383,9 @@ pub enum ParamsError {
     /// A `[lossy]` check failed (lossy-source.md section 6); the text names the inequality.
     #[error("invalid parameters: {check} does not hold")]
     Lossy { check: String },
+    /// An `[edge]` check failed (rules.md section 4); the text names the inequality.
+    #[error("invalid parameters: {check} does not hold")]
+    Edge { check: String },
 }
 
 impl DetectionParams {
@@ -407,8 +433,49 @@ impl DetectionParams {
         if let Some(l) = &self.lossy {
             validate_lossy(l, v.step_suspicious_db)?;
         }
+        if let Some(e) = &self.edge {
+            validate_edge(
+                e,
+                v.fake_max_cutoff_hz,
+                f64::from(self.step.window_bands) * self.fft.band_hz,
+                v.step_fake_db,
+            )?;
+        }
         Ok(())
     }
+}
+
+/// The `[edge]` checks of rules.md section 4, in the order listed there.
+fn validate_edge(
+    e: &EdgeParams,
+    fake_max_cutoff_hz: f64,
+    step_window_hz: f64,
+    step_fake_db: f64,
+) -> Result<(), ParamsError> {
+    let fail = |check: &str| {
+        Err(ParamsError::Edge {
+            check: check.to_string(),
+        })
+    };
+    if !le(fake_max_cutoff_hz + step_window_hz, e.floor_low_hz) {
+        return fail("edge.floor_low_hz ≥ fake_max_cutoff_hz + step_window_bands · band_hz");
+    }
+    if !lt(e.floor_low_hz, e.floor_high_hz) {
+        return fail("edge.floor_low_hz < edge.floor_high_hz");
+    }
+    if !lt(e.floor_min_db, 0.0) {
+        return fail("edge.floor_min_db < 0");
+    }
+    if !e.max_median_step_db.is_finite() {
+        return fail("edge.max_median_step_db is finite");
+    }
+    if !lt(0.0, e.min_residual_db) {
+        return fail("edge.min_residual_db > 0");
+    }
+    if !lt(step_fake_db, e.max_step_db) {
+        return fail("edge.max_step_db > step_fake_db");
+    }
+    Ok(())
 }
 
 fn lossy_error(check: &str) -> ParamsError {

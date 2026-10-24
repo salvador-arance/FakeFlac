@@ -381,6 +381,9 @@ fn clean() -> Measurements {
         gap_db: 0.0,
         upper_level_db: None,
         upper_burst_db: None,
+        median_step_db: None,
+        top_floor_db: None,
+        residual_db: None,
     }
 }
 
@@ -1016,6 +1019,9 @@ fn tab(h: f64, g: f64, d: f64, fs: Option<f64>, fe: f64, u: f64, b: f64) -> Meas
         gap_db: g,
         upper_level_db: Some(u),
         upper_burst_db: Some(b),
+        median_step_db: None,
+        top_floor_db: None,
+        residual_db: None,
     }
 }
 
@@ -1251,12 +1257,12 @@ fn rf04_v3_without_a_full_band_section_the_guard_is_disabled() {
 
 // ---- Parameters (rules.md section 4) --------------------------------------------------------------
 
-// The defaults of the code are v5 (ADR-0041; the audio crate's test compares them with the file).
+// The defaults of the code are v6 (ADR-0042; v5 in ADR-0041; the audio crate's test compares them with the file).
 // Their [full_band] section is that of v4.
 #[test]
 fn rf04_v3_defaults_are_v3() {
     let p = DetectionParams::default();
-    assert_eq!(p.algorithm_version, 5);
+    assert_eq!(p.algorithm_version, 6);
     assert_eq!(
         p.full_band,
         Some(FullBandParams {

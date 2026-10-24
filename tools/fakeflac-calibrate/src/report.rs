@@ -79,6 +79,12 @@ pub struct WatchEntry {
     pub upper_burst_db: Option<f64>,
     /// `Some` only when the params have `[full_band]` and `U` and `B` are defined.
     pub full_band: Option<bool>,
+    /// `D_Q` (v6): `None` without an `[edge]` section or when undefined.
+    pub median_step_db: Option<f64>,
+    /// `R` (v6).
+    pub residual_db: Option<f64>,
+    /// `EdgeStep`; `None` without an `[edge]` section.
+    pub edge_step: Option<bool>,
 }
 
 /// Per setting, for a params file with a `[full_band]` section (evaluation.md section 4): the

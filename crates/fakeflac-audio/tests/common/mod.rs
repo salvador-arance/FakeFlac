@@ -275,6 +275,10 @@ fn signal(name: &str) -> Spec {
             12,
         ),
         "shelf19k5_bursts" => gated_shelf(sr, secs, 19_500.0, -15.0, -20.0, 13),
+        // Edge-step fixtures (added with algorithm_version 6, fixtures.md, "Edge step").
+        "edge_bump19k3" => edge_bump(sr, secs),
+        "edge_bump19k3_lp19k5" => exact_lowpass(edge_bump(sr, secs), sr, 19_500.0),
+        "holes_lp19k5" => holes_lp19k5(sr, secs),
         other => panic!("unknown fixture {other}"),
     };
     let mut samples = samples;
@@ -331,6 +335,108 @@ fn gated_pink(sr: u32, secs: f64, edge_hz: f64, gate_db: f64, seed: u64) -> Vec<
             l + h * gate(t % 2.0, low_gain)
         })
         .collect()
+}
+
+/// `edge_bump19k3` (fixtures.md, "Edge step"). Roll-off: pink noise with a gain of 0 dB below
+/// 17 kHz and -12 dB per kHz above it, plus stationary white noise whose band level is 60 dB below
+/// the roll-off's at 17 kHz. Bump: independent pink noise times the short gate (open 0.25 s of
+/// every 2 s), exactly band-limited to [19100, 19400) Hz, whose band level while open is 15 dB above
+/// the roll-off's band level at 19.25 kHz (the roll-off is -27 dB there, so the bump is -12 dB).
+fn edge_bump(sr: u32, secs: f64) -> Vec<f64> {
+    let rolloff_db = |f: f64| {
+        if f < 17_000.0 {
+            0.0
+        } else {
+            -12.0 * (f - 17_000.0) / 1000.0
+        }
+    };
+    let rolloff = shaped_noise(sr, secs, |f| pink(f) * db_to_gain(rolloff_db(f)), 14);
+    let white = shaped_noise(sr, secs, |_| pink(17_000.0) * db_to_gain(-60.0), 15);
+    let bump_db = rolloff_db(19_250.0) + 15.0;
+    let source = shaped_noise(sr, secs, |f| pink(f) * db_to_gain(bump_db), 16);
+    let gated: Vec<f64> = source
+        .iter()
+        .enumerate()
+        .map(|(i, v)| v * gate_open(i as f64 / f64::from(sr) % 2.0, 0.0, 0.25))
+        .collect();
+    let bump = exact_bandlimit(gated, sr, 19_100.0, 19_400.0);
+    rolloff
+        .iter()
+        .zip(&white)
+        .zip(&bump)
+        .map(|((r, w), b)| r + w + b)
+        .collect()
+}
+
+/// `holes_lp19k5` (fixtures.md, "Edge step"). Base: pink noise below 18.5 kHz kept as is, plus the
+/// [18500, 19500) Hz part multiplied by the gate (gain 0 outside the open window) and then exactly
+/// band-limited to [18500, 19500) Hz. Floor: stationary white noise whose band level is 19 dB below
+/// the base's ungated band level at 19.25 kHz.
+fn holes_lp19k5(sr: u32, secs: f64) -> Vec<f64> {
+    let seed = 17;
+    let low = shaped_noise(sr, secs, |f| if f < 18_500.0 { pink(f) } else { 0.0 }, seed);
+    let high = shaped_noise(
+        sr,
+        secs,
+        |f| {
+            if (18_500.0..19_500.0).contains(&f) {
+                pink(f)
+            } else {
+                0.0
+            }
+        },
+        seed,
+    );
+    let gated: Vec<f64> = high
+        .iter()
+        .enumerate()
+        .map(|(i, v)| v * gate_open(i as f64 / f64::from(sr) % 2.0, 0.0, 0.5))
+        .collect();
+    let high = exact_bandlimit(gated, sr, 18_500.0, 19_500.0);
+    let floor = shaped_noise(sr, secs, |_| pink(19_250.0) * db_to_gain(-19.0), 18);
+    low.iter()
+        .zip(&high)
+        .zip(&floor)
+        .map(|((l, h), f)| l + h + f)
+        .collect()
+}
+
+/// Gate gain at `t` seconds into a 2 s period: 1 during the last `open_s` seconds, `low` elsewhere,
+/// 5 ms raised-cosine ramps outside the open window (as `gate`, whose window is 0.5 s).
+fn gate_open(t: f64, low: f64, open_s: f64) -> f64 {
+    const RAMP: f64 = 0.005;
+    let start = 2.0 - open_s;
+    let blend = |x: f64| 0.5 * (1.0 - (std::f64::consts::PI * x).cos());
+    if t >= start {
+        1.0
+    } else if t >= start - RAMP {
+        low + (1.0 - low) * blend((t - (start - RAMP)) / RAMP)
+    } else if t < RAMP {
+        1.0 + (low - 1.0) * blend(t / RAMP)
+    } else {
+        low
+    }
+}
+
+/// Exact band-limit to `[lo_hz, hi_hz)` (fixtures.md, "Edge step"): every DFT bin of the whole
+/// signal outside the band is set to zero.
+fn exact_bandlimit(x: Vec<f64>, sr: u32, lo_hz: f64, hi_hz: f64) -> Vec<f64> {
+    let len = x.len();
+    let mut planner = RealFftPlanner::<f64>::new();
+    let fft = planner.plan_fft_forward(len);
+    let ifft = planner.plan_fft_inverse(len);
+    let mut input = x;
+    let mut spectrum = fft.make_output_vec();
+    fft.process(&mut input, &mut spectrum).unwrap();
+    for (k, c) in spectrum.iter_mut().enumerate() {
+        let f = k as f64 * f64::from(sr) / len as f64;
+        if !(lo_hz..hi_hz).contains(&f) {
+            *c = Complex::new(0.0, 0.0);
+        }
+    }
+    let mut out = ifft.make_output_vec();
+    ifft.process(&mut spectrum, &mut out).unwrap();
+    out.iter().map(|v| v / len as f64).collect()
 }
 
 /// Exact low-pass at `cutoff_hz` (fixtures.md, "Exact low-pass at F"): the DFT of the whole signal
