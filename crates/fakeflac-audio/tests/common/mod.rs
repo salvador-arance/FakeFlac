@@ -343,7 +343,13 @@ fn gated_pink(sr: u32, secs: f64, edge_hz: f64, gate_db: f64, seed: u64) -> Vec<
 /// every 2 s), exactly band-limited to [19100, 19400) Hz, whose band level while open is 15 dB above
 /// the roll-off's band level at 19.25 kHz (the roll-off is -27 dB there, so the bump is -12 dB).
 fn edge_bump(sr: u32, secs: f64) -> Vec<f64> {
-    let rolloff_db = |f: f64| if f < 17_000.0 { 0.0 } else { -12.0 * (f - 17_000.0) / 1000.0 };
+    let rolloff_db = |f: f64| {
+        if f < 17_000.0 {
+            0.0
+        } else {
+            -12.0 * (f - 17_000.0) / 1000.0
+        }
+    };
     let rolloff = shaped_noise(sr, secs, |f| pink(f) * db_to_gain(rolloff_db(f)), 14);
     let white = shaped_noise(sr, secs, |_| pink(17_000.0) * db_to_gain(-60.0), 15);
     let bump_db = rolloff_db(19_250.0) + 15.0;
@@ -372,7 +378,13 @@ fn holes_lp19k5(sr: u32, secs: f64) -> Vec<f64> {
     let high = shaped_noise(
         sr,
         secs,
-        |f| if (18_500.0..19_500.0).contains(&f) { pink(f) } else { 0.0 },
+        |f| {
+            if (18_500.0..19_500.0).contains(&f) {
+                pink(f)
+            } else {
+                0.0
+            }
+        },
         seed,
     );
     let gated: Vec<f64> = high

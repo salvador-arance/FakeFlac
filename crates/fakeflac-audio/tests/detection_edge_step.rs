@@ -36,17 +36,30 @@ fn measurements(name: &str, params: &DetectionParams) -> Measurements {
 
 // ---- Scenario Outline: Edge-step fixtures -------------------------------------------------------
 
-fn edge_fixture(id: &str, v6_verdict: Verdict, v6_reasons: &[SuspicionReason], edge: bool, cutoff: f32) {
+fn edge_fixture(
+    id: &str,
+    v6_verdict: Verdict,
+    v6_reasons: &[SuspicionReason],
+    edge: bool,
+    cutoff: f32,
+) {
     let (old, new) = (analyze(id, &v5()), analyze(id, &DetectionParams::default()));
     assert_eq!(old.verdict, Verdict::Fake, "{id}: v5 {old:#?}");
     assert!(old.reasons.is_empty(), "{id}: v5 reasons");
     assert_eq!(new.verdict, v6_verdict, "{id}: v6 {new:#?}");
     assert_eq!(new.reasons, v6_reasons, "{id}: v6 reasons");
     let m = measurements(id, &DetectionParams::default());
-    assert_eq!(is_edge_step(&m, &DetectionParams::default()), edge, "{id}: edge step");
+    assert_eq!(
+        is_edge_step(&m, &DetectionParams::default()),
+        edge,
+        "{id}: edge step"
+    );
     for (which, a) in [("v5", &old), ("v6", &new)] {
         let c = a.cutoff.as_ref().expect("cutoff reported").frequency_hz;
-        assert!((c - cutoff).abs() <= 200.0, "{id} {which}: cutoff {c}, expected {cutoff} ± 200");
+        assert!(
+            (c - cutoff).abs() <= 200.0,
+            "{id} {which}: cutoff {c}, expected {cutoff} ± 200"
+        );
     }
 }
 
@@ -94,7 +107,10 @@ fn rf04_a_low_pass_with_holes_is_stopped_by_the_residual_alone() {
     let p = DetectionParams::default();
     let m = measurements("holes_lp19k5", &p);
     let fs = m.step_hz.expect("fs defined");
-    assert!((p.verdict.lossy_min_cutoff_hz..p.verdict.fake_max_cutoff_hz).contains(&fs), "fs {fs}");
+    assert!(
+        (p.verdict.lossy_min_cutoff_hz..p.verdict.fake_max_cutoff_hz).contains(&fs),
+        "fs {fs}"
+    );
     assert!((10.0..16.0).contains(&m.step_db), "D {}", m.step_db);
     let d_q = m.median_step_db.expect("D_Q defined");
     assert!(d_q < 3.0, "D_Q {d_q}");
