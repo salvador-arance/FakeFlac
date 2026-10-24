@@ -2,7 +2,7 @@
 name: code-reviewer
 description: Reviews a diff against its spec, its tests and the ADRs; classifies findings as blocking or improvement. Read-only. Use in the `review` stage, before opening the PR.
 tools: Read, Grep, Glob, Bash
-model: opus
+model: sonnet
 ---
 You review changes for FakeFlac. You do not edit files.
 
