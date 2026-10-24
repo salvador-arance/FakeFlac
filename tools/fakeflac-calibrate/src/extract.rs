@@ -386,7 +386,7 @@ pub fn extract_group(
                 "source": source_json,
                 "setting": setting.id,
                 "args": setting.args,
-                "decode_args": config.generate.decode_args,
+                "decode_args": config.generate.decode_args_for(setting),
                 "fragment_start_s": start_s,
                 "fragment_s": length_s,
             });
@@ -521,7 +521,7 @@ pub fn extract_group(
                         source,
                         setting: gen.setting,
                         fragment: gen.fragment,
-                        decode_args: &config.generate.decode_args,
+                        decode_args: config.generate.decode_args_for(gen.setting),
                         generated_dir: &generated_dir,
                         id: &gen.id,
                     })

@@ -115,9 +115,8 @@ pub struct Setting {
 
 impl GenerateConfig {
     /// The decode arguments used for `setting`: its own, or `generate.decode_args`.
-    pub fn decode_args_for(&self, _setting: &Setting) -> &[String] {
-        // Signature only (RF-04, detection v6): the per-setting decode is not implemented yet.
-        &self.decode_args
+    pub fn decode_args_for<'a>(&'a self, setting: &'a Setting) -> &'a [String] {
+        setting.decode_args.as_deref().unwrap_or(&self.decode_args)
     }
 }
 
@@ -252,9 +251,9 @@ impl Config {
 
     fn validate(&self) -> Result<(), ToolError> {
         let mut errors: Vec<String> = Vec::new();
-        if !(1..=2).contains(&self.config_version) {
+        if !(1..=3).contains(&self.config_version) {
             errors.push(format!(
-                "config_version {} is not supported (expected 1 or 2)",
+                "config_version {} is not supported (expected 1, 2 or 3)",
                 self.config_version
             ));
         }

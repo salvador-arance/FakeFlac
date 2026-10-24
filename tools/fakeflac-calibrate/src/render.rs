@@ -8,8 +8,9 @@ use crate::cache::{bitrate_mode_name, codec_name, error_code, Extracted};
 use crate::config::Config;
 use crate::env::Roots;
 use crate::evaluate::{
-    changed_rows, class_totals, clean_fakes, figure, is_near, margin_summary, reason_name,
-    small_sample_warning, verdict_name, ParamsRun, RowEval, Totals, SPLITS,
+    changed_rows, class_totals, clean_fakes, edge_margins, edge_report, figure, is_near,
+    margin_summary, reason_name, small_sample_warning, verdict_name, ParamsRun, RowEval, Totals,
+    SPLITS,
 };
 use crate::extract::GroupResult;
 use crate::fmt;
@@ -148,7 +149,7 @@ pub fn labels_csv(group: &GroupResult) -> String {
     out
 }
 
-pub const TRACKS_HEADER: [&str; 49] = [
+pub const TRACKS_HEADER: [&str; 56] = [
     "params_file",
     "algorithm_version",
     "path",
@@ -172,6 +173,10 @@ pub const TRACKS_HEADER: [&str; 49] = [
     "U",
     "B",
     "full_band",
+    "D_Q",
+    "F_top",
+    "R",
+    "edge_step",
     "m_low_hf_db",
     "m_gap_fake_db",
     "m_gap_suspicious_db",
@@ -185,6 +190,9 @@ pub const TRACKS_HEADER: [&str; 49] = [
     "m_full_band_burst_db",
     "full_band_margin_db",
     "m_full_band_step_db",
+    "m_edge_median_db",
+    "m_edge_residual_db",
+    "m_edge_step_db",
     "nearest_fake_margin_db",
     "codec",
     "declared_bitrate_kbps",
@@ -217,6 +225,7 @@ pub fn tracks_csv(runs: &[ParamsRun], groups: &[GroupResult]) -> String {
         for (r, e) in groups[run.group].rows.iter().zip(run.evals.iter()) {
             let m = e.m.as_ref();
             let g = e.margins.as_ref();
+            let edge = m.and_then(|m| edge_margins(m, &run.params));
             out.push_str(&csv_row(&[
                 run.name.clone(),
                 run.params.algorithm_version.to_string(),
@@ -248,6 +257,12 @@ pub fn tracks_csv(runs: &[ParamsRun], groups: &[GroupResult]) -> String {
                 fmt::opt_db(m.and_then(|m| m.upper_level_db)),
                 fmt::opt_db(m.and_then(|m| m.upper_burst_db)),
                 full_band_cell(run, m),
+                fmt::opt_db(m.and_then(|m| m.median_step_db)),
+                fmt::opt_db(m.and_then(|m| m.top_floor_db)),
+                fmt::opt_db(m.and_then(|m| m.residual_db)),
+                edge.as_ref()
+                    .map(|e| e.edge_step.to_string())
+                    .unwrap_or_default(),
                 fmt::opt_db(g.map(|g| g.m_low_hf_db)),
                 fmt::opt_db(g.map(|g| g.m_gap_fake_db)),
                 fmt::opt_db(g.map(|g| g.m_gap_suspicious_db)),
@@ -261,6 +276,9 @@ pub fn tracks_csv(runs: &[ParamsRun], groups: &[GroupResult]) -> String {
                 fmt::opt_db(g.and_then(|g| g.m_full_band_burst_db)),
                 fmt::opt_db(g.and_then(|g| g.full_band_margin_db)),
                 fmt::opt_db(g.and_then(|g| g.m_full_band_step_db)),
+                fmt::opt_db(edge.as_ref().and_then(|e| e.m_edge_median_db)),
+                fmt::opt_db(edge.as_ref().and_then(|e| e.m_edge_residual_db)),
+                fmt::opt_db(edge.as_ref().and_then(|e| e.m_edge_step_db)),
                 fmt::opt_db(g.map(|g| g.nearest_fake_margin_db)),
                 String::new(),
                 String::new(),
@@ -332,8 +350,8 @@ fn lossy_track_cells(run: &ParamsRun, r: &LabelRow, e: &LossyRowEval, honest: bo
         fmt::opt_db(m.and_then(|m| m.upper_level_db)),
         fmt::opt_db(m.and_then(|m| m.upper_burst_db)),
     ];
-    // `full_band` and the 14 lossless margin columns.
-    cells.extend(std::iter::repeat_n(String::new(), 15));
+    // `full_band`, `D_Q`, `F_top`, `R`, `edge_step` and the 17 lossless margin columns.
+    cells.extend(std::iter::repeat_n(String::new(), 22));
     cells.extend([
         stream
             .and_then(|s| s.codec)
@@ -525,6 +543,53 @@ fn full_band_table(md: &mut Md, eval: &Evaluation) {
         &["setting", "full_band", "B median", "B p95", "B max"],
         &table,
     );
+}
+
+/// Edge report (evaluation.md section 4): the V4-only detectable positives and the tail of `R`
+/// among those with a low `D_Q`. Only for a params file with an `[edge]` section.
+fn edge_table(md: &mut Md, data: &ReportData<'_>, idx: usize) {
+    let run = &data.runs[idx];
+    let report = edge_report(run, &data.groups[run.group].rows, data.config);
+    if report.is_empty() {
+        return;
+    }
+    md.line("Edge report (detectable positives that only V4 would make `Fake`; \"near\" counts every condition of `EdgeStep` but the one named):");
+    md.blank();
+    for sel in SPLITS {
+        md.line(format!("Split `{}`:", sel.as_str()));
+        md.blank();
+        let table: Vec<Vec<String>> = report
+            .iter()
+            .filter(|r| r.split == sel)
+            .map(|r| {
+                vec![
+                    r.setting.clone(),
+                    r.v4_only.to_string(),
+                    r.edge_step.to_string(),
+                    r.near_r_count.to_string(),
+                    fmt::opt_db(r.near_r_p95),
+                    fmt::opt_db(r.near_r_max),
+                    r.near_r_close.to_string(),
+                    r.near_dq_count.to_string(),
+                    fmt::opt_db(r.near_dq_min),
+                ]
+            })
+            .collect();
+        md.table(
+            &[
+                "setting",
+                "V4-only",
+                "EdgeStep",
+                "near (no R)",
+                "R p95",
+                "R max",
+                "R near min_residual_db",
+                "near (no D_Q)",
+                "D_Q min",
+            ],
+            &table,
+        );
+    }
 }
 
 /// Verdict changes of the positives against the baseline, one row per setting (section 9).
@@ -1032,6 +1097,9 @@ fn watch_section(md: &mut Md, eval: &Evaluation, full: bool) {
         "U",
         "B",
         "full_band",
+        "D_Q",
+        "R",
+        "edge_step",
         "nearest_fake_margin_db",
     ]);
     let rows: Vec<Vec<String>> = eval
@@ -1057,6 +1125,9 @@ fn watch_section(md: &mut Md, eval: &Evaluation, full: bool) {
                 fmt::opt_db(w.upper_level_db),
                 fmt::opt_db(w.upper_burst_db),
                 w.full_band.map(|b| b.to_string()).unwrap_or_default(),
+                fmt::opt_db(w.median_step_db),
+                fmt::opt_db(w.residual_db),
+                w.edge_step.map(|b| b.to_string()).unwrap_or_default(),
                 fmt::opt_db(w.nearest_fake_margin_db),
             ]);
             cells
@@ -1122,6 +1193,7 @@ fn params_section(md: &mut Md, data: &ReportData<'_>, idx: usize, full: bool) {
         setting_rows_table(md, &eval.by_setting_split[sel]);
     }
     full_band_table(md, eval);
+    edge_table(md, data, idx);
 
     watch_section(md, eval, full);
     crate::render_lossy::lossy_section(md, data, idx, full);

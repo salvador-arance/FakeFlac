@@ -90,9 +90,32 @@ pub struct EdgeMargins {
     pub edge_step: bool,
 }
 
-/// `None` for params without an `[edge]` section. Signature only (RF-04, detection v6).
-pub fn edge_margins(_m: &Measurements, _params: &DetectionParams) -> Option<EdgeMargins> {
-    None
+/// The v6 margins and `edge_step` (evaluation.md section 8); `None` for params without an
+/// `[edge]` section.
+pub fn edge_margins(m: &Measurements, params: &DetectionParams) -> Option<EdgeMargins> {
+    let edge = params.edge.as_ref()?;
+    let v = &params.verdict;
+    let in_range = m
+        .step_hz
+        .is_some_and(|f| f >= v.lossy_min_cutoff_hz && f < v.fake_max_cutoff_hz);
+    let m_edge_median_db = m.median_step_db.map(|d_q| edge.max_median_step_db - d_q);
+    let m_edge_residual_db = m.residual_db.map(|r| r - edge.min_residual_db);
+    let m_edge_step_db = in_range.then_some(edge.max_step_db - m.step_db);
+    let edge_step = in_range
+        && m_edge_median_db.is_some_and(|x| x > 0.0)
+        && m_edge_residual_db.is_some_and(|x| x >= 0.0)
+        && m_edge_step_db.is_some_and(|x| x > 0.0);
+    Some(EdgeMargins {
+        m_edge_median_db,
+        m_edge_residual_db,
+        m_edge_step_db,
+        edge_step,
+    })
+}
+
+/// `edge_step` of the track under these params (false without `[edge]`).
+fn is_edge(m: &Measurements, params: &DetectionParams) -> bool {
+    edge_margins(m, params).is_some_and(|e| e.edge_step)
 }
 
 pub fn margins(m: &Measurements, params: &DetectionParams) -> Margins {
@@ -118,7 +141,13 @@ pub fn margins(m: &Measurements, params: &DetectionParams) -> Margins {
         .zip(m_full_band_burst_db)
         .map(|(l, b)| l.min(b));
     let m_full_band_step_db = lossy_step_margin(m, params);
-    let a = m_step_fake_db.map_or(m_gap_fake_db, |s| s.min(m_gap_fake_db));
+    // (v6) When `edge_step` holds, V4 cannot fire: its margin is left out of `a`.
+    let step_for_a = if is_edge(m, params) {
+        None
+    } else {
+        m_step_fake_db
+    };
+    let a = step_for_a.map_or(m_gap_fake_db, |s| s.min(m_gap_fake_db));
     Margins {
         m_low_hf_db: m.high_frequency_db - v.low_hf_threshold_db,
         m_gap_fake_db,
@@ -167,7 +196,9 @@ pub fn nearest_margin(m: &Measurements, params: &DetectionParams) -> f64 {
     let v = &params.verdict;
     let gap = v.gap_fake_db - m.gap_db;
     let a = match m.step_hz {
-        Some(f) if f >= v.lossy_min_cutoff_hz && f < v.fake_max_cutoff_hz => {
+        Some(f)
+            if f >= v.lossy_min_cutoff_hz && f < v.fake_max_cutoff_hz && !is_edge(m, params) =>
+        {
             gap.min(v.step_fake_db - m.step_db)
         }
         _ => gap,
@@ -431,6 +462,13 @@ pub fn evaluation(
             nearest_fake_margin_db: e.margins.as_ref().map(|m| m.nearest_fake_margin_db),
             upper_level_db: e.m.as_ref().and_then(|m| m.upper_level_db),
             upper_burst_db: e.m.as_ref().and_then(|m| m.upper_burst_db),
+            median_step_db: e.m.as_ref().and_then(|m| m.median_step_db),
+            residual_db: e.m.as_ref().and_then(|m| m.residual_db),
+            edge_step: e
+                .m
+                .as_ref()
+                .and_then(|m| edge_margins(m, &run.params))
+                .map(|x| x.edge_step),
             full_band: e.m.as_ref().and_then(|m| {
                 run.params
                     .full_band
@@ -516,6 +554,102 @@ fn setting_ids(config: &Config) -> Vec<String> {
         .map(|s| s.id.clone())
         .chain(std::iter::once("confirmed_fake".to_string()))
         .collect()
+}
+
+/// One row of the edge report (evaluation.md section 4) for one split and one setting.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EdgeReportRow {
+    pub split: SplitSel,
+    pub setting: String,
+    /// Detectable positives that V4 would make `Fake` if `EdgeStep` were false.
+    pub v4_only: u32,
+    /// Of those, the ones with `EdgeStep`.
+    pub edge_step: u32,
+    /// Every condition but `R` holds (`D_Q < max_median_step_db`, `D < max_step_db`, `R` defined).
+    pub near_r_count: u32,
+    pub near_r_p95: Option<f64>,
+    pub near_r_max: Option<f64>,
+    /// How many of them have `R >= min_residual_db - report.near_db`.
+    pub near_r_close: u32,
+    /// Every condition but `D_Q` holds (`R >= min_residual_db`, `D < max_step_db`, `D_Q` defined).
+    pub near_dq_count: u32,
+    pub near_dq_min: Option<f64>,
+}
+
+/// Evaluation.md section 4, edge report: empty for a params file without an `[edge]` section.
+pub fn edge_report(run: &ParamsRun, rows: &[LabelRow], config: &Config) -> Vec<EdgeReportRow> {
+    let Some(edge) = run.params.edge.as_ref() else {
+        return Vec::new();
+    };
+    let v = &run.params.verdict;
+    let near_db = config.report.near_db;
+    let mut out = Vec::new();
+    for sel in SPLITS {
+        for setting in setting_ids(config) {
+            let mut row = EdgeReportRow {
+                split: sel,
+                setting: setting.clone(),
+                v4_only: 0,
+                edge_step: 0,
+                near_r_count: 0,
+                near_r_p95: None,
+                near_r_max: None,
+                near_r_close: 0,
+                near_dq_count: 0,
+                near_dq_min: None,
+            };
+            let mut near_r: Vec<f64> = Vec::new();
+            let mut dq_min: Option<f64> = None;
+            for (r, e) in rows.iter().zip(run.evals.iter()) {
+                if r.truth != Truth::Fake
+                    || r.undetectable
+                    || setting_id(r) != setting
+                    || !sel.matches(r.split)
+                {
+                    continue;
+                }
+                let Some(m) = &e.m else { continue };
+                let in_range = m
+                    .step_hz
+                    .is_some_and(|f| f >= v.lossy_min_cutoff_hz && f < v.fake_max_cutoff_hz);
+                let full_band = is_full_band(m, &run.params);
+                let v4_only = m.high_frequency_db >= v.low_hf_threshold_db
+                    && m.gap_db < v.gap_fake_db
+                    && !full_band
+                    && in_range
+                    && m.step_db >= v.step_fake_db;
+                if !v4_only {
+                    continue;
+                }
+                row.v4_only += 1;
+                if is_edge(m, &run.params) {
+                    row.edge_step += 1;
+                }
+                let (Some(d_q), Some(res)) = (m.median_step_db, m.residual_db) else {
+                    continue;
+                };
+                if d_q < edge.max_median_step_db && m.step_db < edge.max_step_db {
+                    near_r.push(res);
+                    if res >= edge.min_residual_db - near_db {
+                        row.near_r_close += 1;
+                    }
+                }
+                if res >= edge.min_residual_db && m.step_db < edge.max_step_db {
+                    row.near_dq_count += 1;
+                    dq_min = Some(dq_min.map_or(d_q, |x: f64| x.min(d_q)));
+                }
+            }
+            near_r.sort_by(f64::total_cmp);
+            row.near_r_count = near_r.len() as u32;
+            if !near_r.is_empty() {
+                row.near_r_p95 = Some(percentile_sorted(&near_r, 95.0));
+                row.near_r_max = near_r.last().copied();
+            }
+            row.near_dq_min = dq_min;
+            out.push(row);
+        }
+    }
+    out
 }
 
 /// Nearest-index percentile of a non-empty, sorted slice.

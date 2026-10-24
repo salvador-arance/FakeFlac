@@ -371,6 +371,10 @@ pub fn parse_grid(text: &str, settings: &[String]) -> Result<GridFile, ToolError
             errors.push(format!("{name}: lossy parameters cannot be searched yet"));
             continue;
         }
+        if name.starts_with("edge.") {
+            errors.push(format!("{name}: edge parameters cannot be searched yet"));
+            continue;
+        }
         let extraction = name == "algorithm_version"
             || name.starts_with("input.")
             || name.starts_with("fft.")
