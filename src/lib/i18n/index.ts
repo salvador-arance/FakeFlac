@@ -46,6 +46,18 @@ const EN: Record<string, string> = {
   'format.m4aAlac': 'M4A (ALAC)',
   'help.realBitrate':
     "The real bitrate is an estimate from the cutoff, in terms of the file's own codec. Files from sources with little treble, from encoders without a low-pass, or re-encoded from a close bitrate may not be detected.",
+  // specs/ui/album-summary.md, "Texts"
+  'albums.title': 'Albums',
+  'albums.titleCount': 'Albums ({count})',
+  'albums.label': 'Album summaries',
+  'albums.tracks': '{n} tracks',
+  'albums.tracksOne': '1 track',
+  'albums.partial': '{done} of {files} tracks',
+  'albums.real': '{n} real',
+  'albums.suspicious': '{n} suspicious',
+  'albums.fake': '{n} fake',
+  'albums.errors': '{n} errors',
+  'albums.errorsOne': '1 error',
   'spectrogram.label': 'Spectrogram',
   'spectrogram.loading': 'Loading spectrogram…',
   'spectrogram.unavailable': 'Cannot show the spectrogram of this file',

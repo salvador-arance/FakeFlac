@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte'
   import BitrateValue from '../molecules/BitrateValue.svelte'
   import ColumnHeader from '../molecules/ColumnHeader.svelte'
   import CutoffValue from '../molecules/CutoffValue.svelte'
@@ -28,6 +29,7 @@
 
   let scrollTop = $state(0)
   let gridElement: HTMLElement | undefined = $state()
+  let headerElement: HTMLElement | undefined = $state()
 
   function getFileName(p: string): string {
     const norm = p.replace(/\\/g, '/')
@@ -140,6 +142,29 @@
     scrollTop = target.scrollTop
   }
 
+  // components.md "ResultsTable": a selection change (prop or key) scrolls the least needed so the
+  // selected row is visible. Only `selectedIndex` triggers it: new rows or a re-sort never move
+  // the scroll by themselves.
+  $effect(() => {
+    const target = selectedIndex
+    if (target === null || !gridElement) return
+    untrack(() => {
+      const position = sortedRows.findIndex((r) => r.index === target)
+      if (position < 0 || !gridElement) return
+      const viewport = viewportHeight ?? gridElement.clientHeight
+      const header = headerElement?.offsetHeight ?? 0
+      const top = position * rowHeight
+      const bottom = header + (position + 1) * rowHeight
+      let next = gridElement.scrollTop
+      if (next > top) next = top
+      else if (viewport > 0 && next + viewport < bottom) next = bottom - viewport
+      if (next !== gridElement.scrollTop) {
+        gridElement.scrollTop = next
+        scrollTop = next
+      }
+    })
+  })
+
   function handleKeyDown(e: KeyboardEvent) {
     if (sortedRows.length === 0) return
 
@@ -187,7 +212,7 @@
   onkeydown={handleKeyDown}
   style:--row-height="{rowHeight}px"
 >
-  <div class="table-header" role="rowgroup">
+  <div class="table-header" role="rowgroup" bind:this={headerElement}>
     <div class="row header-row" role="row">
       <ColumnHeader
         label="State"

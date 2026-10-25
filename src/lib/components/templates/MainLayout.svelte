@@ -11,8 +11,7 @@
     statusBar: Snippet
   }
 
-  // `sidebar` (RF-10) is not rendered yet.
-  let { titleBar, toolbar, table, detail, statusBar }: Props = $props()
+  let { titleBar, toolbar, table, detail, sidebar, statusBar }: Props = $props()
 
   // main-screen.md "Layout": detail default 260 px (min 160), table min 120 px
   const DEFAULT_DETAIL_HEIGHT = 260
@@ -69,16 +68,23 @@
   <div class="layout-toolbar">
     {@render toolbar()}
   </div>
-  <main class="layout-content" bind:this={content}>
-    <div class="layout-table">
-      {@render table()}
-    </div>
-    {#if detail}
-      <Splitter orientation="horizontal" onresize={resize} />
-      <div class="layout-detail" style:height="{Math.round(detailHeight)}px">
-        {@render detail()}
-      </div>
+  <main class="layout-content">
+    {#if sidebar}
+      <aside class="layout-sidebar">
+        {@render sidebar()}
+      </aside>
     {/if}
+    <div class="layout-main" bind:this={content}>
+      <div class="layout-table">
+        {@render table()}
+      </div>
+      {#if detail}
+        <Splitter orientation="horizontal" onresize={resize} />
+        <div class="layout-detail" style:height="{Math.round(detailHeight)}px">
+          {@render detail()}
+        </div>
+      {/if}
+    </div>
   </main>
   <div class="layout-statusbar">
     {@render statusBar()}
@@ -106,8 +112,28 @@
 
   .layout-content {
     display: flex;
+    flex-direction: row;
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .layout-sidebar {
+    flex: 0 0 var(--sidebar-width);
+    width: var(--sidebar-width);
+    min-height: 0;
+    overflow-y: auto;
+    box-sizing: border-box;
+    background: var(--color-surface);
+    border-right: 1px solid var(--color-border);
+  }
+
+  .layout-main {
+    display: flex;
     flex-direction: column;
     flex: 1;
+    min-width: 0;
     min-height: 0;
     position: relative;
     overflow: hidden;
