@@ -51,3 +51,28 @@ export const ErrorState: Story = {
     message: 'No supported audio files in this folder',
   },
 }
+
+export const FinishedWithNotice: Story = {
+  args: {
+    phase: 'finished',
+    summary: { total: 31, done: 31, real: 28, suspicious: 2, fake: 1, errors: 0 },
+    notice: 'Saved 31 rows to FakeFlac - Album A.csv',
+  },
+}
+
+export const CancelledWithNotice: Story = {
+  args: {
+    phase: 'cancelled',
+    summary: { total: 31, done: 18, real: 15, suspicious: 2, fake: 1, errors: 0 },
+    notice: 'Saved 18 rows to FakeFlac - Album A.csv',
+  },
+}
+
+export const ErrorWithNotice: Story = {
+  args: {
+    phase: 'error',
+    summary: { total: 0, done: 0, real: 0, suspicious: 0, fake: 0, errors: 0 },
+    message: 'The analysis stopped because of an unexpected error',
+    notice: 'Cannot save the CSV file',
+  },
+}

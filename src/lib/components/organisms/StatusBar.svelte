@@ -10,7 +10,7 @@
     notice?: string
   }
 
-  let { phase, summary, message }: Props = $props()
+  let { phase, summary, message, notice }: Props = $props()
 
   let statusText = $derived.by(() => {
     switch (phase) {
@@ -31,6 +31,12 @@
     }
   })
 
+  let shownText = $derived(
+    notice && phase !== 'scanning' && phase !== 'analysing'
+      ? `${statusText} · ${notice}`
+      : statusText,
+  )
+
   let progressValue = $derived.by(() => {
     if (phase !== 'analysing') return undefined
     return summary.total > 0 ? summary.done / summary.total : 0
@@ -43,7 +49,7 @@
       <ProgressBar value={progressValue} />
     </div>
   {/if}
-  <span class="status-text">{statusText}</span>
+  <span class="status-text">{shownText}</span>
 </footer>
 
 <style>

@@ -13,6 +13,15 @@ export const Idle: Story = {
   args: {
     canOpen: true,
     canCancel: false,
+    canExport: false,
+  },
+}
+
+export const IdleExportEnabled: Story = {
+  args: {
+    canOpen: true,
+    canCancel: false,
+    canExport: true,
   },
 }
 
@@ -20,5 +29,6 @@ export const Running: Story = {
   args: {
     canOpen: false,
     canCancel: true,
+    canExport: false,
   },
 }

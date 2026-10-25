@@ -15,3 +15,18 @@ export const FolderOpen: Story = {
     size: 24,
   },
 }
+
+export const Export: Story = {
+  args: {
+    name: 'export',
+    size: 24,
+  },
+}
+
+export const ExportLabelled: Story = {
+  args: {
+    name: 'export',
+    size: 24,
+    label: 'Export CSV',
+  },
+}
