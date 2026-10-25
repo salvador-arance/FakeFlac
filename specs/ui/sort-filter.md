@@ -114,7 +114,7 @@ A row is shown when it passes **both** the verdict filter and the name search (A
 
 - During a run the filters apply to every batch: a new row that passes them appears at its sorted place; one that does not stays hidden until the filters change.
 - The filters can be changed during a run (the controls are enabled whenever the table is shown, section 8).
-- The filters are kept across runs for the whole session, like the sort, and are not saved when the app closes (Q7). Because the controls stay pressed/filled (also when disabled, section 8) and the status bar shows the shown count (section 9), a filter carried into a new run is always visible.
+- The filters are kept across runs for the whole session, like the sort, and are not saved when the app closes (Q7). Because the controls stay pressed/filled (also when disabled, section 8) and, once rows arrive, the status bar shows the shown count (section 9), a filter carried into a new run is always visible.
 - A failed start (`restore()`, then `reset()` for `NOT_A_FOLDER`) and an `INTERNAL` failure (`fail()`) do not change the filters.
 
 ## 5. Selection, keyboard and scroll
@@ -257,7 +257,7 @@ New: `filter.label` Filter by verdict · `filter.fake` Show fake tracks · `filt
 
   Hence the pressed look of section 10 (`IconButton`): background `--color-surface-raised`, border `--color-accent`. Released icons are on the toolbar background #262626, where every verdict colour has at least 3.8:1. Disabled buttons are exempt (WCAG 1.4.11).
 
-## 16. Edits to approved specs (proposed, G1 Q14)
+## 16. Edits to approved specs (approved at G1, Q14)
 
 One cross-reference sentence each, no other text changed:
 
@@ -270,7 +270,7 @@ Behaviour refined by this spec over approved text: the State column order (unspe
 
 ## 17. Open questions for G1
 
-Each has the default this spec is written with.
+Decided at G1 (2026-10-25): every default below is accepted, and this spec is written with them. The questions were answered by a delegate on the owner's behalf; the owner approves the answers by merging the spec PR (#75).
 
 | # | Question | Default |
 |---|---|---|
