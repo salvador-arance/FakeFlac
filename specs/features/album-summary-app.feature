@@ -307,6 +307,19 @@ Feature: Album summaries in the application (H2)
     And the detail panel requests the spectrogram of that row's path
     And "Lib\B" is the current album
 
+  Scenario: Selecting the current album again brings its first track back into view
+    Given an analysis finished with 500 tracks, 10 of them in the album "Lib\A", which is the first item of the panel
+    And I clicked the item "Lib\A", so its first row is selected
+    And I scrolled the table until the selected row is outside its visible area
+    When I click the item "Lib\A"
+    Then the same row is still selected and is within the table's visible area
+    And the spectrogram has been requested only once, by the first click
+    And "Lib\A" is still the current album
+    When I scroll the table until the selected row is outside its visible area again
+    And I focus the Albums panel and press Home
+    Then the same row is still selected and is within the table's visible area
+    And the spectrogram has been requested only once, by the first click
+
   Scenario: Selecting a track marks its album as current
     Given an analysis finished with the albums "Lib\A" and "Lib\B"
     When I click a row of "Lib\B" in the table
@@ -326,7 +339,7 @@ Feature: Album summaries in the application (H2)
 
   @RF-06
   Scenario: Moving the selection in the table keeps the selected row visible
-    Proposed with RF-10 (components.md, ResultsTable): the table scrolls the
+    Decided at G1 (Q13) (components.md, ResultsTable): the table scrolls the
     selected row into view whatever changed the selection.
     Given an analysis finished with 500 tracks and the first row selected
     When I press End in the table
