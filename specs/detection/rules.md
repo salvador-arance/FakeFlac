@@ -388,7 +388,7 @@ Run `20261025T010130Z`, the command of section 8, tool commit `d45830b`; aggrega
 | E6 `all` | **Pass.** cbr192 4/1422 (0.28 pp), cbr256 2/1419 (0.14 pp), cbr192_s24 2/1422 (0.14 pp); cbr320, aac128, cbr256_s24 and cbr320_s24 one each (0.07 pp); cbr128, v2, opus128 and cbr128_s24 none. Reported: v0 4/1387 (0.29 pp), aac256 2/1134 (0.18 pp). The 16-bit figures are those predicted in 8.1 |
 | E6 `holdout` | **Pass with the gate of Q23; fails the original one.** cbr192 and cbr192_s24 2 of at most 392 each (0.51 pp, interval 0.14–1.84 pp); cbr320 and cbr320_s24 1 each (0.26 pp); the other protected settings none. The four 0.51 pp losses are two source tracks, from two albums, at 16 and 24 bits. Reported: v0 2 |
 | E6 `tune` | Reported: cbr192 2, cbr256 2, cbr256_s24 1, aac128 1; v0 2, aac256 2; the rest none |
-| E7 | See the PR of this change (`just test`) |
+| E7 | **Pass.** `just test` on commit `d45830b` plus this spec change: 624 Rust tests in 45 suites and 279 frontend tests, 0 failed |
 
 The 24-bit variants lose no more than their 16-bit settings, and on the same sources (Q21). Of the 20 transcodes that change verdict, 8 are in `holdout` and 12 in `tune`; two of the `tune` ones (v0) are undetectable and do not count in E6.
 

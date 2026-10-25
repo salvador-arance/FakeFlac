@@ -11,7 +11,7 @@
   - 38,305 entries decoded and 36,864 transcoded, 0 failures;
   - the work also includes the 14 RF-15 lossy groups (19,950 files), not only the 13 lossless settings.
 - Results (rules.md section 8.3):
-  - E1–E5 pass. W4 is `Suspicious` (`AmbiguousCutoff`) and T1 passes.
+  - E1–E5 and E7 pass. W4 is `Suspicious` (`AmbiguousCutoff`) and T1 passes. E7: `just test`, 624 Rust tests and 279 frontend tests.
   - E6 on `all` passes: cbr192 0.28 pp, exactly as predicted.
   - E6 on `holdout` failed the original gate by one transcode: cbr192 and cbr192_s24 each lose 2 of at most 392 (0.51 pp). They are the same two source tracks at 16 and 24 bits.
 - The owner chose to keep v6 and its values and to change the `holdout` gate: E6 now fails there only when the lower bound of the 95 % Wilson interval of the drop exceeds 0.5 pp. Q23 records that the choice was made after seeing the result.
@@ -26,6 +26,10 @@
 
 **Blockers / questions for the human**
 - None.
+
+**Notes for the next session**
+- Temporary files go in `target/tmp/` inside the repo, never in the session scratchpad. RP-06 also covers shell redirects, which the `guard-protected` hook does not see: this session wrote to the scratchpad by mistake and cleaned it up. The hook also blocks Claude's memory directory.
+- A corpus run can take hours. Keep Windows awake for the whole run: this one stopped for almost 5 h while the PC slept.
 
 **Next step:** after G1, v6 is accepted on the corpus. Choose the next requirement from `docs/planning/` or the open questions (Q15: W6, via per-frame statistics).
 
