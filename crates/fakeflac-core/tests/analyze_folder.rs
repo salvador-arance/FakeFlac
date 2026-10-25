@@ -133,7 +133,9 @@ fn done_by_index(events: &[ProgressEvent]) -> Vec<(u32, fakeflac_core::TrackAnal
     let mut v: Vec<_> = events
         .iter()
         .filter_map(|e| match e {
-            ProgressEvent::TrackDone { index, analysis } => Some((*index, analysis.clone())),
+            ProgressEvent::TrackDone {
+                index, analysis, ..
+            } => Some((*index, analysis.clone())),
             _ => None,
         })
         .collect();

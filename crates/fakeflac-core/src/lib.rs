@@ -16,7 +16,8 @@ pub mod spectrum;
 pub mod summary;
 
 pub use analyze_folder::{
-    analyze_folder, ActiveRun, AnalysisSlot, AnalysisSummary, CancelToken, ProgressEvent,
+    album_display_name, analyze_folder, ActiveRun, AlbumUpdate, AnalysisSlot, AnalysisSummary,
+    CancelToken, ProgressEvent,
 };
 pub use domain::{
     AlbumSummary, AudioCodec, AudioFormat, BitrateMode, CutoffEstimate, SuspicionReason,

@@ -85,6 +85,27 @@ pub struct CutoffEstimate {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct AlbumSummary {
+    pub folder: String,
+    pub total: u32,
+    pub real: u32,
+    pub suspicious: u32,
+    pub fake: u32,
+    pub errors: u32,
+    pub verdict: Verdict,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct AlbumUpdate {
+    pub index: u32,
+    pub name: String,
+    pub files: u32,
+    pub summary: AlbumSummary,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Type)]
 #[serde(
     tag = "kind",
     rename_all = "camelCase",
@@ -123,6 +144,7 @@ pub struct AnalysisSummary {
     pub elapsed_ms: u64,
 }
 
+#[allow(clippy::large_enum_variant)] // `TrackDone` carries the track and its album (RF-10)
 #[derive(Debug, Clone, PartialEq, Serialize, Type)]
 #[serde(
     tag = "kind",
@@ -130,11 +152,24 @@ pub struct AnalysisSummary {
     rename_all_fields = "camelCase"
 )]
 pub enum ProgressEvent {
-    Scanned { total: u32 },
-    TrackStarted { index: u32, path: String },
-    TrackDone { index: u32, analysis: TrackAnalysis },
-    Finished { summary: AnalysisSummary },
-    Cancelled { summary: AnalysisSummary },
+    Scanned {
+        total: u32,
+    },
+    TrackStarted {
+        index: u32,
+        path: String,
+    },
+    TrackDone {
+        index: u32,
+        analysis: TrackAnalysis,
+        album: AlbumUpdate,
+    },
+    Finished {
+        summary: AnalysisSummary,
+    },
+    Cancelled {
+        summary: AnalysisSummary,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Type)]
@@ -298,6 +333,31 @@ impl From<&core::AnalysisSummary> for AnalysisSummary {
     }
 }
 
+impl From<&core::AlbumSummary> for AlbumSummary {
+    fn from(s: &core::AlbumSummary) -> Self {
+        AlbumSummary {
+            folder: path_string(&s.folder),
+            total: s.total,
+            real: s.real,
+            suspicious: s.suspicious,
+            fake: s.fake,
+            errors: s.errors,
+            verdict: s.verdict.into(),
+        }
+    }
+}
+
+impl From<&core::AlbumUpdate> for AlbumUpdate {
+    fn from(a: &core::AlbumUpdate) -> Self {
+        AlbumUpdate {
+            index: a.index,
+            name: path_string(&a.name),
+            files: a.files,
+            summary: (&a.summary).into(),
+        }
+    }
+}
+
 impl From<&core::ProgressEvent> for ProgressEvent {
     fn from(e: &core::ProgressEvent) -> Self {
         match e {
@@ -306,9 +366,14 @@ impl From<&core::ProgressEvent> for ProgressEvent {
                 index: *index,
                 path: path_string(path),
             },
-            core::ProgressEvent::TrackDone { index, analysis } => ProgressEvent::TrackDone {
+            core::ProgressEvent::TrackDone {
+                index,
+                analysis,
+                album,
+            } => ProgressEvent::TrackDone {
                 index: *index,
                 analysis: analysis.into(),
+                album: album.into(),
             },
             core::ProgressEvent::Finished { summary } => ProgressEvent::Finished {
                 summary: summary.into(),

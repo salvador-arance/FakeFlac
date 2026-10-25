@@ -103,7 +103,9 @@ fn track_done(events: &[dto::ProgressEvent]) -> Vec<(u32, &dto::TrackAnalysis)> 
     events
         .iter()
         .filter_map(|e| match e {
-            dto::ProgressEvent::TrackDone { index, analysis } => Some((*index, analysis)),
+            dto::ProgressEvent::TrackDone {
+                index, analysis, ..
+            } => Some((*index, analysis)),
             _ => None,
         })
         .collect()
@@ -143,9 +145,25 @@ fn scanned(total: u32) -> core::ProgressEvent {
 }
 
 fn done(index: u32, root: &str, name: &str) -> core::ProgressEvent {
+    let analysis = core_track(root, name);
+    let album = core::AlbumUpdate {
+        index: 0,
+        name: PathBuf::from("Lib"),
+        files: 1,
+        summary: core::AlbumSummary {
+            folder: analysis.info.folder.clone(),
+            total: 1,
+            real: 1,
+            suspicious: 0,
+            fake: 0,
+            errors: 0,
+            verdict: core::Verdict::Real,
+        },
+    };
     core::ProgressEvent::TrackDone {
         index,
-        analysis: core_track(root, name),
+        analysis,
+        album,
     }
 }
 

@@ -133,7 +133,9 @@ impl ExportState {
                 kept.root = Some(root.to_path_buf());
                 kept.tracks.clear();
             }
-            ProgressEvent::TrackDone { index, analysis } => {
+            ProgressEvent::TrackDone {
+                index, analysis, ..
+            } => {
                 if kept.root.is_none() {
                     kept.root = Some(root.to_path_buf());
                 }

@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AnalysisSummary, ProgressEvent } from "../api";
 import * as api from "../api";
 import type { Spectrogram } from "../model";
-import { makeSummary, makeTrack } from "../testing/fixtures";
+import { makeAlbum, makeSummary, makeTrack } from "../testing/fixtures";
 import type { TrackOptions } from "../testing/fixtures";
 import { installCanvasStub, makeSpectrogram } from "../testing/spectrogram";
 import type { CanvasStub } from "../testing/spectrogram";
@@ -84,7 +84,7 @@ async function mountWithFinishedRun(tracks: TrackOptions[]) {
   await vi.waitFor(() => expect(api.startAnalysis).toHaveBeenCalled());
   onEvent({ kind: "scanned", total: tracks.length });
   tracks.forEach((o, index) =>
-    onEvent({ kind: "trackDone", index, analysis: makeTrack(o) }),
+    onEvent({ kind: "trackDone", index, analysis: makeTrack(o), album: makeAlbum() }),
   );
   const summary = makeSummary({ total: tracks.length, done: tracks.length });
   onEvent({ kind: "finished", summary });

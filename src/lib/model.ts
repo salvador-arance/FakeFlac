@@ -3,6 +3,8 @@
 import type { AnalysisSummary, TrackAnalysis } from './api/bindings'
 
 export type {
+  AlbumSummary,
+  AlbumUpdate,
   AnalysisSummary,
   AudioCodec,
   AudioFormat,
@@ -16,8 +18,11 @@ export type {
   Verdict,
 } from './api/bindings'
 
-/** A table row. `index` comes from the progress events and is the row key (never the path). */
-export type ResultRow = { index: number; analysis: TrackAnalysis }
+/**
+ * A table row. `index` comes from the progress events and is the row key (never the path);
+ * `albumIndex` is the `album.index` of its `trackDone` (specs/ui/album-summary.md).
+ */
+export type ResultRow = { index: number; analysis: TrackAnalysis; albumIndex: number }
 
 /** Columns of the results table, in display order (specs/ui/main-screen.md). */
 export type SortColumn =

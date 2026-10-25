@@ -31,6 +31,7 @@ export const LossyRows: Story = {
     rows: [
       {
         index: 0,
+        albumIndex: 0,
         analysis: makeTrack({
           path: 'C:/Music/Mixed/a.mp3',
           format: 'mp3',
@@ -44,6 +45,7 @@ export const LossyRows: Story = {
       },
       {
         index: 1,
+        albumIndex: 0,
         analysis: makeTrack({
           path: 'C:/Music/Mixed/b.m4a',
           format: 'm4a',
@@ -53,6 +55,7 @@ export const LossyRows: Story = {
       },
       {
         index: 2,
+        albumIndex: 0,
         analysis: makeTrack({
           path: 'C:/Music/Mixed/v.mp3',
           format: 'mp3',

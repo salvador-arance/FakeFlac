@@ -7,9 +7,11 @@
     toolbar: Snippet
     table: Snippet
     detail?: Snippet
+    sidebar?: Snippet
     statusBar: Snippet
   }
 
+  // `sidebar` (RF-10) is not rendered yet.
   let { titleBar, toolbar, table, detail, statusBar }: Props = $props()
 
   // main-screen.md "Layout": detail default 260 px (min 160), table min 120 px

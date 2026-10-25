@@ -15,7 +15,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AnalysisSummary, ProgressEvent } from '../api'
 import * as api from '../api'
-import { makeSummary, makeTrack } from '../testing/fixtures'
+import { makeAlbum, makeSummary, makeTrack } from '../testing/fixtures'
 import type { TrackOptions } from '../testing/fixtures'
 import AnalysisPage from './AnalysisPage.svelte'
 
@@ -61,7 +61,7 @@ function fakeRun() {
   return {
     scanned: (total: number) => onEvent({ kind: 'scanned', total }),
     done: (index: number, o: TrackOptions) =>
-      onEvent({ kind: 'trackDone', index, analysis: makeTrack(o) }),
+      onEvent({ kind: 'trackDone', index, analysis: makeTrack(o), album: makeAlbum() }),
     finish: (summary: AnalysisSummary) => {
       onEvent({ kind: 'finished', summary })
       resolve(summary)

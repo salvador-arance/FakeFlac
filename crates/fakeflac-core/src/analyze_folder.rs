@@ -2,7 +2,7 @@
 //! events → summary. Contract: `specs/contracts/commands.md`; scenarios: `specs/features/analyze-folder.feature`.
 
 use crate::analysis::analyze_track;
-use crate::domain::{TrackAnalysis, TrackError, Verdict};
+use crate::domain::{AlbumSummary, TrackAnalysis, TrackError, Verdict};
 use crate::error::{AppError, AppErrorCode};
 use crate::params::DetectionParams;
 use crate::ports::{AudioProbe, FileEntry, FileScanner, SpectrumAnalyzer};
@@ -48,20 +48,53 @@ pub struct AnalysisSummary {
     pub elapsed_ms: u64,
 }
 
+/// The album of a `TrackDone` after counting that track (RF-10, commands.md version 5).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AlbumUpdate {
+    /// Key of the album within the run (path order of the album folders).
+    pub index: u32,
+    /// Display name (see `album_display_name`).
+    pub name: PathBuf,
+    /// Supported files the scan found directly in the album folder.
+    pub files: u32,
+    pub summary: AlbumSummary,
+}
+
+/// Display name of the album `folder` of a run on `root` (commands.md, "Name rule").
+pub fn album_display_name(root: &Path, folder: &Path) -> PathBuf {
+    let _ = (root, folder);
+    todo!("RF-10: name rule")
+}
+
 /// Progress of one run, in order: `Scanned`, then `TrackStarted`/`TrackDone` per track
 /// (`TrackDone` may arrive out of index order), then exactly one of `Finished` / `Cancelled`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[allow(clippy::large_enum_variant)] // `TrackDone` carries the track and its album (RF-10)
 #[serde(
     tag = "kind",
     rename_all = "camelCase",
     rename_all_fields = "camelCase"
 )]
 pub enum ProgressEvent {
-    Scanned { total: u32 },
-    TrackStarted { index: u32, path: PathBuf },
-    TrackDone { index: u32, analysis: TrackAnalysis },
-    Finished { summary: AnalysisSummary },
-    Cancelled { summary: AnalysisSummary },
+    Scanned {
+        total: u32,
+    },
+    TrackStarted {
+        index: u32,
+        path: PathBuf,
+    },
+    TrackDone {
+        index: u32,
+        analysis: TrackAnalysis,
+        album: AlbumUpdate,
+    },
+    Finished {
+        summary: AnalysisSummary,
+    },
+    Cancelled {
+        summary: AnalysisSummary,
+    },
 }
 
 /// Scans `root`, analyses every supported file on `workers` threads and reports progress.
@@ -223,9 +256,25 @@ fn run_worker(
         };
         let analysis = analyze_track(analyzer, entry, params);
         counts.record(analysis.verdict);
+        // Compile-only placeholder (RF-10): the implementation builds the real album update.
+        let album = AlbumUpdate {
+            index: 0,
+            name: entry.folder.clone(),
+            files: 0,
+            summary: AlbumSummary {
+                folder: entry.folder.clone(),
+                total: 0,
+                real: 0,
+                suspicious: 0,
+                fake: 0,
+                errors: 0,
+                verdict: Verdict::Error,
+            },
+        };
         on_progress(ProgressEvent::TrackDone {
             index: index as u32,
             analysis,
+            album,
         });
     }
 }

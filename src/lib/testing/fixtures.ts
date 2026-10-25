@@ -1,5 +1,6 @@
 // Synthetic data for component tests and stories. No real audio, no corpus.
 import type {
+  AlbumUpdate,
   AnalysisSummary,
   AudioCodec,
   AudioFormat,
@@ -60,8 +61,48 @@ export function makeTrack(o: TrackOptions = {}): TrackAnalysis {
   }
 }
 
-export function makeRow(index: number, o: TrackOptions = {}): ResultRow {
-  return { index, analysis: makeTrack(o) }
+export function makeRow(index: number, o: TrackOptions = {}, albumIndex = 0): ResultRow {
+  return { index, analysis: makeTrack(o), albumIndex }
+}
+
+export type AlbumOptions = {
+  index?: number
+  name?: string
+  /** `summary.folder`. Default: `C:/Music/<name>`. */
+  folder?: string
+  files?: number
+  real?: number
+  suspicious?: number
+  fake?: number
+  errors?: number
+  /** Default: the most severe counted verdict, `error` when only errors were counted. */
+  verdict?: Verdict
+}
+
+/** An `AlbumUpdate` as the backend sends it (specs/contracts/commands.md, version 5). */
+export function makeAlbum(o: AlbumOptions = {}): AlbumUpdate {
+  const name = o.name ?? 'Album A'
+  const real = o.real ?? 1
+  const suspicious = o.suspicious ?? 0
+  const fake = o.fake ?? 0
+  const errors = o.errors ?? 0
+  const total = real + suspicious + fake + errors
+  const verdict: Verdict =
+    o.verdict ?? (fake > 0 ? 'fake' : suspicious > 0 ? 'suspicious' : real > 0 ? 'real' : 'error')
+  return {
+    index: o.index ?? 0,
+    name,
+    files: o.files ?? total,
+    summary: {
+      folder: o.folder ?? `C:/Music/${name}`,
+      total,
+      real,
+      suspicious,
+      fake,
+      errors,
+      verdict,
+    },
+  }
 }
 
 export function makeSummary(o: Partial<AnalysisSummary> = {}): AnalysisSummary {

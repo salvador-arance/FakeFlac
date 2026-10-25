@@ -1,9 +1,11 @@
 // The `analysis` store: rows, phase, selection, sort and counters (specs/ui/components.md).
 import type { ProgressEvent } from '../api'
-import type { ResultRow, SortColumn, SortState, StatusPhase, StatusSummary } from '../model'
+import type { AlbumUpdate, ResultRow, SortColumn, SortState, StatusPhase, StatusSummary } from '../model'
 
 export interface AnalysisStore {
   readonly rows: ResultRow[]
+  /** Latest update of each album of the run, sorted by `index` (specs/ui/album-summary.md). */
+  readonly albums: AlbumUpdate[]
   readonly phase: StatusPhase
   readonly summary: StatusSummary
   readonly message: string | undefined
@@ -20,6 +22,8 @@ export interface AnalysisStore {
   /** The run ended with a contract error. */
   fail(message: string): void
   select(index: number): void
+  /** Selects the row with the lowest `index` among the rows of the album. */
+  selectAlbum(albumIndex: number): void
   toggleSort(column: SortColumn): void
 }
 
@@ -125,7 +129,7 @@ export function createAnalysisStore(): AnalysisStore {
       phase = 'analysing'
     } else if (event.kind === 'trackDone') {
       phase = 'analysing'
-      pendingRows.push({ index: event.index, analysis: event.analysis })
+      pendingRows.push({ index: event.index, analysis: event.analysis, albumIndex: event.album.index })
       pendingSummary.done += 1
       if (event.analysis.verdict === 'real') {
         pendingSummary.real += 1
@@ -179,6 +183,10 @@ export function createAnalysisStore(): AnalysisStore {
     selectedIndex = index
   }
 
+  function selectAlbum(albumIndex: number) {
+    void albumIndex // RF-10 stub
+  }
+
   function toggleSort(column: SortColumn) {
     if (sort.column === column) {
       sort = { column, direction: sort.direction === 'asc' ? 'desc' : 'asc' }
@@ -190,6 +198,10 @@ export function createAnalysisStore(): AnalysisStore {
   return {
     get rows() {
       return rows
+    },
+    get albums() {
+      // RF-10 stub: the implementation keeps the albums.
+      return [] as AlbumUpdate[]
     },
     get phase() {
       return phase
@@ -212,6 +224,7 @@ export function createAnalysisStore(): AnalysisStore {
     apply,
     fail,
     select,
+    selectAlbum,
     toggleSort,
   }
 }
