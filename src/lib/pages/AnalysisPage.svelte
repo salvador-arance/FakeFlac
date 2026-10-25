@@ -24,6 +24,7 @@
   import MainLayout from '../components/templates/MainLayout.svelte'
   import { t } from '../i18n'
   import { createAnalysisStore } from '../stores/analysis.svelte'
+  import { isFilterActive } from '../table-view'
 
   const store = createAnalysisStore()
 
@@ -207,6 +208,15 @@
     await cancelAnalysis()
   }
 
+  // RF-08 (sort-filter.md 4.3): the Clear filters button disappears with the no-match state, so
+  // the focus moves to the search field.
+  let searchFocusRequest = $state(0)
+
+  function handleClearFilters() {
+    store.clearFilter()
+    searchFocusRequest += 1
+  }
+
   let canOpen = $derived(store.phase !== 'scanning' && store.phase !== 'analysing')
   let canExport = $derived(
     store.rows.length > 0 &&
@@ -252,12 +262,15 @@
       {canOpen}
       {canCancel}
       {canExport}
-      canFilter={false}
-      verdictFilter={[]}
-      query=""
+      canFilter={!isEmpty}
+      verdictFilter={store.filter.verdicts}
+      query={store.filter.query}
+      {searchFocusRequest}
       onopen={handleOpenFolder}
       oncancel={handleCancel}
       onexport={handleExport}
+      ontoggleverdict={(verdict) => store.toggleVerdictFilter(verdict)}
+      onquery={(text) => store.setQuery(text)}
     />
   {/snippet}
 
@@ -266,12 +279,14 @@
       <FolderDropZone active={isDraggingOver} empty={isEmpty} />
       {#if !isEmpty}
         <ResultsTable
-          rows={store.rows}
+          rows={store.visibleRows}
           selectedIndex={store.selectedIndex}
           sort={store.sort}
           {revealRequest}
+          noMatches={store.rows.length > 0 && store.visibleRows.length === 0}
           onselect={handleSelect}
           onsort={(column) => store.toggleSort(column)}
+          onclearfilters={handleClearFilters}
         />
       {/if}
     </div>
@@ -282,6 +297,9 @@
       phase={store.phase}
       summary={store.summary}
       message={store.message}
+      shown={isFilterActive(store.filter) && store.rows.length > 0
+        ? store.visibleRows.length
+        : undefined}
       {notice}
     />
   {/snippet}

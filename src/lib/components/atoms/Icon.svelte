@@ -44,6 +44,8 @@
       <path d="M8 4.5l5 6H3l5-6z" />
     {:else if name === 'sort-desc'}
       <path d="M8 11.5l5-6H3l5 6z" />
+    {:else if name === 'search'}
+      <path fill-rule="evenodd" d="M6.5 1a5.5 5.5 0 1 0 3.3 9.9l3.65 3.65a.75.75 0 1 0 1.06-1.06L10.86 9.84A5.5 5.5 0 0 0 6.5 1zm0 1.5a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" />
     {/if}
   </svg>
 {:else}
@@ -80,6 +82,8 @@
       <path d="M8 4.5l5 6H3l5-6z" />
     {:else if name === 'sort-desc'}
       <path d="M8 11.5l5-6H3l5 6z" />
+    {:else if name === 'search'}
+      <path fill-rule="evenodd" d="M6.5 1a5.5 5.5 0 1 0 3.3 9.9l3.65 3.65a.75.75 0 1 0 1.06-1.06L10.86 9.84A5.5 5.5 0 0 0 6.5 1zm0 1.5a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" />
     {/if}
   </svg>
 {/if}

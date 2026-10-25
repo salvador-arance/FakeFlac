@@ -1,5 +1,7 @@
 <script lang="ts">
   import IconButton from '../atoms/IconButton.svelte'
+  import SearchField from '../molecules/SearchField.svelte'
+  import VerdictFilter from '../molecules/VerdictFilter.svelte'
   import { t } from '../../i18n'
   import type { Verdict } from '../../model'
 
@@ -7,7 +9,6 @@
     canOpen: boolean
     canCancel: boolean
     canExport?: boolean
-    // RF-08 (sort-filter.md section 10). Stub: declared, not used yet.
     canFilter: boolean
     verdictFilter: Verdict[]
     query: string
@@ -19,7 +20,20 @@
     onquery?: (text: string) => void
   }
 
-  let { canOpen, canCancel, canExport = false, onopen, oncancel, onexport }: Props = $props()
+  let {
+    canOpen,
+    canCancel,
+    canExport = false,
+    canFilter,
+    verdictFilter,
+    query,
+    searchFocusRequest = 0,
+    onopen,
+    oncancel,
+    onexport,
+    ontoggleverdict,
+    onquery,
+  }: Props = $props()
 </script>
 
 <div class="toolbar" role="toolbar" aria-label="Main toolbar">
@@ -45,6 +59,17 @@
     size="toolbar"
     onclick={onexport}
   />
+  <div class="separator" role="separator" aria-orientation="vertical"></div>
+  <VerdictFilter selected={verdictFilter} disabled={!canFilter} ontoggle={ontoggleverdict} />
+  <div class="search">
+    <SearchField
+      value={query}
+      disabled={!canFilter}
+      shortcut
+      focusRequest={searchFocusRequest}
+      oninput={onquery}
+    />
+  </div>
 </div>
 
 <style>
@@ -57,6 +82,10 @@
     background: var(--color-surface);
     border-bottom: 1px solid var(--color-border);
     box-sizing: border-box;
+  }
+
+  .search {
+    margin-left: auto;
   }
 
   .separator {

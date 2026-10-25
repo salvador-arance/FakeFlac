@@ -8,22 +8,26 @@
     label: string
     disabled?: boolean
     size?: 'toolbar' | 'small'
-    /** RF-08 (sort-filter.md section 10): given = a toggle button with `aria-pressed`. Stub: not used yet. */
+    /** Given (true or false) = a toggle button with `aria-pressed`; absent = a plain button. */
     pressed?: boolean
-    /** RF-08: the icon takes the verdict colour token. Stub: not used yet. */
+    /** The icon takes the verdict colour token (`--verdict-*`), except when disabled. */
     tone?: Verdict
     onclick?: () => void
   }
 
-  let { icon, label, disabled = false, size = 'toolbar', onclick }: Props = $props()
+  let { icon, label, disabled = false, size = 'toolbar', pressed, tone, onclick }: Props = $props()
 </script>
 
 <button
   type="button"
   class="icon-button {size}"
+  class:pressed
+  class:toned={tone !== undefined}
+  data-tone={tone}
   {disabled}
   title={label}
   aria-label={label}
+  aria-pressed={pressed}
   {onclick}
 >
   <Icon name={icon} size={size === 'toolbar' ? 24 : 16} />
@@ -53,6 +57,22 @@
     height: 24px;
   }
 
+  .icon-button[data-tone='real'] {
+    color: var(--verdict-real);
+  }
+
+  .icon-button[data-tone='suspicious'] {
+    color: var(--verdict-suspicious);
+  }
+
+  .icon-button[data-tone='fake'] {
+    color: var(--verdict-fake);
+  }
+
+  .icon-button[data-tone='error'] {
+    color: var(--verdict-error);
+  }
+
   .icon-button:hover:not(:disabled) {
     background: var(--color-surface-raised);
     border-color: var(--color-border);
@@ -62,10 +82,21 @@
     background: var(--color-surface);
   }
 
+  /* A pressed toggle keeps its look on hover; it differs from a hovered one by the border. */
+  .icon-button.pressed,
+  .icon-button.pressed:hover:not(:disabled) {
+    background: var(--color-surface-raised);
+    border-color: var(--color-accent);
+  }
+
   .icon-button:disabled {
-    color: var(--color-text-muted);
     cursor: not-allowed;
     opacity: 0.5;
+  }
+
+  .icon-button:disabled,
+  .icon-button.toned:disabled {
+    color: var(--color-text-muted);
   }
 
   .icon-button:focus-visible {

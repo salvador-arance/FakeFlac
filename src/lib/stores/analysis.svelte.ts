@@ -10,6 +10,10 @@ import type {
   StatusSummary,
   Verdict,
 } from '../model'
+import { rowMatches } from '../table-view'
+
+// Canonical order of `RowFilter.verdicts` (the verdict buttons' order)
+const VERDICT_ORDER: Verdict[] = ['fake', 'suspicious', 'real', 'error']
 
 export interface AnalysisStore {
   readonly rows: ResultRow[]
@@ -79,8 +83,13 @@ export function createAnalysisStore(): AnalysisStore {
   let message = $state<string | undefined>(undefined)
   let selectedIndex = $state<number | null>(null)
   let sort = $state<SortState>({ column: 'file', direction: 'asc' })
-  // RF-08 compile-only stub (stage `test`): the filter never changes and the methods throw.
-  const filter: RowFilter = { verdicts: [], query: '' }
+  // RF-08 (sort-filter.md section 10): replaced as a whole on every change, kept across runs
+  let filter = $state.raw<RowFilter>({ verdicts: [], query: '' })
+  // The flushed rows that pass `filter`; album names come from the published `albums`
+  let visibleRows = $derived.by(() => {
+    const names = new Map(albums.map((a) => [a.index, a.name]))
+    return rows.filter((row) => rowMatches(row, filter, names.get(row.albumIndex)))
+  })
 
   let batchTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -226,13 +235,22 @@ export function createAnalysisStore(): AnalysisStore {
   }
 
   function selectAlbum(albumIndex: number) {
+    // The lowest index among the rows that pass the filter (pending rows included, judged with the
+    // names of `latest`); with none shown, the lowest index of the album (sort-filter.md section 6)
     let lowest: number | null = null
+    let lowestShown: number | null = null
     for (const row of [...rows, ...pendingRows]) {
-      if (row.albumIndex === albumIndex && (lowest === null || row.index < lowest)) {
-        lowest = row.index
+      if (row.albumIndex !== albumIndex) continue
+      if (lowest === null || row.index < lowest) lowest = row.index
+      if (
+        (lowestShown === null || row.index < lowestShown) &&
+        rowMatches(row, filter, latest.get(row.albumIndex)?.name)
+      ) {
+        lowestShown = row.index
       }
     }
-    if (lowest !== null) selectedIndex = lowest
+    const target = lowestShown ?? lowest
+    if (target !== null) selectedIndex = target
   }
 
   function toggleSort(column: SortColumn) {
@@ -243,8 +261,19 @@ export function createAnalysisStore(): AnalysisStore {
     }
   }
 
-  function notImplemented(): never {
-    throw new Error('not implemented')
+  function toggleVerdictFilter(verdict: Verdict) {
+    const pressed = filter.verdicts.includes(verdict)
+      ? filter.verdicts.filter((v) => v !== verdict)
+      : [...filter.verdicts, verdict]
+    filter = { ...filter, verdicts: VERDICT_ORDER.filter((v) => pressed.includes(v)) }
+  }
+
+  function setQuery(query: string) {
+    filter = { ...filter, query }
+  }
+
+  function clearFilter() {
+    filter = { verdicts: [], query: '' }
   }
 
   return {
@@ -272,8 +301,8 @@ export function createAnalysisStore(): AnalysisStore {
     get filter() {
       return filter
     },
-    get visibleRows(): ResultRow[] {
-      return notImplemented()
+    get visibleRows() {
+      return visibleRows
     },
     begin,
     restore,
@@ -283,14 +312,8 @@ export function createAnalysisStore(): AnalysisStore {
     select,
     selectAlbum,
     toggleSort,
-    toggleVerdictFilter: (verdict: Verdict) => {
-      void verdict
-      notImplemented()
-    },
-    setQuery: (query: string) => {
-      void query
-      notImplemented()
-    },
-    clearFilter: () => notImplemented(),
+    toggleVerdictFilter,
+    setQuery,
+    clearFilter,
   }
 }
