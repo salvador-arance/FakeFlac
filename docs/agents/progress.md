@@ -19,11 +19,10 @@
 
 **Pending**
 - G2 for #71. Before merging, the owner runs the manual checks M1–M7 (`specs/ui/export-csv.md`, checklist in the PR) with `npm run tauri dev`. M6(b) records what the dialog does with a typed `results.txt`.
-- `src-tauri/examples/cli.rs`: an untracked file, not written by this session's agents. It was left untouched and is not part of #71.
 - `CLAUDE_CODE_SUBAGENT_MODEL=sonnet` in `~/.claude/settings.json`: the owner adds it (it is outside the repo).
 
 **Blockers / questions for the human**
-- Is `src-tauri/examples/cli.rs` yours? Keep it, commit it, or delete it.
+- None. (`src-tauri/examples/cli.rs`, an untracked file no agent wrote, was removed by the owner.)
 
 **Notes for the next session**
 - Bash may start in `/cygdrive/c/...`; use `cd "C:/Workspaces/FakeFlac"` there, or vitest fails to start.
