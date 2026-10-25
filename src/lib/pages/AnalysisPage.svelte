@@ -53,6 +53,8 @@
   let spectrogramLoading = $state(false)
   let spectrogramUnavailable = $state(false)
   let spectrogramRequest = 0
+  // RF-10 (Q16): bumped on every album selection so the table brings the selected row into view.
+  let revealRequest = $state(0)
 
   // RF-10: the current album is the album of the selected row.
   let currentAlbum = $derived(
@@ -79,6 +81,7 @@
   // RF-10: selecting an album selects its row with the lowest index (also when it is the album of
   // the current row), through the same flow as a click on that row.
   async function handleSelectAlbum(albumIndex: number) {
+    revealRequest += 1
     const before = store.selectedIndex
     store.selectAlbum(albumIndex)
     const after = store.selectedIndex
@@ -263,6 +266,7 @@
           rows={store.rows}
           selectedIndex={store.selectedIndex}
           sort={store.sort}
+          {revealRequest}
           onselect={handleSelect}
           onsort={(column) => store.toggleSort(column)}
         />
