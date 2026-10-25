@@ -15,6 +15,6 @@ export default defineConfig({
     environment: 'jsdom',
     passWithNoTests: true,
     // tests read tokens.css as text (?raw); vitest returns an empty string for CSS unless processed
-    css: { include: [/tokens.css/] },
+    css: { include: [/tokens\.css/] },
   },
 })

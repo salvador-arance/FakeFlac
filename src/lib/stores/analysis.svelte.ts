@@ -133,6 +133,7 @@ export function createAnalysisStore(): AnalysisStore {
       batchTimer = null
     }
     pendingRows = []
+    // Unlike fail(), pending updates are dropped: only the published albums stay (NOT_A_FOLDER after restore)
     latest = new Map(albums.map((a) => [a.index, a]))
     phase = 'ready'
     message = undefined

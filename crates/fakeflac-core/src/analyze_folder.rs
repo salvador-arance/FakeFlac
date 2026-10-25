@@ -336,6 +336,7 @@ fn run_worker(
             }
         });
         // `group_albums` gives every track an album of the table, so `album` is always `Some`.
+        debug_assert!(album.is_some(), "track {index} has no album");
         if let Some(album) = album {
             on_progress(ProgressEvent::TrackDone {
                 index: index as u32,
