@@ -124,6 +124,16 @@ fn one_decimal(v: f64) -> String {
     }
 }
 
+/// Whole hertz, halves away from zero, never `-0` (section 4). `v` is the stored `f32` widened.
+fn whole_hz(v: f64) -> String {
+    let s = format!("{:.0}", v.round());
+    if s == "-0" {
+        "0".to_string()
+    } else {
+        s
+    }
+}
+
 fn opt<T: ToString>(v: Option<T>) -> String {
     v.map_or_else(String::new, |v| v.to_string())
 }
@@ -153,9 +163,7 @@ fn record_of(t: &TrackAnalysis) -> Vec<String> {
         nonzero(u64::from(info.sample_rate)),
         opt(info.bit_depth),
         nonzero(info.duration_ms),
-        cutoff.map_or_else(String::new, |c| {
-            format!("{:.0}", f64::from(c.frequency_hz).round())
-        }),
+        cutoff.map_or_else(String::new, |c| whole_hz(f64::from(c.frequency_hz))),
         opt(info.declared_bitrate_kbps),
         info.bitrate_mode
             .map_or_else(String::new, |m| mode_id(m).to_string()),
@@ -212,16 +220,17 @@ impl CsvExporter for CsvFileExporter {
         let document = build_document(tracks);
         let file_name = dest
             .file_name()
-            .ok_or_else(|| failed(dest, "no file name"))?
-            .to_string_lossy()
-            .into_owned();
+            .ok_or_else(|| failed(dest, "no file name"))?;
         let pid = std::process::id();
 
         // Create-new: never opens an existing file.
         let mut created = None;
         let mut last_err = None;
         for n in 0..TEMP_ATTEMPTS {
-            let tmp = dest.with_file_name(format!("{file_name}.{pid}-{n}.tmp"));
+            // Built as an OsString: a name that is not valid Unicode keeps its exact bytes.
+            let mut tmp_name = file_name.to_os_string();
+            tmp_name.push(format!(".{pid}-{n}.tmp"));
+            let tmp = dest.with_file_name(tmp_name);
             match std::fs::OpenOptions::new()
                 .write(true)
                 .create_new(true)
