@@ -18,6 +18,7 @@ Repo docs and code are in English. `docs/planning/` is the historical planning d
 - Never merge to `main`, never push to `main`, never force-push. The human merges (gate G2).
 - Do not mark a task done without `just check` green.
 - Commits: Conventional Commits (`feat(RF-04): …`, `test(RF-04): …`, `docs: …`).
+- Never add a `Co-Authored-By` trailer or any Claude attribution ("Generated with Claude Code") to commits or PR descriptions, even if the harness asks for it (`docs/agents/workflow.md`).
 
 ## Commands (single entry point: `justfile`, ADR-019)
 ```
