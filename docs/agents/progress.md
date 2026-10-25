@@ -2,6 +2,24 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-25 - #65 merged (G1); detection v6 accepted
+
+**Done**
+- #65 merged (098ae18): E6 `holdout` gate on the Wilson lower bound. With it, v6 passes E1–E7 on run `20261025T010130Z` and is accepted.
+- README status: v6 accepted on the local corpus.
+
+**Pending**
+- G2: merge this docs PR.
+- Choose the next requirement. H2 still has RF-08 (sort and filter), RF-09 (CSV export), RF-10 (album summary in the UI; the core use case exists), RF-11 (cache), RF-13 (Spanish and English UI), Opus (ADR-0030 spike), RNF-01, RNF-06, RNF-07, RNF-08 and RNF-11. Open detection question: Q15 (W6, via per-frame statistics).
+
+**Blockers / questions for the human**
+- Which requirement comes next.
+
+**Notes for the next session**
+- Same as the block below: temporary files in `target/tmp/`; keep Windows awake during corpus runs.
+
+**Next step:** `/new-spec` for the requirement the owner chooses.
+
 ## 2026-10-25 - Corpus run of v6 done; E6 `holdout` gate changed (spec PR, waiting for G1)
 
 **Done**
