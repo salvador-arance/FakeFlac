@@ -1497,8 +1497,9 @@ fn rf04_v4_a_v3_params_file_still_gives_the_v3_verdicts() {
     let v3 = v3_params();
     let v4 = params();
     type Outcome = (Verdict, Vec<SuspicionReason>);
+    type Measures = (f64, f64, f64, f64, f64, f64);
     // (case, (G, D, fs, fe, U, B), v3 outcome, v4 outcome)
-    let rows: Vec<(&str, (f64, f64, f64, f64, f64, f64), Outcome, Outcome)> = vec![
+    let rows: Vec<(&str, Measures, Outcome, Outcome)> = vec![
         (
             "FP4 pattern with bursty content",
             (-0.25, 14.22, 19_450.0, 22_050.0, -45.0, 8.0),

@@ -891,8 +891,9 @@ fn rf04_v4_margins_include_the_lossy_step() {
     let v4 = params_file(&v4_params());
     assert_eq!(v4.algorithm_version, 4);
     assert!(v4.lossy.is_none(), "a v4 file has no [lossy] section");
+    type Row = (&'static str, f64, f64, Option<f64>, Option<f64>, f64);
     // (case, G, D, fs, m_full_band_step_db, nearest_fake_margin_db)
-    let rows: [(&str, f64, f64, Option<f64>, Option<f64>, f64); 5] = [
+    let rows: [Row; 5] = [
         // a = min(6 - 10, 10 - 2) = -4; g = min(5, 3 - 2) = 1; full band, so max(a, g) = 1
         (
             "small lossy step",

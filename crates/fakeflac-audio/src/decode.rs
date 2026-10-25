@@ -260,6 +260,7 @@ fn ended_short(decoded: u64, declared: u64, tolerance: u64) -> bool {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
 
@@ -424,7 +425,7 @@ mod tests {
         src.read_exact(&mut b).unwrap();
         assert_eq!(b, [15, 16]);
         assert_eq!(src.seek(SeekFrom::Current(-3)).unwrap(), 4);
-        assert_eq!(src.seek(SeekFrom::Current(0)).unwrap(), 4);
+        assert_eq!(src.stream_position().unwrap(), 4);
         assert_eq!(src.seek(SeekFrom::End(-1)).unwrap(), 89);
         src.read_exact(&mut b[..1]).unwrap();
         assert_eq!(b[0], 99);
