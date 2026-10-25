@@ -34,7 +34,7 @@ status: proposed
 |---|---|---|---|---|
 | `TitleBar` | `title: string` | `minimize`, `toggleMaximize`, `close` | — | `data-tauri-drag-region` |
 | `Toolbar` | `canOpen: boolean`, `canCancel: boolean` | `open`, `cancel` | idle · running | Groups and separators like the reference; H2 adds remove, export, filters and search. Export (RF-09): prop `canExport`, event `export`, and `StatusBar`'s `notice` and `Icon`'s `export` in `export-csv.md` |
-| `ResultsTable` | `rows: ResultRow[]` (`{ index: number; analysis: TrackAnalysis }`, `index` from the progress events), `selectedIndex: number \| null`, `sort: SortState` | `select(index)`, `sort(column)` | empty · rows · many rows (virtualised) | Columns of `main-screen.md`; virtualised rows (row height token); keyboard navigation |
+| `ResultsTable` | `rows: ResultRow[]` (`{ index: number; analysis: TrackAnalysis }`, `index` from the progress events; H2 RF-10 adds `albumIndex: number`, unused by the table), `selectedIndex: number \| null`, `sort: SortState` | `select(index)`, `sort(column)` | empty · rows · many rows (virtualised) · H2 RF-10: selected row scrolled into view | Columns of `main-screen.md`; virtualised rows (row height token); keyboard navigation. **Proposed for G1 (RF-10, `album-summary.md`):** when `selectedIndex` changes to a row outside the visible range, the table scrolls the least needed so it is visible, whatever changed it: a prop change (selecting an album) or ↑/↓/Home/End. The approved keyboard rule of `main-screen.md` does not say whether the table scrolls and today it does not, so this also changes what those keys do visibly |
 | `SpectrogramView` | `spectrogram: Spectrogram \| null`, `cutoffHz: number \| null`, `loading: boolean` | — | loading · image · none | `<canvas>`; colour map from tokens; frequency axis in kHz; cutoff line |
 | `DetailPanel` | `track: TrackAnalysis \| null`, `spectrogram`, `loading` | — | nothing selected · loading · spectrogram · unavailable (request failed: verdict line + `spectrogram.unavailable`) · error | Text line: "Cutoff 16.0 kHz · Fake"; " · <reason>" (`reason.*` text) is appended only when the track has reasons (a `Fake` verdict has none); for errors shows the error text. Lossy tracks (H2) add the declared and the source bitrate after the cutoff (`lossy-formats.md`) |
 | `StatusBar` | `phase: 'ready' \| 'scanning' \| 'analysing' \| 'finished' \| 'cancelled' \| 'error'`, `summary`, `message?` | — | one per phase | Uses `ProgressBar` |
@@ -42,7 +42,7 @@ status: proposed
 
 ## Templates and pages
 
-- `MainLayout`: slots `titleBar`, `toolbar`, `table`, `detail`, `statusBar`; owns the splitter position (remembered in `localStorage`, fallback to default).
+- `MainLayout`: slots `titleBar`, `toolbar`, `table`, `detail`, `statusBar`; owns the splitter position (remembered in `localStorage`, fallback to default). H2 (RF-10): optional slot `sidebar` for the Albums panel (`AlbumSummaryList` organism), width from the new layout token `--sidebar-width` (240 px), and `ResultsTable` scrolls the selected row into view (proposed for G1, see its row above); both in `album-summary.md`.
 - `AnalysisPage`: connects the `analysis` store (rows, phase, selection, summary) and the API client (`pickFolder`, `startAnalysis`, `cancelAnalysis`, `getSpectrogram`, drag-drop). The only place with side effects.
 
 ## Accessibility

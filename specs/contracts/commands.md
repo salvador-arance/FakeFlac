@@ -1,20 +1,20 @@
 ---
 id: SPEC-CONTRACT-H1
-requirements: [RF-01, RF-02, RF-05, RF-06, RF-07, RF-09, RF-14, RF-15]
+requirements: [RF-01, RF-02, RF-05, RF-06, RF-07, RF-09, RF-10, RF-14, RF-15]
 status: proposed
-version: 4
+version: 5
 ---
 
-# Backend ↔ frontend contract (H1, with the H2 lossy formats and CSV export)
+# Backend ↔ frontend contract (H1, with the H2 lossy formats, CSV export and album summaries)
 
-> The commands, events and types the frontend can use. They are defined once in Rust and the TypeScript bindings are **generated** with `tauri-specta` (S3, ADR-0003); this document is the readable reference. Field names are camelCase on the TS side. Settings and cache commands arrive later in H2. Version 3 adds MP3 and M4A files (RF-14 H2) and the source-bitrate estimate (RF-15); changes are listed in "Lossy formats (version 3)". Version 4 adds `export_csv` (RF-09); changes are listed in "CSV export (version 4)".
+> The commands, events and types the frontend can use. They are defined once in Rust and the TypeScript bindings are **generated** with `tauri-specta` (S3, ADR-0003); this document is the readable reference. Field names are camelCase on the TS side. Settings and cache commands arrive later in H2. Version 3 adds MP3 and M4A files (RF-14 H2) and the source-bitrate estimate (RF-15); changes are listed in "Lossy formats (version 3)". Version 4 adds `export_csv` (RF-09); changes are listed in "CSV export (version 4)". Version 5 adds the album summary to every `trackDone` event (RF-10); changes are listed in "Album summary (version 5)".
 
 ## Commands
 
 | Command | Input | Output | Errors (`AppError.code`) | Req. |
 |---|---|---|---|---|
 | `pick_folder` | — | `string \| null` (absolute path; `null` if the dialog is cancelled) | — | RF-01 |
-| `start_analysis` | `root: string` (absolute path), `onProgress: Channel<ProgressEvent>` | `AnalysisSummary` when the run ends (finished or cancelled) | `NOT_A_FOLDER`, `FOLDER_UNREADABLE`, `NO_AUDIO_FOUND`, `ANALYSIS_RUNNING`, `INTERNAL` | RF-01..06 |
+| `start_analysis` | `root: string` (absolute path), `onProgress: Channel<ProgressEvent>` | `AnalysisSummary` when the run ends (finished or cancelled) | `NOT_A_FOLDER`, `FOLDER_UNREADABLE`, `NO_AUDIO_FOUND`, `ANALYSIS_RUNNING`, `INTERNAL` | RF-01..06, RF-10 (version 5) |
 | `cancel_analysis` | — | `void` (no-op if nothing is running) | — | RF-05 |
 | `get_spectrogram` | `path: string` | `Spectrogram` | `NOT_ANALYZED` is not used in H1; `INTERNAL` if the file cannot be decoded | RF-07 |
 | `export_csv` (version 4) | — (the destination comes from the native save dialog, never from the frontend) | `ExportResult \| null` (`null` if the dialog is cancelled) | `NOT_ANALYZED`, `ANALYSIS_RUNNING`, `EXPORT_FAILED`, `INTERNAL` | RF-09 |
@@ -41,12 +41,12 @@ Ordered per run. Exactly one of `finished` / `cancelled` is the last event.
 type ProgressEvent =
   | { kind: 'scanned'; total: number }                          // files found (supported formats only)
   | { kind: 'trackStarted'; index: number; path: string }       // RF-05 per-track progress
-  | { kind: 'trackDone'; index: number; analysis: TrackAnalysis }
+  | { kind: 'trackDone'; index: number; analysis: TrackAnalysis; album: AlbumUpdate } // `album`: version 5 (RF-10)
   | { kind: 'finished'; summary: AnalysisSummary }
   | { kind: 'cancelled'; summary: AnalysisSummary }
 ```
 
-`index` is the 0-based position of the file in the scan order (sorted by path, case-insensitive). `trackDone` events may arrive out of index order (parallel analysis).
+`index` is the 0-based position of the file in the scan order (sorted by path, case-insensitive). `trackDone` events may arrive out of index order (parallel analysis). `album` is the summary of the track's album after counting that track ("Album summary (version 5)").
 
 ## Types
 
@@ -100,6 +100,20 @@ type Spectrogram = {
   maxFrequencyHz: number   // = sampleRate / 2
   dbRange: [number, number] // u8 0 → dbRange[0], 255 → dbRange[1]
   data: number[]           // width*height bytes (0–255), row-major by time (ADR-0009); sent as a JSON array of numbers
+}
+
+type AlbumSummary = {     // version 5 (RF-10); rule: specs/detection/album-summary.md
+  folder: string           // the album's folder: the direct parent folder of its tracks, equal to their `TrackInfo.folder`
+  total: number            // tracks of this album with a `trackDone` so far in the run; = real + suspicious + fake + errors
+  real: number; suspicious: number; fake: number; errors: number
+  verdict: Verdict         // most severe of real < suspicious < fake; 'error' only when every counted track is an error
+}
+
+type AlbumUpdate = {      // version 5 (RF-10)
+  index: number            // the album's key within the run (0-based, path order of the album folders); never key by path
+  name: string             // display name: the folder relative to the parent of the analysed root (rule in "Album summary (version 5)")
+  files: number            // supported files the scan found directly in this folder; summary.total ≤ files
+  summary: AlbumSummary    // the album after counting the track of this event
 }
 
 type ExportResult = {     // version 4 (RF-09)
@@ -157,6 +171,61 @@ Version 4 (RF-09; file format and layers: `specs/contracts/csv-export.md`, ADR-0
 - `NOT_ANALYZED` gets its first use here (csv-export.md Q10); `AppErrorCode` does not change.
 
 `just gen` produces new bindings (the command `exportCsv` and the type `ExportResult`); `just gen-check` must pass. The API client adds `exportCsv(): Promise<ExportResult | null>`, which rejects with `ApiError` on a contract error, like `getSpectrogram`.
+
+## Album summary (version 5)
+
+Version 5 (RF-10; rule: `specs/detection/album-summary.md`, unchanged; UI: `specs/ui/album-summary.md`; scenarios: `specs/features/album-summary-app.feature`):
+
+- **Computed in the backend.** The `analyze_folder` use case of `fakeflac-core` groups the tracks of the run by album and summarises each album with the existing rule `summarize_album`. The frontend never recomputes a summary verdict: it shows the latest `AlbumUpdate` it received for each album. The rule already lives and is tested in `fakeflac-core`; a TypeScript copy would put a verdict rule outside the core (ADR-0001, `src-tauri/CLAUDE.md`) and would have to be kept equal by hand. No new port, crate or dependency; the core stays free of I/O (grouping and the name rule are pure path operations on the scanned entries).
+- **Types and layers.**
+  - `AlbumSummary` of the contract **is the existing core type** `fakeflac_core::domain::AlbumSummary` (`folder: PathBuf`, the value `summarize_album` returns; unchanged), mapped by a new src-tauri DTO `AlbumSummary` in `src-tauri/src/dto.rs` that turns `folder` into a string with the same lossy conversion as `TrackInfo.folder` (`path_string`).
+  - `AlbumUpdate` is a **new core type defined in `fakeflac-core`**, next to `ProgressEvent` in `analyze_folder.rs`, because the use case emits it: `index: u32`, `name: PathBuf`, `files: u32`, `summary: AlbumSummary` (core). `ProgressEvent::TrackDone` gains `album: AlbumUpdate`. src-tauri adds the DTO `AlbumUpdate` (`name` through `path_string`) and the `album` field of its `TrackDone` DTO.
+  - **The display-name rule lives in `fakeflac-core`**: a pure public function of `root` and the album folder that returns the path to show (`PathBuf`; rule below). The core never converts it to a lossy string; the DTO does, like every other path.
+  - **src-tauri only maps** core types to DTOs (`From` impls in `dto.rs`, as for `TrackInfo`): it does no grouping, counting, ordering, naming or verdict logic (`src-tauri/CLAUDE.md`).
+- **Album.** An album is the set of scanned files with the same **direct parent folder** (`FileEntry.folder`, which becomes `TrackInfo.folder`; album-summary.md "Inputs"). Each subfolder is a separate album (`Album 1` and `Album 1\CD2` are two albums). A folder that holds no supported file directly (only subfolders, or only unsupported files) is no album. **The analysed root is an album** when it holds supported files directly, like any other folder.
+- **`trackDone.album`.** Every `trackDone` event carries `album: AlbumUpdate`, the album of that track **after** counting it:
+  - `index`: the album's key within the run. The run's albums are numbered 0, 1, … by sorting their folders path component by component, case-insensitively, then by exact path (the same key the scan uses for files, applied to the folder path). So a folder comes before its subfolders (`Artist`, `Artist\Album 1`, `Artist\Album 1\CD2`, `Artist\Album 2`). The numbering is fixed once the scan ends: it does not depend on which track finishes first. Two folders whose names differ only in characters that are not valid Unicode get different `index` values even when their `folder` strings are equal (U+FFFD, see "Events"): the frontend keys albums by `index`, never by `folder` or `name`.
+  - `name`: the display name (rule below).
+  - `files`: the supported files the scan found directly in this folder (`≥ 1`). `summary.total ≤ files`; they are equal once every file of the album has had its `trackDone`.
+  - `summary`: equal to `summarize_album(folder, T)`, where `T` is the tracks of this album whose `trackDone` was sent in this run up to and including this one. `summary.folder` equals `analysis.info.folder`. The implementation may keep running counts instead of calling `summarize_album` on every event, provided every summary sent equals what `summarize_album` returns (the tests compare against it).
+- **Order.** For each album, the summaries of its `trackDone` events grow one track at a time in channel order: the n-th `trackDone` of an album carries `summary.total == n`. So the latest update received for an album is always its newest state, even with parallel workers.
+  - **Album lock.** The use case holds **one album lock**, a mutex of its own (not the lock that guards `next` and sends `trackStarted`), around exactly two steps: updating the album state (count the track in its album, build the `AlbumUpdate`) and the `on_progress(TrackDone)` call for that track. It is **never held during a track's analysis**, and never together with the `next` lock (no lock-order deadlock). So workers still analyse in parallel; only the counting and the sending of `trackDone` are serialised.
+  - **`on_progress` must not block.** Every worker's `trackDone` passes through the album lock, so the sink must return without waiting for the page: src-tauri's sink records the event for the export (a short mutex) and hands it to the Tauri `Channel`, whose `send` does not wait for the frontend. A blocking sink would stall every worker at its next `trackDone` (it would not break the order). The sink must not call back into the use case.
+- **When summaries change.** Only with `trackDone`. `scanned`, `trackStarted`, `finished` and `cancelled` carry no album data, and `AnalysisSummary` does not change.
+  - Finished run: the last update of every album has `summary.total == files`.
+  - Cancelled run: each album with at least one track done has its last update, which may have `summary.total < files`; an album with no track done never appears in any event.
+  - Run that ends with `INTERNAL`: as cancelled, for the tracks reported. `INTERNAL` after events means the run's task failed (for example a panic in the use case outside the per-track guard, or in the sink; `src-tauri/src/commands.rs` turns the failed task into `INTERNAL`): every album update already sent obeys the rules above, and no further event follows.
+  - A new run numbers its albums from 0 again; its albums replace the previous run's (the frontend drops them when it starts the run, `ui/album-summary.md`).
+- **Error tracks** (RNF-04) are counted in `errors` and decide the summary verdict only when every counted track of the album is an error (album-summary.md rule 3). An album whose files are all unreadable, corrupt or too short has `verdict: 'error'`. While the run goes on, an album can change from `error` to another verdict when one of its readable tracks arrives later.
+- **Name rule** (pure, computed in `fakeflac-core` from the run's `root` and the album folder): when the root has a parent folder and the album folder starts with it (component-wise), `name` is the album folder with that parent removed, so it starts with the root folder's own name; otherwise (the root is a drive root such as `D:\` or `\\?\C:\`, or a UNC share root such as `\\nas\music`, which have no parent) `name` is the album folder in full. The separator is the one in the folder path (`\` on Windows). Names that are not valid Unicode get U+FFFD like any other path string (in the DTO).
+  - **Over `Path` components, not strings.** The rule uses `std::path::Path` (`parent`, component-wise prefix), like the scan order already does, so `\\?\`, UNC prefixes and a trailing separator are handled by the standard library. A Windows path is only parsed as one on Windows, so the tests of the rule, and every use-case test of this feature whose paths are Windows paths (`C:\…`, `\\?\…`, `\\nas\…`), are **`#[cfg(windows)]`** (for example one test file with `#![cfg(windows)]`). CI runs the Rust tests on `windows-latest` (`.github/workflows/ci.yml`, job `test-rust`), so they always run there; the Linux `lint` job only compiles test targets (clippy), where they are left out.
+  - **The table is the test**: the Scenario Outline "Album name" of `features/album-summary-app.feature` has exactly these rows, one test case per row.
+
+  | Root | Album folder | `name` |
+  |---|---|---|
+  | `C:\Music\Artist` | `C:\Music\Artist` (the root's own tracks) | `Artist` |
+  | `C:\Music\Artist` | `C:\Music\Artist\Album 1` | `Artist\Album 1` |
+  | `C:\Music\Artist\` (trailing separator) | `C:\Music\Artist\Album 1\CD2` | `Artist\Album 1\CD2` |
+  | `C:\Music\Álbum ″Ñandú″` | `C:\Music\Álbum ″Ñandú″` | `Álbum ″Ñandú″` |
+  | `\\?\C:\Music\Album A` | `\\?\C:\Music\Album A` | `Album A` |
+  | `\\?\C:\` (verbatim drive root) | `\\?\C:\` | `\\?\C:\` |
+  | `\\?\C:\` | `\\?\C:\Album A` | `\\?\C:\Album A` |
+  | `\\nas\music\Rock` | `\\nas\music\Rock\Album B` | `Rock\Album B` |
+  | `D:\` (drive root) | `D:\` | `D:\` |
+  | `D:\` | `D:\Album A` | `D:\Album A` |
+  | `\\nas\music` (UNC share root) | `\\nas\music` | `\\nas\music` |
+  | `\\nas\music` | `\\nas\music\Album B` | `\\nas\music\Album B` |
+
+- **Unchanged:** the commands and their inputs and outputs, `AppError` codes, `AnalysisSummary`, `TrackAnalysis`, the results kept for export and the CSV file. **The CSV export does not include album summaries**: it stays one record per track, `csv_format_version` 1 (csv-export.md unchanged); the `folder` column already lets a spreadsheet group the tracks (open question Q8 of `ui/album-summary.md`).
+
+- **Consequence on existing tests (declared).** `ProgressEvent::TrackDone` (`crates/fakeflac-core/src/analyze_folder.rs`) and its DTO gain `album`, so tests derived from approved specs that build a `trackDone` event or match it without `..` stop compiling or type-checking. **Updating them is a declared consequence of this spec**: the test author does it in the `test(RF-10)` commit (stage `test`); it only adds the `album` field or `..`, and their assertions on the other fields do not change. The implementer does not touch them.
+  - `crates/fakeflac-core/tests/analyze_folder.rs`: `done_by_index` matches `TrackDone { index, analysis }` exhaustively.
+  - `src-tauri/tests/contract.rs`: `progress_events_match_the_contract` builds a core `TrackDone` and expects its JSON without `album`.
+  - `src-tauri/tests/export_csv.rs`: `track_done` matches the DTO `TrackDone { index, analysis }` exhaustively; `done` builds a core `TrackDone`.
+  - `src/lib/pages/AnalysisPage.test.ts`, `src/lib/pages/AnalysisPage.export.test.ts`, `src/lib/pages/AnalysisPage.spectrogram.test.ts`: their stubbed `trackDone` events have no `album` (the type check fails and the store reads `event.album`).
+  - No change needed: tests that match `TrackDone { .. }` or `TrackDone { index, .. }` (the other patterns in `crates/fakeflac-core/tests/analyze_folder.rs`, `src-tauri/tests/{run_analysis,run_analysis_lossy,run_analysis_lossy_v5}.rs`). Production code that maps the event (`src-tauri/src/dto.rs`, `ExportState::record` in `src-tauri/src/run.rs`, the store) changes in stage `implement`; `src/lib/api/bindings.ts` is regenerated.
+
+`just gen` produces new bindings (the types `AlbumSummary` and `AlbumUpdate`, the field `album` of the `trackDone` event); `just gen-check` must pass. The API client's `startAnalysis` does not change its signature. The frontend's `ResultRow` gains `albumIndex` (`ui/album-summary.md`).
 
 ## Supported files (RF-14)
 

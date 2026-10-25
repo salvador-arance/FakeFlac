@@ -6,7 +6,7 @@ status: proposed
 
 # Main screen (H1)
 
-> One dark window modelled on the reference tool (`docs/reference/`, `docs/architecture/frontend.md`): custom title bar, icon toolbar, results table, detail panel with the spectrogram, status bar. H1 has no folder tree, no search, no verdict filters and no export: those arrive in H2 and the layout keeps their place. H2 export (RF-09): the "Export CSV" toolbar button, its enabled states and the status bar notice are in `export-csv.md`.
+> One dark window modelled on the reference tool (`docs/reference/`, `docs/architecture/frontend.md`): custom title bar, icon toolbar, results table, detail panel with the spectrogram, status bar. H1 has no folder tree, no search, no verdict filters and no export: those arrive in H2 and the layout keeps their place. H2 export (RF-09): the "Export CSV" toolbar button, its enabled states and the status bar notice are in `export-csv.md`. H2 album summaries (RF-10): the Albums panel on the left of the content area, its states and its link with the selection are in `album-summary.md`; it also proposes (G1) that the table scroll the selected row into view, for ↑/↓/Home/End too (`components.md`, `ResultsTable`).
 
 ## Layout (`MainLayout` template, rendered by `AnalysisPage`)
 
