@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte'
   import BitrateValue from '../molecules/BitrateValue.svelte'
   import ColumnHeader from '../molecules/ColumnHeader.svelte'
   import CutoffValue from '../molecules/CutoffValue.svelte'
@@ -12,6 +13,11 @@
     sort: SortState
     rowHeight?: number
     viewportHeight?: number
+    /**
+     * RF-10 (components.md Q16): a counter the page increments on every album selection; each
+     * change scrolls the selected row into view.
+     */
+    revealRequest?: number
     onselect?: (index: number) => void
     onsort?: (column: SortColumn) => void
   }
@@ -22,12 +28,14 @@
     sort,
     rowHeight = 22,
     viewportHeight,
+    revealRequest = 0,
     onselect,
     onsort,
   }: Props = $props()
 
   let scrollTop = $state(0)
   let gridElement: HTMLElement | undefined = $state()
+  let headerElement: HTMLElement | undefined = $state()
 
   function getFileName(p: string): string {
     const norm = p.replace(/\\/g, '/')
@@ -140,6 +148,38 @@
     scrollTop = target.scrollTop
   }
 
+  // components.md "ResultsTable" (Q13, Q16): a change of `selectedIndex` or of `revealRequest`
+  // scrolls the least needed so the selected row is visible. New rows or a re-sort never move the
+  // scroll by themselves, so the effect compares against the values seen on its previous run.
+  let seenSelected: number | null = null
+  let seenReveal: number | undefined
+  $effect(() => {
+    const target = selectedIndex
+    const reveal = revealRequest
+    const grid = gridElement
+    const changed = target !== seenSelected || (seenReveal !== undefined && reveal !== seenReveal)
+    // Nothing is recorded until the grid exists, so a selection made before it is bound still scrolls
+    if (!grid) return
+    seenSelected = target
+    seenReveal = reveal
+    if (!changed || target === null) return
+    untrack(() => {
+      const position = sortedRows.findIndex((r) => r.index === target)
+      if (position < 0) return
+      const viewport = viewportHeight ?? grid.clientHeight
+      const header = headerElement?.offsetHeight ?? 0
+      const top = position * rowHeight
+      const bottom = header + (position + 1) * rowHeight
+      let next = grid.scrollTop
+      if (next > top) next = top
+      else if (viewport > 0 && next + viewport < bottom) next = bottom - viewport
+      if (next !== grid.scrollTop) {
+        grid.scrollTop = next
+        scrollTop = next
+      }
+    })
+  })
+
   function handleKeyDown(e: KeyboardEvent) {
     if (sortedRows.length === 0) return
 
@@ -187,7 +227,7 @@
   onkeydown={handleKeyDown}
   style:--row-height="{rowHeight}px"
 >
-  <div class="table-header" role="rowgroup">
+  <div class="table-header" role="rowgroup" bind:this={headerElement}>
     <div class="row header-row" role="row">
       <ColumnHeader
         label="State"

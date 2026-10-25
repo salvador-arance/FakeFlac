@@ -2,6 +2,45 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-25 - RF-10 (album summary in the app) implemented; feature PR #74 waiting for G2
+
+**Done**
+- #73 (RF-10 spec) merged at G1.
+- `/feature RF-10` on `feat/RF-10`, PR #74:
+  - Tests:
+    - `1fde168`: the first `test(RF-10)` commit.
+    - `92cc5d2`: the A1 page test fixed with the owner's approval. It expected plural-only counts ("1 errors") and counted DOM rows, but the non-virtualised jsdom table renders at most 50.
+  - Implementation:
+    - `86ad2f3` (core and src-tauri): `AlbumUpdate`, album lock, name rule and the `AlbumTally` shared with `summarize_album`.
+    - `0b698bb` (frontend): `AlbumSummaryList`, store, sidebar, table scroll-to-selection.
+  - Review round 1: nothing blocking; improvements in `e406e8c`.
+  - Its finding 2 led to Q16: selecting the current album again brings its first row back into view.
+    - `05805d5`: spec. A delegate answered the G1 questions and the owner approved.
+    - `885fa98` and `1c2667c`: tests and story.
+    - `70d5a9f`: `ResultsTable.revealRequest`.
+    - Review round 2: nothing blocking; improvements in `921af6c`.
+  - `just ci` (436 vitest), `trace`, `privacy-check`, `guard-tests`: green.
+  - Manual checks M1 (1000 albums, release build) and M2 (visual) passed (owner).
+
+**Pending**
+- G2 of #74 (owner), then `just prune-branches`.
+- Dependabot alert #1 is still open and unexamined.
+- Harness gap, seen once: the frontend implementer (a `general-purpose` agent) appended a story to the protected `ResultsTable.stories.ts` in stage `implement`.
+  - `guard-protected` only covers Edit/Write/NotebookEdit, so it was presumably done through Bash.
+  - CI `guard-tests` caught it. The orchestrator amended the commit before the push and moved the story to its own `test(RF-10)` commit.
+  - If it repeats, record it in `lessons.md` and close the Bash path, or add a frontend implementer agent definition.
+- Optional: name the type-forced test edits (`ResultsTable.test.ts` and stories, `albumIndex: 0`) in commands.md's declared list. They are disclosed in #74.
+
+**Blockers / questions for the human**
+- None.
+
+**Notes for the next session**
+- `just test` excludes the src-tauri package (`fakeflac`). Its tests run in `check-app` / `just ci` or with `cargo test -p fakeflac`.
+- There is no frontend implementer agent type. RF-10 used `general-purpose` with a brief, and it does not inherit `rust-implementer`'s rules.
+- The owner has uncommitted local edits in `.claude/agents/{rust-implementer,test-author}.md` (model sonnet → opus). Never commit them.
+
+**Next step:** after #74 is merged, `just prune-branches`, then the owner picks the next H2 requirement.
+
 ## 2026-10-25 - RF-10 (album summary in the app) specified; spec PR #73 waiting for G1 merge
 
 **Done**

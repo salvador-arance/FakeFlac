@@ -291,6 +291,7 @@ const lossy = (
   o: Parameters<typeof makeTrack>[0] = {},
 ): ResultRow => ({
   index,
+  albumIndex: 0,
   analysis: makeTrack({ path, format: 'mp3', codec: 'mp3', ...o }),
 })
 
@@ -344,7 +345,11 @@ describe('ResultsTable: lossy columns (specs/ui/lossy-formats.md)', () => {
         cutoffHz: 16000,
         verdict: 'real',
       }),
-      { index: 2, analysis: makeTrack({ path: 'C:/Mixed/full_band.flac', cutoffHz: 22050 }) },
+      {
+        index: 2,
+        albumIndex: 0,
+        analysis: makeTrack({ path: 'C:/Mixed/full_band.flac', cutoffHz: 22050 }),
+      },
     ])
     const byName = Object.fromEntries(dataRows().map((r) => [cells(r)[1].textContent?.trim(), r]))
     const row = (n: string) => cells(byName[n])

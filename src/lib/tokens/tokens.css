@@ -33,6 +33,7 @@
   --font-ui: 'Segoe UI', system-ui, sans-serif;
   --font-size: 12px;
   --row-height: 22px;
+  --sidebar-width: 240px;
 }
 
 html,

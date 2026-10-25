@@ -25,6 +25,23 @@ export const commands = {
 };
 
 /* Types */
+export type AlbumSummary = {
+	folder: string,
+	total: number,
+	real: number,
+	suspicious: number,
+	fake: number,
+	errors: number,
+	verdict: Verdict,
+};
+
+export type AlbumUpdate = {
+	index: number,
+	name: string,
+	files: number,
+	summary: AlbumSummary,
+};
+
 export type AnalysisSummary = {
 	root: string,
 	total: number,
@@ -68,7 +85,7 @@ export type ExportResult = {
 	rows: number,
 };
 
-export type ProgressEvent = { kind: "scanned"; total: number } | { kind: "trackStarted"; index: number; path: string } | { kind: "trackDone"; index: number; analysis: TrackAnalysis } | { kind: "finished"; summary: AnalysisSummary } | { kind: "cancelled"; summary: AnalysisSummary };
+export type ProgressEvent = { kind: "scanned"; total: number } | { kind: "trackStarted"; index: number; path: string } | { kind: "trackDone"; index: number; analysis: TrackAnalysis; album: AlbumUpdate } | { kind: "finished"; summary: AnalysisSummary } | { kind: "cancelled"; summary: AnalysisSummary };
 
 /**  RF-07. `data` is serialised as a JSON number array (`number[]` in the contract). */
 export type Spectrogram = {

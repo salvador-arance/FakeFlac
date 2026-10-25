@@ -31,6 +31,7 @@ export const LossyRows: Story = {
     rows: [
       {
         index: 0,
+        albumIndex: 0,
         analysis: makeTrack({
           path: 'C:/Music/Mixed/a.mp3',
           format: 'mp3',
@@ -44,6 +45,7 @@ export const LossyRows: Story = {
       },
       {
         index: 1,
+        albumIndex: 0,
         analysis: makeTrack({
           path: 'C:/Music/Mixed/b.m4a',
           format: 'm4a',
@@ -53,6 +55,7 @@ export const LossyRows: Story = {
       },
       {
         index: 2,
+        albumIndex: 0,
         analysis: makeTrack({
           path: 'C:/Music/Mixed/v.mp3',
           format: 'mp3',
@@ -66,5 +69,15 @@ export const LossyRows: Story = {
     ],
     selectedIndex: null,
     sort: { column: 'file', direction: 'asc' },
+  },
+}
+
+/** RF-10 (Q16): `revealRequest` changes with the selection unchanged; the row is scrolled back into view. */
+export const RevealRequest: Story = {
+  args: {
+    rows: makeManyRows(60),
+    selectedIndex: 0,
+    sort: { column: 'file', direction: 'asc' },
+    revealRequest: 1,
   },
 }

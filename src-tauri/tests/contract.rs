@@ -44,6 +44,29 @@ fn track_json(t: &core::TrackAnalysis) -> Value {
     serde_json::to_value(dto::TrackAnalysis::from(t)).expect("serialize")
 }
 
+fn core_album() -> core::AlbumUpdate {
+    core::AlbumUpdate {
+        index: 0,
+        name: PathBuf::from("Album A"),
+        files: 3,
+        summary: core::AlbumSummary {
+            folder: PathBuf::from(r"C:\Music\Album A"),
+            total: 1,
+            real: 1,
+            suspicious: 0,
+            fake: 0,
+            errors: 0,
+            verdict: core::Verdict::Real,
+        },
+    }
+}
+
+fn album_json() -> Value {
+    json!({"index": 0, "name": "Album A", "files": 3, "summary": {
+        "folder": r"C:\Music\Album A", "total": 1, "real": 1, "suspicious": 0,
+        "fake": 0, "errors": 0, "verdict": "real"}})
+}
+
 fn summary() -> core::AnalysisSummary {
     core::AnalysisSummary {
         root: PathBuf::from("C:/Music"),
@@ -273,13 +296,15 @@ fn progress_events_match_the_contract() {
         json!({"kind": "trackStarted", "index": 0, "path": "C:/Music/a.flac"})
     );
     let t = track(core::Verdict::Real, None);
+    let album = core_album();
     let done = event_json(core::ProgressEvent::TrackDone {
         index: 2,
         analysis: t.clone(),
+        album: album.clone(),
     });
     assert_eq!(
         done,
-        json!({"kind": "trackDone", "index": 2, "analysis": track_json(&t)})
+        json!({"kind": "trackDone", "index": 2, "analysis": track_json(&t), "album": album_json()})
     );
     assert_eq!(
         event_json(core::ProgressEvent::Finished { summary: summary() }),
@@ -334,4 +359,25 @@ fn non_finite_cutoff_is_sent_as_no_cutoff() {
         });
         assert_eq!(track_json(&t)["cutoff"], Value::Null, "{bad}");
     }
+}
+
+// RF-10, scenario "The trackDone event in JSON" (album-summary-app.feature, contract layer).
+#[test]
+fn track_done_json_carries_the_album_update() {
+    let t = track(core::Verdict::Real, None);
+    let v = event_json(core::ProgressEvent::TrackDone {
+        index: 0,
+        analysis: t,
+        album: core_album(),
+    });
+    let mut keys: Vec<&str> = v
+        .as_object()
+        .expect("object")
+        .keys()
+        .map(String::as_str)
+        .collect();
+    keys.sort_unstable();
+    assert_eq!(keys, ["album", "analysis", "index", "kind"]);
+    assert_eq!(v["album"], album_json());
+    assert_eq!(v["album"]["summary"]["folder"], json!(r"C:\Music\Album A"));
 }
