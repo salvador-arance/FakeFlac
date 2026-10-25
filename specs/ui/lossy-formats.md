@@ -1,6 +1,6 @@
 ---
 id: SPEC-UI-LOSSY-H2
-requirements: [RF-06, RF-14, RF-15, RNF-08]
+requirements: [RF-06, RF-14, RF-15, RF-16, RNF-08]
 status: proposed
 ---
 
@@ -42,6 +42,19 @@ New: `column.bitrate` Bitrate · `column.realBitrate` Real bitrate · `bitrate.k
 Changed: `error.NO_AUDIO_FOUND` "No WAV or FLAC files in this folder" → **"No supported audio files in this folder"** (`main-screen.md`).
 
 Where they appear: `reason.cutoffBelowDeclared` in the `VerdictCell` tooltip and in the detail line, like every reason; `help.realBitrate` as the tooltip of the Real bitrate column header (it explains the limits of `lossy-source.md` section 8 in plain words); `error.unsupportedFormat` in the detail panel and the row tooltip of an error row (the `error.*` text every error row shows on hover, as in H1), like every error text.
+
+## Streaming sample rate (RF-16)
+
+Contract version 6 (`specs/contracts/commands.md`, "Streaming sample rate (version 6)"); rule: `specs/detection/lossy-source.md` section 11. **No new component, prop, state or variant**: the reason is shown where every reason is shown.
+
+- **New text:** `reason.streamingSampleRate` **Full band at 48 kHz: possibly a streaming rip; genuine 48 kHz files look the same.** (decided at G1, lossy-source.md Q28). It says what was seen, the likely origin, and why the verdict is only `Suspicious` (lossy-source.md section 11.6). It names "48 kHz" literally: a params version that adds another rate changes this text too (lossy-source.md Q28). "Full band" is meant in Opus's terms: Opus's full band ends at 20 kHz, the edge the rule's window `[19800, 20200)` Hz looks for (lossy-source.md section 11.3.1).
+- **Spanish:** not added now. The Spanish catalogue only overrides the verdict texts until RF-13 and falls back to English for the rest. Proposed text for RF-13: "Banda completa a 48 kHz: posible ripeo de streaming; los archivos auténticos a 48 kHz se ven igual."
+- **Where it appears:** in the `VerdictCell` tooltip of the State column and at the end of the detail line, like every reason. Example detail line: "Cutoff 20.1 kHz · 320 kbps · Suspicious · Full band at 48 kHz: possibly a streaming rip; genuine 48 kHz files look the same." (no "≈… kbps source" part: the estimate is `null`).
+- **Real bitrate cell:** "—" (`BitrateValue` state none, accessible label "No bitrate"), because the estimate is `null`; it sorts with the other "—" cells, last. The Bitrate cell shows the declared bitrate as usual.
+- **Colour and icon:** those of `Suspicious` (RNF-08: icon + text, never colour alone). The verdict filter's Suspicious button includes these rows (`ui/sort-filter.md`, unchanged); the Albums panel counts them as suspicious (`ui/album-summary.md`, unchanged).
+- `help.realBitrate` does not change.
+
+Scenarios: `specs/features/detection-streaming-source.feature`, "Table cells and tooltip of a flagged track" (`@RF-06`) and "Detail line of a flagged track" (`@RF-07`).
 
 ## Scenarios
 

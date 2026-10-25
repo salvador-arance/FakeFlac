@@ -3,8 +3,15 @@ Feature: Source bitrate of lossy files (detection v5)
   The lossy rules of specs/detection/lossy-source.md with DetectionParams v5
   (detection-params.v5.toml; since detection v6 the defaults are
   detection-params.v6.toml, whose [lossy] section and every other value used
-  here are v5's, rules.md Q22 (c); the tests may use the defaults for v5's
-  values, and only the algorithmVersion they carry differs): the content edge fc (the reported
+  here are v5's, rules.md Q22 (c), so under detection v6 the tests could use
+  the defaults for v5's values. Changed for detection v7 (lossy-source.md
+  Q25 (c), RF-16): the defaults are now detection-params.v7.toml, which adds
+  [lossy.streaming]; with it the row "48 kHz MP3 from Opus (known limitation)"
+  and the fixture mp3_320_48k_lp20k are suspicious (streamingSampleRate,
+  detection-streaming-source.feature). So in this feature "DetectionParams v5"
+  means a params set without [lossy.streaming], the parameters of
+  detection-params.v5.toml or detection-params.v6.toml, never the v7 defaults;
+  only the algorithmVersion they carry differs): the content edge fc (the reported
   cutoff: fs when D >= step_suspicious_db = 7, otherwise fe), the expected
   cutoff c_exp = min(table row of the declared bitrate, LAME tag low-pass,
   nyquist - 400), the shortfall s = c_exp - fc, and rules L0-L6:

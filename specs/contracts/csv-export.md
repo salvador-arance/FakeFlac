@@ -1,6 +1,6 @@
 ---
 id: SPEC-CSV-EXPORT
-requirements: [RF-09, RNF-04, RNF-05, RNF-09]
+requirements: [RF-09, RF-16, RNF-04, RNF-05, RNF-09]
 status: proposed
 csv_format_version: 1
 ---
@@ -85,6 +85,7 @@ verdict,file,folder,format,sample_rate_hz,bit_depth,duration_ms,cutoff_hz,declar
 - **Lossy rows** fill columns 9 and 10, and column 11 when there is an estimate; lossless rows leave columns 9–11 empty (`ui/lossy-formats.md`).
 - **A non-finite cutoff** (any of the three `CutoffEstimate` values is NaN or infinite) is written as no cutoff: columns 8, 18 and 19 empty, as the contract sends such a track without a cutoff (`src-tauri` DTO conversion).
 - Changing the columns, their order or a value encoding bumps `csv_format_version` (a spec change at G1). The version is not written into the file (RFC 4180 has no comment lines).
+- **A new contract identifier is not a new encoding.** When the contract adds a value to an enum written here (for example the reason `streamingSampleRate`, contract version 6, RF-16, `commands.md` "Streaming sample rate (version 6)"), the column writes it like the others and `csv_format_version` stays 1. A flagged track's record has `suspicious` in column 1, `streamingSampleRate` in column 12 and an empty column 11 (`specs/features/detection-streaming-source.feature`, "The CSV record of a flagged track").
 
 ## 4. Numbers
 

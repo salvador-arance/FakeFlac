@@ -9,6 +9,20 @@ Feature: Calibration and acceptance for lossy files
   otherwise, the run uses the params files detection-params.v2.toml and
   detection-params.v5.toml, in that order. "The sample lossy trusted.txt" and
   "the sample lossy confirmed.txt" are the files of lossy.md section 9.
+  Changed for detection v7 (specs/detection/lossy-source.md, Q25 (h); RF-16):
+  the per-group table (lossy.md 6.3) gains the column "streaming", three fc
+  percentile columns and one sub-row per decoded sample rate, labelled
+  "<group> @ <bucket>" (lossy.md 6.8, C13). No scenario text changes. "Lossy
+  table per group" says "contains the rows": its rows are still present with
+  the same counts, the new sub-rows are extra rows (only "@ 44100" ones, as
+  every lossy fixture of the variant is 44.1 kHz) and the step compares only
+  the columns it names, so the new columns are not compared; with v2 and v5
+  (no [lossy.streaming]) "streaming" is 0 in every row anyway. The rows of
+  confirmed lossy fakes per upstream and per sample rate now hold strong labels
+  only (lossy.md 6.3, 6.8); "confirmed_fake aac" below holds no weak label, so
+  its counts do not change. No derived test compares the whole table or
+  summary.md as exact text, so no test changes (declared consequence, lossy.md
+  6.8 and lossy-source.md Q25 (h), (j)).
 
   # --- Lossless rows do not change -------------------------------------------
 
