@@ -91,7 +91,7 @@
 
   .icon-button:disabled {
     cursor: not-allowed;
-    opacity: 0.5;
+    opacity: var(--disabled-opacity);
   }
 
   .icon-button:disabled,

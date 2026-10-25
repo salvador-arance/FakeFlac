@@ -81,7 +81,7 @@
     gap: var(--space-1);
     width: var(--search-width);
     box-sizing: border-box;
-    height: 28px;
+    height: var(--control-height);
     padding: 0 var(--space-1) 0 var(--space-2);
     background: var(--color-surface-raised);
     border: 1px solid var(--color-border);
@@ -94,7 +94,7 @@
   }
 
   .search-field.disabled {
-    opacity: 0.5;
+    opacity: var(--disabled-opacity);
   }
 
   input {
