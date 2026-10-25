@@ -2,6 +2,31 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-25 - RF-10 (album summary in the app) specified; spec PR #73 waiting for G1 merge
+
+**Done**
+- #71 (RF-09 CSV export) merged at G2.
+- The owner chose RF-10 as the next H2 requirement.
+- RF-10 spec, PR #73 (`spec/RF-10`):
+  - 4c3c6da: `commands.md` version 5 (`trackDone.album: AlbumUpdate`, computed in core with `summarize_album`, kept in order by a separate album lock), the left Albums panel (`specs/ui/album-summary.md`), and `features/album-summary-app.feature` with scenarios for core, src-tauri and the UI. The approved H0 rule files are untouched.
+  - code-reviewer readiness review: nothing blocking; its 9 improvements are applied.
+  - 5f0ef58: G1 questions answered by a delegate on the owner's behalf. Q1–Q14: defaults kept. Q15: the core sink-panic scenario is dropped. The decisions are in "G1 decisions" of `ui/album-summary.md` and summarised in a PR comment.
+  - `just trace` and `just privacy-check` are green.
+
+**Pending**
+- The owner merges #73 (G1), then `just prune-branches`.
+- `/feature RF-10`. The `test(RF-10)` commit must update the existing tests that build or match `trackDone`; they are listed in `commands.md` version 5 and in the RF-10 row of `traceability.md`. The implementer must not touch them.
+- Dependabot alert #1 is open on the repo (seen on push); not looked at.
+
+**Blockers / questions for the human**
+- None.
+
+**Notes for the next session**
+- The name-rule and Windows-path scenarios are `#[cfg(windows)]`; CI runs Rust tests on `windows-latest`.
+- `StatusBar.svelte` has hard-coded English strings (existing debt, for RF-13).
+
+**Next step:** after #73 is merged, run `/feature RF-10`.
+
 ## 2026-10-25 - RF-09 (CSV export) built; feature PR #71 waiting for G2
 
 **Done**
