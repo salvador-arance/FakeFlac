@@ -227,6 +227,10 @@ Version 5 (RF-10; rule: `specs/detection/album-summary.md`, unchanged; UI: `spec
 
 `just gen` produces new bindings (the types `AlbumSummary` and `AlbumUpdate`, the field `album` of the `trackDone` event); `just gen-check` must pass. The API client's `startAnalysis` does not change its signature. The frontend's `ResultRow` gains `albumIndex` (`ui/album-summary.md`).
 
+## Sort and filter (RF-08): no change
+
+RF-08 (UI: `specs/ui/sort-filter.md`; scenarios: `specs/features/sort-filter.feature`) sorts and filters the results table in the frontend, over the rows the store already holds. **The contract does not change**: version 5 stays, no command, event, type or `AppError` code is added or changed, and `just gen` produces the same bindings (`just gen-check` passes). `export_csv` keeps exporting every track of the latest run in scan order, whatever the table's sort and filters ("CSV export (version 4)"); exporting only the shown rows would be a new contract version (sort-filter.md Q12).
+
 ## Supported files (RF-14)
 
 Extensions, case-insensitive: `.wav`, `.flac` (H1); `.mp3`, `.m4a` (H2, version 3). **`.opus` is still skipped** until the Opus decoder is chosen (ADR-0030 spike; pending scenarios in `specs/pending/opus.feature`). `.mp4`, `.m4b`, `.aac` and `.ogg` are not supported. Other files are skipped silently by the scan. Hidden files and folders (starting with `.`) are skipped. Symbolic links are not followed.
