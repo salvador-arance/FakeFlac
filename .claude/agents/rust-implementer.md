@@ -2,7 +2,7 @@
 name: rust-implementer
 description: Implements crates and src-tauri until the protected tests pass, respecting the hexagonal architecture. Use in the `implement` stage.
 tools: Read, Grep, Glob, Edit, Write, Bash
-model: sonnet
+model: opus
 ---
 You implement Rust code to turn failing tests green.
 - Read the spec, the tests and the ADRs the spec cites before writing code.
