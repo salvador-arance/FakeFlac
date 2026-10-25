@@ -8,10 +8,11 @@ Feature: Streaming sample rate of lossy files (detection v7)
   lossy.streaming.sample_rates_hz = [48000], its declared bitrate is at least
   lossy.streaming.min_declared_bitrate_kbps = 192 and its reported cutoff fc
   lies in [lossy.streaming.min_cutoff_hz, lossy.streaming.max_cutoff_hz) =
-  [19500, 21000) Hz. L6a is evaluated after L1a-L5, so it never overrides an
+  [19800, 20200) Hz. L6a is evaluated after L1a-L5, so it never overrides an
   error, a fake or a suspicious verdict of an earlier rule, and it never gives
-  fake. These values are indicative, not measured (lossy-source.md Q21);
-  acceptance K decides.
+  fake. The two cutoff bounds were measured and decided at G1 (lossy-source.md
+  Q21 and section 11.3.1); the rates, codecs and bitrate floor are indicative.
+  Acceptance K checks them.
   Every other value is v6's (= v5's lossy values, detection-lossy.feature):
   fc = fs when D >= 7 dB, otherwise fe; c_exp = min(table row of the declared
   bitrate, LAME tag low-pass, nyquist - 400); s = c_exp - fc; L3 fake when
@@ -23,6 +24,10 @@ Feature: Streaming sample rate of lossy files (detection v7)
   In the measurement tables, fs "—" means fs is undefined (D = 0), a tag
   low-pass "—" means the stream declares none, and an estimate "none" means no
   estimated source bitrate is reported (null).
+  The rows "fc at / just below min_cutoff_hz / max_cutoff_hz" give fs values
+  (19799, 19800, 20199, 20200) that a real analysis never reports (with
+  D >= 7 dB fs is a band centre ending in 50); they test the comparisons of
+  rule L6a as unit boundaries.
   Audio-level scenarios use the fixtures of specs/detection/lossy-fixtures.md
   (the test stage first confirms its section 3 for the new fixtures and returns
   to G1 if a check fails).
@@ -84,24 +89,27 @@ Feature: Streaming sample rate of lossy files (detection v7)
     Examples:
       | case                                                 | codec | rate  | b   | tag   | H   | G | D    | fs    | fe    | c_exp | verdict    | reasons                 | estimate |
       | the motivating case: MP3 320 at 48 kHz, edge 20050   | mp3   | 48000 | 320 | 20500 | -20 | 0 | 40   | 20050 | 24000 | 20500 | suspicious | streamingSampleRate     | none     |
+      | the other Opus value: MP3 320 at 48 kHz, edge 20150  | mp3   | 48000 | 320 | 20500 | -20 | 0 | 40   | 20150 | 24000 | 20500 | suspicious | streamingSampleRate     | none     |
       | the same at 44.1 kHz                                 | mp3   | 44100 | 320 | 20500 | -20 | 0 | 40   | 20050 | 22050 | 20500 | real       |                         | 320      |
-      | honest LAME 320 of a 48 kHz master (by design)       | mp3   | 48000 | 320 | 20500 | -20 | 0 | 40   | 20450 | 24000 | 20500 | suspicious | streamingSampleRate     | none     |
+      | honest LAME 320 of a 48 kHz master: above the window | mp3   | 48000 | 320 | 20500 | -20 | 0 | 40   | 20450 | 24000 | 20500 | real       |                         | 320      |
+      | honest LAME 256 at 48 kHz: below the window          | mp3   | 48000 | 256 | 19700 | -20 | 0 | 40   | 19650 | 24000 | 19700 | real       |                         | 256      |
       | 48 kHz 320 from 128: L3 comes first                  | mp3   | 48000 | 320 | 20500 | -20 | 0 | 40   | 17050 | 24000 | 20500 | fake       |                         | 128      |
       | 48 kHz 320 from 192: L4 comes first                  | mp3   | 48000 | 320 | —     | -20 | 0 | 40   | 18550 | 24000 | 20500 | suspicious | cutoffBelowDeclared     | 192      |
       | 48 kHz large shortfall, step not deep: L4            | mp3   | 48000 | 320 | —     | -20 | 0 | 9    | 17050 | 24000 | 20500 | suspicious | cutoffBelowDeclared     | 128      |
-      | 48 kHz no step, content fades early: L5              | mp3   | 48000 | 320 | —     | -20 | 0 | 3    | —     | 17000 | 20500 | suspicious | gradualRolloff          | 128      |
+      | 48 kHz no step, content fades early: L5              | mp3   | 48000 | 320 | —     | -20 | 0 | 3    | 18050 | 17000 | 20500 | suspicious | gradualRolloff          | 128      |
       | 48 kHz little treble: L2 comes first                 | mp3   | 48000 | 320 | —     | -65 | 0 | 40   | 20050 | 24000 | 20500 | suspicious | lowHighFrequencyContent | none     |
-      | fc at min_cutoff_hz                                  | mp3   | 48000 | 256 | —     | -20 | 0 | 40   | 19500 | 24000 | 19700 | suspicious | streamingSampleRate     | none     |
-      | fc just below min_cutoff_hz                          | mp3   | 48000 | 256 | —     | -20 | 0 | 40   | 19499 | 24000 | 19700 | real       |                         | 256      |
-      | fc just below max_cutoff_hz                          | mp3   | 48000 | 320 | —     | -20 | 0 | 40   | 20999 | 24000 | 20500 | suspicious | streamingSampleRate     | none     |
-      | fc at max_cutoff_hz                                  | mp3   | 48000 | 320 | —     | -20 | 0 | 40   | 21000 | 24000 | 20500 | real       |                         | 320      |
+      | fc at min_cutoff_hz                                  | mp3   | 48000 | 256 | —     | -20 | 0 | 40   | 19800 | 24000 | 19700 | suspicious | streamingSampleRate     | none     |
+      | fc just below min_cutoff_hz                          | mp3   | 48000 | 256 | —     | -20 | 0 | 40   | 19799 | 24000 | 19700 | real       |                         | 256      |
+      | fc just below max_cutoff_hz                          | mp3   | 48000 | 320 | —     | -20 | 0 | 40   | 20199 | 24000 | 20500 | suspicious | streamingSampleRate     | none     |
+      | fc at max_cutoff_hz                                  | mp3   | 48000 | 320 | —     | -20 | 0 | 40   | 20200 | 24000 | 20500 | real       |                         | 320      |
       | no low-pass: content to Nyquist (fc = fe)            | mp3   | 48000 | 320 | —     | -20 | 0 | 6.99 | 17050 | 24000 | 20500 | real       |                         | 320      |
-      | declared at min_declared_bitrate_kbps                | mp3   | 48000 | 192 | —     | -20 | 0 | 40   | 19550 | 24000 | 18600 | suspicious | streamingSampleRate     | none     |
-      | declared below min_declared_bitrate_kbps             | mp3   | 48000 | 160 | —     | -20 | 0 | 40   | 19550 | 24000 | 17500 | real       |                         | 160      |
+      | declared at min_declared_bitrate_kbps                | mp3   | 48000 | 192 | —     | -20 | 0 | 40   | 20050 | 24000 | 18600 | suspicious | streamingSampleRate     | none     |
+      | declared below min_declared_bitrate_kbps             | mp3   | 48000 | 160 | —     | -20 | 0 | 40   | 20050 | 24000 | 17500 | real       |                         | 160      |
       | VBR average between rows                             | mp3   | 48000 | 245 | —     | -20 | 0 | 40   | 19950 | 24000 | 19400 | suspicious | streamingSampleRate     | none     |
-      | tag low-pass lowers c_exp, fc still in the window    | mp3   | 48000 | 320 | 19600 | -20 | 0 | 40   | 19650 | 24000 | 19600 | suspicious | streamingSampleRate     | none     |
+      | tag low-pass lowers c_exp, fc below the window       | mp3   | 48000 | 320 | 19600 | -20 | 0 | 40   | 19650 | 24000 | 19600 | real       |                         | 320      |
+      | tag low-pass lowers c_exp, fc in the window          | mp3   | 48000 | 320 | 19900 | -20 | 0 | 40   | 19950 | 24000 | 19900 | suspicious | streamingSampleRate     | none     |
       | 32 kHz is not a listed rate                          | mp3   | 32000 | 320 | —     | -20 | 0 | 0    | —     | 16000 | 15600 | real       |                         | 320      |
-      | AAC 256 at 48 kHz, edge near full band               | aac   | 48000 | 256 | —     | -20 | 0 | 40   | 19950 | 24000 | 19000 | suspicious | streamingSampleRate     | none     |
+      | AAC 256 at 48 kHz, edge in the window                | aac   | 48000 | 256 | —     | -20 | 0 | 40   | 19950 | 24000 | 19000 | suspicious | streamingSampleRate     | none     |
       | the same AAC at 44.1 kHz                             | aac   | 44100 | 256 | —     | -20 | 0 | 40   | 19950 | 22050 | 19000 | real       |                         | 256      |
       | AAC 128 at 48 kHz: below the bitrate and the window  | aac   | 48000 | 128 | —     | -20 | 0 | 40   | 16050 | 24000 | 15500 | real       |                         | 128      |
       | AAC at 96 kHz is not a listed rate                   | aac   | 96000 | 320 | —     | -20 | 0 | 40   | 19950 | 48000 | 19500 | real       |                         | 320      |
@@ -204,7 +212,7 @@ Feature: Streaming sample rate of lossy files (detection v7)
     Given the default DetectionParams of the code
     Then they are equal to specs/detection/detection-params.v7.toml
     And their sections other than [lossy.streaming] are equal to those of specs/detection/detection-params.v6.toml
-    And lossy.streaming.sample_rates_hz is [48000], lossy.streaming.codecs is [mp3, aac], lossy.streaming.min_declared_bitrate_kbps is 192, lossy.streaming.min_cutoff_hz is 19500 and lossy.streaming.max_cutoff_hz is 21000
+    And lossy.streaming.sample_rates_hz is [48000], lossy.streaming.codecs is [mp3, aac], lossy.streaming.min_declared_bitrate_kbps is 192, lossy.streaming.min_cutoff_hz is 19800 and lossy.streaming.max_cutoff_hz is 20200
     And every TrackAnalysis computed with them carries algorithmVersion 7
 
   @RF-16
@@ -219,7 +227,7 @@ Feature: Streaming sample rate of lossy files (detection v7)
       | lossy.streaming.codecs set to ["aac"]                      |
       | lossy.streaming.codecs set to ["aac", "mp3"]               |
       | lossy.streaming.min_declared_bitrate_kbps set to 1         |
-      | lossy.streaming.min_cutoff_hz set to 20999.0               |
+      | lossy.streaming.min_cutoff_hz set to 20199.0               |
 
   @RF-16
   Scenario Outline: An invalid [lossy.streaming] section is rejected
@@ -250,7 +258,7 @@ Feature: Streaming sample rate of lossy files (detection v7)
       | lossy.streaming.min_declared_bitrate_kbps set to 0                      | validation      | lossy.streaming.min_declared_bitrate_kbps > 0                    |
       | lossy.streaming.min_cutoff_hz set to 0.0                                | validation      | lossy.streaming.min_cutoff_hz > 0                                |
       | lossy.streaming.min_cutoff_hz set to nan                                | validation      | lossy.streaming.min_cutoff_hz > 0                                |
-      | lossy.streaming.min_cutoff_hz set to 21000.0 (equal to max_cutoff_hz)   | validation      | lossy.streaming.min_cutoff_hz < lossy.streaming.max_cutoff_hz    |
+      | lossy.streaming.min_cutoff_hz set to 20200.0 (equal to max_cutoff_hz)   | validation      | lossy.streaming.min_cutoff_hz < lossy.streaming.max_cutoff_hz    |
       | lossy.streaming.max_cutoff_hz set to nan                                | validation      | lossy.streaming.min_cutoff_hz < lossy.streaming.max_cutoff_hz    |
       | lossy.suspicious_shortfall_hz set to 0.0 and lossy.streaming.codecs set to [] | validation | lossy.suspicious_shortfall_hz > 0                             |
 
@@ -296,27 +304,44 @@ Feature: Streaming sample rate of lossy files (detection v7)
     The evaluation step of the calibration tool, given evaluated lossy rows
     (no audio). Group rows and columns are those of lossy.md sections 6.3 and 6.8.
     Rows 1 to 6 belong to generated entries ([[generate.lossy]] ids); row 7 is a
-    confirmed lossy fake with upstream "opus" (written "confirmed_fake opus", as
-    in calibration-lossy.feature): it is counted in the 6.3 row of confirmed
-    lossy fakes with upstream = opus (the "upstream = opus" row of K4) and in the
-    6.3 row of confirmed lossy fakes at sample rate 48000.
+    confirmed lossy fake with upstream "opus" and a strong label (written
+    "confirmed_fake opus", as in calibration-lossy.feature): it is counted in
+    the 6.3 row of confirmed lossy fakes with upstream = opus (the "upstream =
+    opus" row of K4) and in the 6.3 row of confirmed lossy fakes at sample rate
+    48000. Row 4 is an honest LAME 320 at 48 kHz above the window: not flagged.
     Given these lossy rows, each evaluated with detection-params.v6.toml and detection-params.v7.toml
       | row | group               | truth | rate  | fc    | v6 verdict | v6 reasons          | v7 verdict | v7 reasons          |
       | 1   | opus128_cbr320      | fake  | 48000 | 20050 | real       |                     | suspicious | streamingSampleRate |
       | 2   | opus128_cbr320      | fake  | 48000 | 20150 | real       |                     | suspicious | streamingSampleRate |
       | 3   | opus128_cbr320      | fake  | 48000 | 17050 | fake       |                     | fake       |                     |
-      | 4   | cbr320              | real  | 48000 | 20450 | real       |                     | suspicious | streamingSampleRate |
+      | 4   | cbr320              | real  | 48000 | 20450 | real       |                     | real       |                     |
       | 5   | cbr320              | real  | 44100 | 20450 | real       |                     | real       |                     |
       | 6   | cbr320              | real  | 44100 | 18550 | suspicious | cutoffBelowDeclared | suspicious | cutoffBelowDeclared |
       | 7   | confirmed_fake opus | fake  | 48000 | 20050 | real       |                     | suspicious | streamingSampleRate |
     When the lossy tables are written
-    Then the lossy verdict-change table v6 × v7 has "real → suspicious" 4 and every other off-diagonal count 0
-    And its "of which streamingSampleRate" count is 4
+    Then the lossy verdict-change table v6 × v7 has "real → suspicious" 3 and every other off-diagonal count 0
+    And its "of which streamingSampleRate" count is 3
     And with v7 the group row "opus128_cbr320" has streaming 2, caught 3 of 3 and fc median 20050 Hz
-    And with v7 the row "cbr320 @ 48000" has 1 row, streaming 1 and Suspicious 1
+    And with v7 the row "cbr320 @ 48000" has 1 row, streaming 0 and Real 1
     And with v7 the row "cbr320 @ 44100" has 2 rows, streaming 0, Real 1 and Suspicious 1
+    And with v7 the rows "confirmed_fake opus" and "confirmed_fake 48000" each have 1 row, streaming 1 and Suspicious 1
     And with v6 every streaming count is 0
     And summary.md names no file, folder or artist
+
+  @RF-16 @RP-11
+  Scenario: Weak labels are counted only in the weak row
+    The rows of confirmed lossy fakes per upstream and per sample rate hold
+    strong labels only, so K4 reads the strong labels of "confirmed_fake 48000"
+    (lossy.md sections 6.3 and 6.8). The lossy verdict-change table counts strong
+    and weak labels.
+    Given these lossy rows, each evaluated with detection-params.v6.toml and detection-params.v7.toml
+      | row | group               | truth | label  | rate  | fc    | v6 verdict | v6 reasons | v7 verdict | v7 reasons          |
+      | 1   | confirmed_fake opus | fake  | strong | 48000 | 20050 | real       |            | suspicious | streamingSampleRate |
+      | 2   | confirmed_fake opus | fake  | weak   | 48000 | 20150 | real       |            | suspicious | streamingSampleRate |
+    When the lossy tables are written
+    Then with v7 the rows "confirmed_fake opus" and "confirmed_fake 48000" each have 1 row, streaming 1 and Suspicious 1
+    And with v7 the row "weak" has 1 row, streaming 1 and Suspicious 1
+    And the lossy verdict-change table v6 × v7 has "real → suspicious" 2 and its "of which streamingSampleRate" count is 2
 
   @RF-16 @RP-11
   Scenario: The lossy sample corpus with v6 and v7

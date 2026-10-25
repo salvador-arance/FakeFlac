@@ -113,12 +113,14 @@ aac = [
 [lossy.streaming]                     # lossy-source.md section 11 (RF-16), rule L6a. Absent (v5, v6 files) = L6a never fires.
 # A lossy file that rule L6 would call Real becomes Suspicious(StreamingSampleRate), with no estimate, when its codec,
 # decoded sample rate, declared bitrate and reported cutoff fc all match below. Never Fake; never overrides L1-L5.
-# Every value is an INDICATIVE starting value, not measured on the corpus; acceptance K (section 11.7) decides.
+# sample_rates_hz, codecs and min_declared_bitrate_kbps are INDICATIVE starting values, not measured on the corpus.
+# min_cutoff_hz and max_cutoff_hz are MEASURED (lossy-source.md section 11.3.1; decided at G1, 2026-10-25).
+# Acceptance K (section 11.7) checks all five.
 sample_rates_hz = [48000]             # decoded rates that count: Opus always decodes at 48 kHz, so an Opus rip kept at its rate is 48 kHz
 codecs = ["mp3", "aac"]               # codecs judged ("mp3", "aac"); "opus" is not allowed (every Opus file is natively 48 kHz)
-min_declared_bitrate_kbps = 192       # declared bitrate b at or above this (below it the encoder's own low-pass hides the source's edge)
-min_cutoff_hz = 19500.0               # "near full band": fc in [min_cutoff_hz, max_cutoff_hz); below Opus's full-band edge (~20 kHz)
-max_cutoff_hz = 21000.0               # ... and below this: content above ~20 kHz is more than Opus codes (an encode without low-pass is not flagged)
+min_declared_bitrate_kbps = 192       # declared bitrate b at or above this: excludes the 128-class files (the window, not this bound, excludes the LAME 224/256 low-passes)
+min_cutoff_hz = 19800.0               # fc in [min_cutoff_hz, max_cutoff_hz): an edge at Opus's 20 kHz reports 20050 or 20150 Hz; above the 19750 Hz of LAME 224/256 (lossy-source.md 11.3.1)
+max_cutoff_hz = 20200.0               # ... and below the 20250-20450 Hz that LAME 320 reports at 48 kHz: content past 20.2 kHz is more than Opus codes
 
 [spectrogram]
 window = "hann"

@@ -17,10 +17,12 @@ Feature: Calibration and acceptance for lossy files
   the same counts, the new sub-rows are extra rows (only "@ 44100" ones, as
   every lossy fixture of the variant is 44.1 kHz) and the step compares only
   the columns it names, so the new columns are not compared; with v2 and v5
-  (no [lossy.streaming]) "streaming" is 0 in every row anyway. A derived test
-  that compares the whole table or summary.md as exact text gains the new
-  columns and sub-rows in the test stage (declared consequence, lossy.md 6.8
-  and lossy-source.md Q25 (h), (j)).
+  (no [lossy.streaming]) "streaming" is 0 in every row anyway. The rows of
+  confirmed lossy fakes per upstream and per sample rate now hold strong labels
+  only (lossy.md 6.3, 6.8); "confirmed_fake aac" below holds no weak label, so
+  its counts do not change. No derived test compares the whole table or
+  summary.md as exact text, so no test changes (declared consequence, lossy.md
+  6.8 and lossy-source.md Q25 (h), (j)).
 
   # --- Lossless rows do not change -------------------------------------------
 
