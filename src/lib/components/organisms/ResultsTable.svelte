@@ -15,7 +15,7 @@
     viewportHeight?: number
     /**
      * RF-10 (components.md Q16): a counter the page increments on every album selection; each
-     * change scrolls the selected row into view. 
+     * change scrolls the selected row into view.
      */
     revealRequest?: number
     onselect?: (index: number) => void
@@ -158,6 +158,7 @@
     const reveal = revealRequest
     const grid = gridElement
     const changed = target !== seenSelected || (seenReveal !== undefined && reveal !== seenReveal)
+    // Nothing is recorded until the grid exists, so a selection made before it is bound still scrolls
     if (!grid) return
     seenSelected = target
     seenReveal = reveal
