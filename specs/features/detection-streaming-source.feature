@@ -289,13 +289,13 @@ Feature: Streaming sample rate of lossy files (detection v7)
     Given a stubbed TrackAnalysis of "a.mp3" with format "mp3", codec "mp3", sample rate 48000, declared bitrate 320 kbps, bitrate mode "cbr", no estimated source bitrate, cutoff 20100 Hz, verdict "suspicious" and reasons "streamingSampleRate"
     When the results table shows it
     Then "a.mp3" has state "Suspicious", samplerate "48000", cutoff "20.1 kHz", bitrate "320 kbps" and "—" in its real bitrate cell
-    And hovering its state cell shows a tooltip that contains "Full band at 48 kHz: possibly ripped from a streaming site such as YouTube. Genuine 48 kHz releases look the same."
+    And hovering its state cell shows a tooltip that contains "Full band at 48 kHz: possibly a streaming rip; genuine 48 kHz files look the same."
 
   @RF-16 @RF-07
   Scenario: Detail line of a flagged track
     Given a stubbed TrackAnalysis with format "mp3", sample rate 48000, declared bitrate 320 kbps, bitrate mode "cbr", no estimated source bitrate, cutoff 20100 Hz, verdict "suspicious" and reasons "streamingSampleRate"
     When I select its row
-    Then the panel shows "Cutoff 20.1 kHz · 320 kbps · Suspicious · Full band at 48 kHz: possibly ripped from a streaming site such as YouTube. Genuine 48 kHz releases look the same."
+    Then the panel shows "Cutoff 20.1 kHz · 320 kbps · Suspicious · Full band at 48 kHz: possibly a streaming rip; genuine 48 kHz files look the same."
 
   # --- Calibration reports (specs/calibration/lossy.md section 6.8) ----------------
 
@@ -342,6 +342,55 @@ Feature: Streaming sample rate of lossy files (detection v7)
     Then with v7 the rows "confirmed_fake opus" and "confirmed_fake 48000" each have 1 row, streaming 1 and Suspicious 1
     And with v7 the row "weak" has 1 row, streaming 1 and Suspicious 1
     And the lossy verdict-change table v6 × v7 has "real → suspicious" 2 and its "of which streamingSampleRate" count is 2
+
+  @RF-16 @RP-11
+  Scenario Outline: K5 passes when the honest 48 kHz MP3 320 and 256 rows stay within their bounds
+    Acceptance K5 (lossy-source.md section 11.7, decided at G1, Q22): with v7,
+    the streaming rate of "cbr320 @ 48000" is at most 10 % and that of
+    "cbr256 @ 48000" at most 2 %. The streaming rate (lossy.md section 6.8) is
+    the share of the row's rate denominator (rows minus Undetectable,
+    Source-limited and Error) whose reasons include streamingSampleRate; the
+    bound is checked on the counts. The tool shows the figures and evaluates no
+    lossy gate (lossy.md C12), so K5 is read from the rows. The source-limited
+    row of "cbr320" is left out of the denominator (1 of 10, not 1 of 11).
+    Given the generated entry "cbr320" has <a> rows at 48000 that v7 makes suspicious with streamingSampleRate, <b> rows at 48000 that v7 makes real and 1 source-limited row at 48000 that v7 makes real
+    And the generated entry "cbr256" has <c> rows at 48000 that v7 makes suspicious with streamingSampleRate and <d> rows at 48000 that v7 makes real
+    When the lossy tables are written
+    Then with v7 the row "cbr320 @ 48000" has <rows320> rows, Source-limited 1, streaming <a> and streaming rate "<rate320>"
+    And with v7 the row "cbr256 @ 48000" has <rows256> rows, streaming <c> and streaming rate "<rate256>"
+    And K5's bounds read from those two rows hold
+
+    Examples:
+      | case                 | a | b  | c | d  | rows320 | rate320 | rows256 | rate256 |
+      | both at their bounds | 1 | 9  | 1 | 49 | 11      | 10.0 %  | 50      | 2.0 %   |
+      | nothing flagged      | 0 | 10 | 0 | 50 | 11      | 0.0 %   | 50      | 0.0 %   |
+
+  @RF-16 @RP-11
+  Scenario Outline: K5 fails when an honest 48 kHz MP3 320 or 256 row exceeds its bound
+    A failed K5 returns to G1 with the run's figures; the implementer does not
+    tune the parameters (lossy-source.md section 11.7).
+    Given the generated entry "cbr320" has <a> rows at 48000 that v7 makes suspicious with streamingSampleRate and <b> rows at 48000 that v7 makes real
+    And the generated entry "cbr256" has <c> rows at 48000 that v7 makes suspicious with streamingSampleRate and <d> rows at 48000 that v7 makes real
+    When the lossy tables are written
+    Then with v7 the row "cbr320 @ 48000" has streaming <a> and streaming rate "<rate320>"
+    And with v7 the row "cbr256 @ 48000" has streaming <c> and streaming rate "<rate256>"
+    And K5's bound on "<row>" read from that row does not hold
+    And K5's bound on "<other>" read from that row holds
+
+    Examples:
+      | case                   | a | b  | c | d  | rate320 | rate256 | row            | other          |
+      | cbr320 above 10 %      | 2 | 17 | 0 | 50 | 10.5 %  | 0.0 %   | cbr320 @ 48000 | cbr256 @ 48000 |
+      | cbr256 above 2 %       | 1 | 9  | 2 | 48 | 10.0 %  | 4.0 %   | cbr256 @ 48000 | cbr320 @ 48000 |
+
+  @RF-16 @RP-11
+  Scenario: A K5 bound with no 48 kHz rows is n/a and does not block
+    Sub-rows exist only for sample-rate buckets with at least one row (lossy.md
+    section 6.8).
+    Given the generated entry "cbr320" has 10 rows at 48000 that v7 makes real
+    And the generated entry "cbr256" has 50 rows at 44100 that v7 makes real and none at 48000
+    When the lossy tables are written
+    Then with v7 there is no row "cbr256 @ 48000"
+    And K5's bound on "cbr256 @ 48000" is n/a and K5's bound on "cbr320 @ 48000" holds
 
   @RF-16 @RP-11
   Scenario: The lossy sample corpus with v6 and v7

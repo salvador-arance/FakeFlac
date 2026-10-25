@@ -45,9 +45,10 @@ So the evidence is not "near full band" but "the edge sits exactly where Opus pu
 3. **Contract.** `commands.md` goes to version 6: the new reason, and `estimatedSourceBitrateKbps` null in this case. `csv_format_version` stays 1.
 4. **Acceptance.** K1–K7 in `lossy-source.md` section 11.7. K1 and K2 hold by construction: lossless results are unchanged, and lossy files can only change `Real → Suspicious`. The gates are:
    - **K3:** generated `opus128_cbr320` caught. Measured with this window: 99.5 % (n = 1 425).
-   - **K4:** strong-labelled 48 kHz fakes caught. Measured: 134 of 134.
+   - **K4:** strong-labelled 48 kHz fakes caught, applied from 30 strong labels. Measured: 134 of 134.
+   - **K5:** honest generated encodes flagged by L6a: at most 10 % of `cbr320 @ 48000` and 2 % of `cbr256 @ 48000`. Measured: 2.7–4.7 % and 0 %.
 
-   K4's labels come from the same sample-rate observation (`upstream=by-rate`), so K4 measures recall only, never false positives. K5 and K6 report the false positives per sample rate and where the cutoffs fall.
+   K4's labels come from the same sample-rate observation (`upstream=by-rate`), so K4 measures recall only, never false positives; K5 is the false-positive gate. K6 reports where the cutoffs fall.
 
 ## Alternatives considered
 
