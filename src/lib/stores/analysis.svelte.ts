@@ -11,6 +11,8 @@ export interface AnalysisStore {
   readonly sort: SortState
   /** Marks the run as requested (scanning). */
   begin(): void
+  /** Puts back the screen state saved by the last `begin()` (a start that did not begin a run). */
+  restore(): void
   /** Resets to ready state. */
   reset(): void
   /** Applies one progress event (rows are batched, at most one update per 100 ms). */
@@ -61,7 +63,22 @@ export function createAnalysisStore(): AnalysisStore {
     summary = { ...pendingSummary }
   }
 
+  let snapshot: {
+    rows: ResultRow[]
+    phase: StatusPhase
+    summary: StatusSummary
+    message: string | undefined
+    selectedIndex: number | null
+  } | null = null
+
   function begin() {
+    snapshot = {
+      rows: [...rows, ...pendingRows],
+      phase,
+      summary: { ...pendingSummary },
+      message,
+      selectedIndex,
+    }
     if (batchTimer !== null) {
       clearTimeout(batchTimer)
       batchTimer = null
@@ -73,6 +90,22 @@ export function createAnalysisStore(): AnalysisStore {
     pendingSummary = { total: 0, done: 0, real: 0, suspicious: 0, fake: 0, errors: 0 }
     message = undefined
     selectedIndex = null
+  }
+
+  function restore() {
+    if (snapshot === null) return
+    if (batchTimer !== null) {
+      clearTimeout(batchTimer)
+      batchTimer = null
+    }
+    rows = snapshot.rows
+    pendingRows = []
+    phase = snapshot.phase
+    summary = { ...snapshot.summary }
+    pendingSummary = { ...snapshot.summary }
+    message = snapshot.message
+    selectedIndex = snapshot.selectedIndex
+    snapshot = null
   }
 
   function reset() {
@@ -174,6 +207,7 @@ export function createAnalysisStore(): AnalysisStore {
       return sort
     },
     begin,
+    restore,
     reset,
     apply,
     fail,

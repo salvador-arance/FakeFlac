@@ -5,11 +5,13 @@
   type Props = {
     canOpen: boolean
     canCancel: boolean
+    canExport?: boolean
     onopen?: () => void
     oncancel?: () => void
+    onexport?: () => void
   }
 
-  let { canOpen, canCancel, onopen, oncancel }: Props = $props()
+  let { canOpen, canCancel, canExport = false, onopen, oncancel, onexport }: Props = $props()
 </script>
 
 <div class="toolbar" role="toolbar" aria-label="Main toolbar">
@@ -27,6 +29,14 @@
     size="toolbar"
     onclick={oncancel}
   />
+  <div class="separator" role="separator" aria-orientation="vertical"></div>
+  <IconButton
+    icon="export"
+    label={t('toolbar.export')}
+    disabled={!canExport}
+    size="toolbar"
+    onclick={onexport}
+  />
 </div>
 
 <style>
@@ -39,5 +49,11 @@
     background: var(--color-surface);
     border-bottom: 1px solid var(--color-border);
     box-sizing: border-box;
+  }
+
+  .separator {
+    width: 1px;
+    height: 24px;
+    background: var(--color-border);
   }
 </style>

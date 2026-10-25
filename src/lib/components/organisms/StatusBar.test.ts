@@ -86,3 +86,45 @@ describe('StatusBar', () => {
     expect(screen.queryByRole('progressbar')).toBeNull()
   })
 })
+
+// RF-09 specs/ui/export-csv.md "After the export": notice appended as " · <notice>"
+describe('StatusBar notice', () => {
+  it('finished with notice', () => {
+    render(StatusBar, {
+      props: {
+        phase: 'finished',
+        summary: summary({ total: 31, done: 31, real: 28, suspicious: 2, fake: 1 }),
+        notice: 'Saved 31 rows to FakeFlac - Album A.csv',
+      },
+    })
+    expect(statusText()).toBe(
+      '31 tracks · 28 real · 2 suspicious · 1 fake · 0 errors · Saved 31 rows to FakeFlac - Album A.csv',
+    )
+  })
+
+  it('cancelled with notice', () => {
+    render(StatusBar, {
+      props: { phase: 'cancelled', summary: summary({ total: 31, done: 18 }), notice: 'Saved 18 rows to a.csv' },
+    })
+    expect(statusText()).toBe('Cancelled · 18 of 31 · Saved 18 rows to a.csv')
+  })
+
+  it('error with notice', () => {
+    render(StatusBar, {
+      props: {
+        phase: 'error',
+        summary: summary(),
+        message: 'The analysis stopped because of an unexpected error',
+        notice: 'Cannot save the CSV file',
+      },
+    })
+    expect(statusText()).toBe(
+      'The analysis stopped because of an unexpected error · Cannot save the CSV file',
+    )
+  })
+
+  it('no notice: the text is unchanged', () => {
+    render(StatusBar, { props: { phase: 'cancelled', summary: summary({ total: 31, done: 18 }) } })
+    expect(statusText()).toBe('Cancelled · 18 of 31')
+  })
+})

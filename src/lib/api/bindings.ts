@@ -12,6 +12,16 @@ export const commands = {
 	cancelAnalysis: () => __TAURI_INVOKE<void>("cancel_analysis"),
 	/**  RF-07: spectrogram of one file for display. Decoding runs on a blocking thread. */
 	getSpectrogram: (path: string) => typedError<Spectrogram, AppError>(__TAURI_INVOKE("get_spectrogram", { path })),
+	/**
+	 *  RF-09: saves the results of the latest run as CSV. The destination is chosen in the native
+	 *  save dialog (never by the page). `None` when the user cancels it.
+	 */
+	exportCsv: () => typedError<{
+	/**  Absolute path of the CSV written. */
+	path: string,
+	/**  Tracks written (header not counted). */
+	rows: number,
+} | null, AppError>(__TAURI_INVOKE("export_csv")),
 };
 
 /* Types */
@@ -48,6 +58,14 @@ export type CutoffEstimate = {
 	frequencyHz: number,
 	steepnessDbPerKhz: number,
 	noiseFloorDb: number,
+};
+
+/**  Result of `export_csv` (contract version 4, RF-09). */
+export type ExportResult = {
+	/**  Absolute path of the CSV written. */
+	path: string,
+	/**  Tracks written (header not counted). */
+	rows: number,
 };
 
 export type ProgressEvent = { kind: "scanned"; total: number } | { kind: "trackStarted"; index: number; path: string } | { kind: "trackDone"; index: number; analysis: TrackAnalysis } | { kind: "finished"; summary: AnalysisSummary } | { kind: "cancelled"; summary: AnalysisSummary };

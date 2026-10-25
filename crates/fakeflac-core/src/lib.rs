@@ -8,6 +8,7 @@ pub mod analyze_folder;
 pub mod detect;
 pub mod domain;
 pub mod error;
+pub mod export_csv;
 pub mod params;
 pub mod ports;
 pub mod spectrogram;
@@ -22,6 +23,7 @@ pub use domain::{
     TrackAnalysis, TrackError, TrackInfo, Verdict,
 };
 pub use error::{AppError, AppErrorCode};
+pub use export_csv::export_csv;
 pub use params::{DetectionParams, WindowKind};
 pub use spectrogram::Spectrogram;
 pub use spectrum::BandSpectra;

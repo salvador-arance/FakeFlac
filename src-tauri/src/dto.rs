@@ -369,3 +369,13 @@ impl From<&core::Spectrogram> for Spectrogram {
         }
     }
 }
+
+/// Result of `export_csv` (contract version 4, RF-09).
+#[derive(Debug, Clone, PartialEq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportResult {
+    /// Absolute path of the CSV written.
+    pub path: String,
+    /// Tracks written (header not counted).
+    pub rows: u32,
+}

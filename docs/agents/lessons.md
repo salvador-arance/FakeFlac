@@ -23,3 +23,8 @@
 
 - **What happened:** after its stage, the RF-14 test author had 283k tokens of context. Sending it another round would have cost the most and given the worst work. The owner asked that no agent with that much context ever be resumed. RF-14 already used a fresh agent per iteration, but only because the owner asked; the harness did not enforce it.
 - **Harness fix:** the `guard-agents` hook (PreToolUse `SendMessage`) reads the subagent's transcript and blocks resuming any subagent of any type over 150k tokens of context (`FAKEFLAC_AGENT_CONTEXT_LIMIT`). `/feature` and `workflow.md` say every stage rerun gets a fresh agent with a short brief.
+
+## Claude attribution in a commit merged to `main` (2026-10-25, #66)
+
+- **What happened:** the harness asked for a `Co-Authored-By` trailer and the "Generated with Claude Code" line. The orchestrator had not read `docs/agents/workflow.md`, which forbids both, and added them to #66. The squash merge put the trailer in `main`. The owner had to rewrite `main` with a force-push.
+- **Harness fix:** the rule is now in the non-negotiable rules of `CLAUDE.md` (#67). That file is loaded in every session; `workflow.md` is not.

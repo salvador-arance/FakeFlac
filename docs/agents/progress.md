@@ -2,6 +2,36 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-25 - RF-09 (CSV export) built; feature PR #71 waiting for G2
+
+**Done**
+- #66 merged: README says v6 is accepted.
+- The owner rewrote `main` (05ce393) to drop a Claude `Co-authored-by` trailer.
+- #67 merged: the no-attribution rule is in `CLAUDE.md`.
+- RF-09 spec:
+  - #68 merged (G1), every default kept; no ADR (owner, Q15);
+  - #69 merged: `NOT_A_FOLDER` from Open folder shows "Ready" without the notice.
+- #70 merged: `check-fast` runs clippy with `--all-targets`; the 31 lints it found in test code are fixed.
+- RF-09 feature, PR #71 (`feat/RF-09`):
+  - commits 699541f (tests), befc528 (backend), f1b9ae3 (frontend), 06e396e (review fixes);
+  - `just ci` green: 702 Rust tests, 324 frontend tests;
+  - review: nothing blocking.
+
+**Pending**
+- G2 for #71. The manual checks M1–M7 pass (owner, `npm run tauri dev`). M6(b): a typed `results.txt` is refused ("Cannot save the CSV file") and no file is written. M7: 10 000 rows in about 0.5 s.
+- #72 merged: `App.svelte` mounts `AnalysisPage`. Until then the window showed the H0 placeholder, and no test rendered `App`.
+- `CLAUDE_CODE_SUBAGENT_MODEL=sonnet` in `~/.claude/settings.json`: the owner adds it (it is outside the repo).
+
+**Blockers / questions for the human**
+- None. (`src-tauri/examples/cli.rs`, an untracked file no agent wrote, was removed by the owner.)
+
+**Notes for the next session**
+- Bash may start in `/cygdrive/c/...`; use `cd "C:/Workspaces/FakeFlac"` there, or vitest fails to start.
+- A worktree under `target/tmp/` has no `node_modules`: `npm run check` and vitest cannot run there, only the Rust checks.
+- A subagent can stop when the session ends, leaving uncommitted work. Check `git status` and run the checks before you assume it is lost or done.
+
+**Next step:** after G2 of #71, choose the next H2 requirement: RF-08 (sort and filter), RF-10 (album summary in the UI), RF-11 (cache) or RF-13 (Spanish UI).
+
 ## 2026-10-25 - #65 merged (G1); detection v6 accepted
 
 **Done**

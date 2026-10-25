@@ -30,3 +30,21 @@ describe('Icon', () => {
     expect(svg?.getAttribute('height')).toBe(String(size))
   })
 })
+
+describe('Icon export (RF-09)', () => {
+  // specs/ui/export-csv.md: new IconName export, own SVG, 16x16 view box; decorative and labelled
+  it('draws the export icon decorative', () => {
+    const { container } = render(Icon, { props: { name: 'export' } })
+    const svg = container.querySelector('svg')
+    expect(svg?.getAttribute('viewBox')).toBe('0 0 16 16')
+    expect(svg?.getAttribute('aria-hidden')).toBe('true')
+    expect(svg?.querySelector('path')).not.toBeNull()
+  })
+
+  it('draws the export icon labelled', () => {
+    const { container } = render(Icon, { props: { name: 'export', label: 'Export CSV' } })
+    const svg = container.querySelector('svg')
+    expect(screen.getByLabelText('Export CSV')).toBe(svg)
+    expect(svg?.querySelector('path')).not.toBeNull()
+  })
+})

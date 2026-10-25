@@ -5,6 +5,7 @@
     ApiError,
     cancelAnalysis,
     closeWindow,
+    exportCsv,
     getSpectrogram,
     minimizeWindow,
     onDragDrop,
@@ -44,18 +45,6 @@
   onDestroy(() => {
     unlistenDragDrop?.()
   })
-
-  function handleError(err: unknown) {
-    if (err instanceof ApiError) {
-      if (err.code === 'NOT_A_FOLDER') {
-        store.reset()
-        return
-      }
-      store.fail(t(`error.${err.code}`))
-    } else {
-      store.fail(t('error.INTERNAL'))
-    }
-  }
 
   // RF-07: spectrogram of the selected row. `spectrogramRequest` identifies the latest request;
   // a response or failure for an older one (a row no longer selected) is discarded.
@@ -97,9 +86,41 @@
     spectrogramUnavailable = result === null
   }
 
-  function beginRun() {
+  // RF-09: the notice of the last export, shown in the status bar until a start attempt.
+  let notice = $state<string | undefined>(undefined)
+  let exporting = $state(false)
+
+  type Saved = { notice: string | undefined; spectrogram: typeof spectrogram }
+
+  function beginRun(): Saved {
+    const saved = { notice, spectrogram }
     clearSpectrogram()
+    notice = undefined
     store.begin()
+    return saved
+  }
+
+  /** A start that ended before any event: the previous results stay on screen (export-csv.md). */
+  function undoStart(saved: Saved) {
+    store.restore()
+    spectrogram = saved.spectrogram
+    notice = saved.notice
+  }
+
+  function handleError(err: unknown, eventsSeen: boolean, saved: Saved) {
+    if (!eventsSeen) {
+      store.restore()
+      spectrogram = saved.spectrogram
+    }
+    if (err instanceof ApiError) {
+      if (err.code === 'NOT_A_FOLDER') {
+        store.reset()
+        return
+      }
+      store.fail(t(`error.${err.code}`))
+    } else {
+      store.fail(t('error.INTERNAL'))
+    }
   }
 
   async function handleOpenFolder() {
@@ -107,11 +128,15 @@
     const path = await pickFolder()
     if (!path) return
 
-    beginRun()
+    const saved = beginRun()
+    let eventsSeen = false
     try {
-      await startAnalysis(path, (ev) => store.apply(ev))
+      await startAnalysis(path, (ev) => {
+        eventsSeen = true
+        store.apply(ev)
+      })
     } catch (err) {
-      handleError(err)
+      handleError(err, eventsSeen, saved)
     }
   }
 
@@ -119,14 +144,39 @@
     if (store.phase === 'scanning' || store.phase === 'analysing') return
     if (!paths || paths.length === 0) return
 
-    beginRun()
+    const saved = beginRun()
+    let eventsSeen = false
     try {
-      const summary = await startAnalysisOfDropped(paths, (ev) => store.apply(ev))
-      if (summary === null) {
-        store.reset()
+      const summary = await startAnalysisOfDropped(paths, (ev) => {
+        eventsSeen = true
+        store.apply(ev)
+      })
+      if (summary === null) undoStart(saved)
+    } catch (err) {
+      handleError(err, eventsSeen, saved)
+    }
+  }
+
+  async function handleExport() {
+    if (!canExport) return
+    exporting = true
+    try {
+      const result = await exportCsv()
+      if (result !== null) {
+        const file = result.path.split(/[\\/]/).pop() ?? result.path
+        notice =
+          result.rows === 1
+            ? t('status.exportedOne', { file })
+            : t('status.exported', { rows: result.rows, file })
       }
     } catch (err) {
-      handleError(err)
+      const code = err instanceof ApiError ? err.code : 'INTERNAL'
+      notice =
+        code === 'NOT_ANALYZED' || code === 'ANALYSIS_RUNNING'
+          ? t(`error.${code}`)
+          : t('error.EXPORT_FAILED')
+    } finally {
+      exporting = false
     }
   }
 
@@ -135,6 +185,12 @@
   }
 
   let canOpen = $derived(store.phase !== 'scanning' && store.phase !== 'analysing')
+  let canExport = $derived(
+    store.rows.length > 0 &&
+      store.phase !== 'scanning' &&
+      store.phase !== 'analysing' &&
+      !exporting,
+  )
   let canCancel = $derived(store.phase === 'scanning' || store.phase === 'analysing')
   let isEmpty = $derived(store.phase === 'ready' && store.rows.length === 0)
   // main-screen.md "Screen states": the detail panel is hidden until there are rows.
@@ -164,8 +220,10 @@
     <Toolbar
       {canOpen}
       {canCancel}
+      {canExport}
       onopen={handleOpenFolder}
       oncancel={handleCancel}
+      onexport={handleExport}
     />
   {/snippet}
 
@@ -189,6 +247,7 @@
       phase={store.phase}
       summary={store.summary}
       message={store.message}
+      {notice}
     />
   {/snippet}
 </MainLayout>

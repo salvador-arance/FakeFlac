@@ -34,12 +34,16 @@ pub async fn pick_folder(window: WebviewWindow) -> Option<String> {
 #[specta::specta]
 pub async fn start_analysis(
     slot: State<'_, std::sync::Arc<AnalysisSlot>>,
+    export: State<'_, std::sync::Arc<run::ExportState>>,
     root: String,
     on_progress: Channel<dto::ProgressEvent>,
 ) -> Result<dto::AnalysisSummary, dto::AppError> {
     let slot = std::sync::Arc::clone(&slot);
+    let export = std::sync::Arc::clone(&export);
     tauri::async_runtime::spawn_blocking(move || {
-        run::run_analysis(&slot, Path::new(&root), &|e| on_progress.send(e).is_ok())
+        run::run_analysis_kept(&slot, &export, Path::new(&root), &|e| {
+            on_progress.send(e).is_ok()
+        })
     })
     .await
     .map_err(|e| dto::AppError {
@@ -65,4 +69,42 @@ pub async fn get_spectrogram(path: String) -> Result<dto::Spectrogram, dto::AppE
             code: dto::AppErrorCode::Internal,
             message: format!("spectrogram task failed: {e}"),
         })?
+}
+
+/// RF-09: saves the results of the latest run as CSV. The destination is chosen in the native
+/// save dialog (never by the page). `None` when the user cancels it.
+#[tauri::command]
+#[specta::specta]
+pub async fn export_csv(
+    window: WebviewWindow,
+    slot: State<'_, std::sync::Arc<AnalysisSlot>>,
+    export: State<'_, std::sync::Arc<run::ExportState>>,
+) -> Result<Option<dto::ExportResult>, dto::AppError> {
+    let (snapshot, guard) = run::begin_export(&slot, &export)?;
+    let file_name = fakeflac_export::default_file_name(&snapshot.root);
+    // The guard lives until the export ends, whatever the outcome.
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let picked = window
+            .dialog()
+            .file()
+            .set_parent(&window)
+            .add_filter("CSV (*.csv)", &["csv"])
+            .set_file_name(file_name)
+            .blocking_save_file();
+        let Some(picked) = picked else {
+            return Ok(None);
+        };
+        let dest = picked.into_path().map_err(|e| dto::AppError {
+            code: dto::AppErrorCode::ExportFailed,
+            message: format!("the chosen destination is not a file path: {e}"),
+        })?;
+        run::export_csv(&snapshot, &dest).map(Some)
+    })
+    .await
+    .map_err(|e| dto::AppError {
+        code: dto::AppErrorCode::Internal,
+        message: format!("export task failed: {e}"),
+    });
+    drop(guard);
+    result?
 }
