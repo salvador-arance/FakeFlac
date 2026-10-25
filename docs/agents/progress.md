@@ -18,7 +18,7 @@
   - RF-13 (Spanish/English interface, low). It carries the #76 review notes: the locale-dependent Format sort key cache, and `getLocale()` inside `ResultsTable`'s `$derived`.
   - RNF-01, 06, 07, 08, 10 and 11 (high).
 - RF-08: manual checks M1–M3 and P1–P2, if they were not run before the merge.
-- There is still no frontend implementer agent type. RF-08 and RF-10 used `general-purpose` with a brief. Consider a `frontend-implementer.md` before the next UI feature.
+- New agent `svelte-implementer` (planned in planning section 3.11.4, added now under D6 after RF-10 and RF-08 used `general-purpose`). `/feature` sends `src/` work to it. It is untested: check its first run.
 
 **Blockers / questions for the human**
 - Which requirement comes next.

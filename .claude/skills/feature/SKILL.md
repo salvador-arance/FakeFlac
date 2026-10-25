@@ -9,7 +9,7 @@ Precondition: `specs/` contains an approved spec for the requirement (merged `sp
 Procedure (each step sets the stage in `.claude/stage`, which the hooks enforce):
 1. `git switch -c feat/RF-xx` (or a worktree). Run `just check` to confirm the starting point is green; if red, fixing it is the first task.
 2. **Stage `test`**: write `test` to `.claude/stage`; delegate to the `test-author` subagent. Result: failing tests for the expected reason and a commit `test(RF-xx): ...`.
-3. **Stage `implement`**: write `implement` to `.claude/stage`; delegate to `rust-implementer` (or the frontend implementer). Iterate until `just check` is green. Commit `feat(RF-xx): ...`.
+3. **Stage `implement`**: write `implement` to `.claude/stage`; delegate to `rust-implementer` for `crates/` and `src-tauri/`, and to `svelte-implementer` for `src/`. A change that spans both gets one agent per side, Rust first. Iterate until `just check` is green. Commit `feat(RF-xx): ...`.
 4. **Stage `review`**: write `review` to `.claude/stage`; delegate to `code-reviewer`. Blocking findings go back to step 3 (set the stage back to `implement`).
 5. Write the stage file empty (or delete it). Run `just ci`.
 6. Open the PR (ask first; it uses the PR template: cite RF/RNF, spec, issue, plan, checks run).
