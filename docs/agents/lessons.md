@@ -28,3 +28,13 @@
 
 - **What happened:** the harness asked for a `Co-Authored-By` trailer and the "Generated with Claude Code" line. The orchestrator had not read `docs/agents/workflow.md`, which forbids both, and added them to #66. The squash merge put the trailer in `main`. The owner had to rewrite `main` with a force-push.
 - **Harness fix:** the rule is now in the non-negotiable rules of `CLAUDE.md` (#67). That file is loaded in every session; `workflow.md` is not.
+
+## Indicative thresholds that were wrong on both sides (2026-10-25, RF-16)
+
+- **What happened:** the spec-writer proposed the L6a window `[19500, 21000)` as "indicative, not measured". A measurement run before G1 used a throwaway harness on FakeFlac's own code, ffmpeg cascades and the corpus. It showed that the window would flag 96–100 % of honest 48 kHz LAME 320 encodes and 88–91 % of LAME 224/256 encodes. The measured window `[19800, 20200)` cut those to 3–5 % and 0 %, and recall stayed at 99.5 %. Without the run, the bad values would have reached G1 and the implement stage.
+- **Harness fix:** `/new-spec` step 3 asks for indicative detection thresholds to be measured before G1 when they can be measured locally.
+
+## No handoff after a spec merge (2026-10-25, RF-16)
+
+- **What happened:** `/new-spec` ended at "open a PR and stop". After the owner merged #78, ADR-0043 was still `proposed`, `progress.md` had no entry and `backend.md` named a stale default. The owner had to point it out.
+- **Harness fix:** `/new-spec` step 5 runs `/handoff` on a `docs/...` branch after the merge.

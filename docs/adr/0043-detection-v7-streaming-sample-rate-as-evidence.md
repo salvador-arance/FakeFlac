@@ -1,6 +1,6 @@
 # ADR-0043: Detection v7: a 48 kHz lossy file whose edge is Opus's 20 kHz band edge is `Suspicious` (streaming sample rate as evidence)
 
-- Status: proposed
+- Status: accepted (G1, #78)
 - Date: 2026-10-25
 
 ## Context and rationale

@@ -2,6 +2,34 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-25 - RF-16 spec merged (streaming sample rate, detection v7)
+
+**Done**
+- #78 (`spec(RF-16)`) merged at G1:
+  - new requirement RF-16 (medium, H2);
+  - rule L6a in `specs/detection/lossy-source.md` section 11: a 48 kHz MP3/AAC at `b >= 192` with `fc` in `[19800, 20200)` becomes `Suspicious` (`streamingSampleRate`, null estimate) instead of `Real`;
+  - `detection-params.v7.toml` with the optional section `[lossy.streaming]`;
+  - contract version 6; `csv_format_version` stays 1.
+- The window was measured before G1 (section 11.3.1). The evidence report and the throwaway harness are in `target/rf16-g1/` (git-ignored; corpus paths removed).
+- All G1 questions are decided: Q18–Q28 and C13. K3 and K4 gates at 90 %, K4 applied from 30 strong labels. K5 is a gate: honest `cbr320 @ 48000` at most 10 % flagged, `cbr256 @ 48000` at most 2 %. The reason text is the short one.
+- This PR:
+  - ADR-0043 marked `accepted`;
+  - `backend.md` default corrected to v6, with v7 noted as specified;
+  - two lessons, and `/new-spec` steps 3 and 5.
+
+**Pending**
+- `/feature RF-16`:
+  - Test stage: the protected tests listed in lossy-source.md Q25 (j) change, including `detection_edge_step.rs`. In `detect_lossy.rs`, `v5()` must return the defaults with `lossy.streaming = None`.
+  - Implement stage: `fakeflac_core::detect` (L6a); `params.rs` (`[lossy.streaming]` and its validation); the new reason in `domain.rs`, `dto.rs`, the CSV export, `evaluate.rs` and the i18n text; `just gen`; the calibration `streaming rate` column and strong-only confirmed-fake rows (`tools/fakeflac-calibrate/src/lossy.rs`); `backend.md` changed to make v7 the default.
+  - Acceptance K1–K7 on the corpus (`just accept`).
+- Optional, for the owner: hand-check about 20 of the 125 unlabelled 48 kHz MP3s that v7 would flag.
+- Carried over from the previous block: RF-11, RF-13 and the high-priority RNFs are still `draft`; RF-08 manual checks M1–M3 and P1–P2; the first real run of `svelte-implementer` (RF-16's frontend change is small: one reason text).
+
+**Blockers / questions for the human**
+- None.
+
+**Next step:** `/feature RF-16`.
+
 ## 2026-10-25 - After RF-08: Dependabot alert dismissed, agent models committed
 
 **Done**
