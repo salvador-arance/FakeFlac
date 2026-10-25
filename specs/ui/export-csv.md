@@ -46,7 +46,7 @@ The export never changes the screen state, the table, the selection or the detai
 The notice is replaced by the next export's notice, and it is cleared by every attempt to start an analysis that changes the screen state:
 
 - the start succeeds: the state becomes Scanning and the status bar shows "Scanning…" without the notice;
-- the start fails before Scanning (`NOT_A_FOLDER` from Open folder, `FOLDER_UNREADABLE`, `NO_AUDIO_FOUND`, `ANALYSIS_RUNNING`): the state becomes Error and the status bar shows that error's text (`main-screen.md`) **without** the old notice, which the new error replaces. The table keeps its rows, so Export CSV stays enabled when it has any;
+- the start fails before Scanning (`NOT_A_FOLDER` from Open folder, `FOLDER_UNREADABLE`, `NO_AUDIO_FOUND`, `ANALYSIS_RUNNING`): the state becomes Error and the status bar shows that error's text (`main-screen.md`) **without** the old notice, which the new error replaces. `NOT_A_FOLDER` has no text (`main-screen.md`), so the status bar shows "Ready" without the notice. The table keeps its rows, so Export CSV stays enabled when it has any;
 - a drop whose paths are all files starts nothing and shows no error (`commands.md`, drag and drop): nothing changes and the notice stays. A drop clears the notice only when one of its `startAnalysis` calls ends other than with `NOT_A_FOLDER`, by the two rules above.
 
 The contract's technical `message` is not shown.

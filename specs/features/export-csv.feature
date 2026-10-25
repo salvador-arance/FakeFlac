@@ -464,7 +464,7 @@ Feature: Export the results to CSV (H2)
   Scenario Outline: A start that fails before Scanning replaces the notice with its error
     Given an analysis has finished with 3 tracks and the status bar ends with "· Saved 3 rows to a.csv"
     When I open the folder "Docs" and start_analysis rejects with "<code>" before any event
-    Then the status bar shows the error text of "<code>" (main-screen.md, state Error) and not "Saved 3 rows to a.csv"
+    Then the status bar shows the text main-screen.md gives "<code>" ("Ready" for NOT_A_FOLDER, which has no text) and not "Saved 3 rows to a.csv"
     And the table keeps its 3 rows and the toolbar button "Export CSV" is enabled
 
     Examples:
