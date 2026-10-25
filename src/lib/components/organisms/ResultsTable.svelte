@@ -13,6 +13,11 @@
     sort: SortState
     rowHeight?: number
     viewportHeight?: number
+    /**
+     * RF-10 (components.md Q16): a counter the page increments on every album selection; each
+     * change scrolls the selected row into view. Compile-only stub: not implemented yet.
+     */
+    revealRequest?: number
     onselect?: (index: number) => void
     onsort?: (column: SortColumn) => void
   }
