@@ -54,3 +54,14 @@ pub trait FileScanner: Send + Sync {
     /// not an absolute path, does not exist or cannot be listed (`specs/contracts/commands.md`).
     fn scan(&self, root: &std::path::Path) -> Result<Vec<FileEntry>, AppError>;
 }
+
+/// Writes the results to a CSV file (RF-09, `specs/contracts/csv-export.md` section 5).
+pub trait CsvExporter: Send + Sync {
+    /// Writes `tracks`, in the order given, to `dest`. A failure is `EXPORT_FAILED` and leaves
+    /// the destination as it was.
+    fn export(
+        &self,
+        tracks: &[crate::domain::TrackAnalysis],
+        dest: &std::path::Path,
+    ) -> Result<(), AppError>;
+}

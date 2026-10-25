@@ -2,6 +2,7 @@
 export type IconName =
   | 'folder-open'
   | 'cancel'
+  | 'export'
   | 'minimize'
   | 'maximize'
   | 'close'
