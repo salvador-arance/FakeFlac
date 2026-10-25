@@ -311,6 +311,7 @@ fn check_aac_lc(esds: &[u8]) -> Result<(), TrackError> {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
 

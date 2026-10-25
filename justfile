@@ -8,7 +8,7 @@ default:
 # Fast checks: formatting, lint, types, architecture rules, quick tests. Target < 60 s (RP-08).
 check-fast:
     cargo fmt --all -- --check
-    cargo clippy --workspace --exclude fakeflac -- -D warnings
+    cargo clippy --workspace --exclude fakeflac --all-targets -- -D warnings
     npm run check
     node scripts/lint-arch.mjs
     node --test ".claude/hooks/*.test.mjs" "scripts/*.test.mjs"
