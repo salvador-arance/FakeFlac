@@ -18,7 +18,8 @@
   - review: nothing blocking.
 
 **Pending**
-- G2 for #71. Before merging, the owner runs the manual checks M1–M7 (`specs/ui/export-csv.md`, checklist in the PR) with `npm run tauri dev`. M6(b) records what the dialog does with a typed `results.txt`.
+- G2 for #71. The manual checks M1–M7 pass (owner, `npm run tauri dev`). M6(b): a typed `results.txt` is refused ("Cannot save the CSV file") and no file is written. M7: 10 000 rows in about 0.5 s.
+- #72 merged: `App.svelte` mounts `AnalysisPage`. Until then the window showed the H0 placeholder, and no test rendered `App`.
 - `CLAUDE_CODE_SUBAGENT_MODEL=sonnet` in `~/.claude/settings.json`: the owner adds it (it is outside the repo).
 
 **Blockers / questions for the human**
