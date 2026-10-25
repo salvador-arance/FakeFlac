@@ -30,7 +30,7 @@ An **Albums panel** on the left of the content area, in the place the reference 
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-- The panel spans the content area's full height (beside the table, the splitter and the detail panel), as the reference's left panel does. Fixed width **240 px** in H2 (no splitter, not collapsible; open question Q3). The width is a **new layout token** `--sidebar-width: 240px` in `src/lib/tokens/tokens.css` (sizes come from tokens, `src/CLAUDE.md`; today the only size token is `--row-height`); the folder tree of a later milestone reuses it. It scrolls vertically on its own. A 1 px `--color-border` line separates it from the table.
+- The panel spans the content area's full height (beside the table, the splitter and the detail panel), as the reference's left panel does. Fixed width **240 px** in H2 (no splitter, not collapsible; G1 decision Q3). The width is a **new layout token** `--sidebar-width: 240px` in `src/lib/tokens/tokens.css` (sizes come from tokens, `src/CLAUDE.md`; today the only size token is `--row-height`); the folder tree of a later milestone reuses it. It scrolls vertically on its own. A 1 px `--color-border` line separates it from the table.
 - The window's minimum size (900 × 500) does not change; the table keeps its horizontal scroll.
 - Why not group the table (header rows per album) or add an "album verdict" column: see Q2. A side list gives the at-a-glance answer for a whole library ("which albums have fakes?") without changing the table, so the table's sort, keyboard navigation, virtualisation and the coming RF-08 sort/filter work on tracks exactly as today.
 
@@ -131,11 +131,11 @@ The list is a `listbox` with the accessible name `albums.label` and one tab stop
 - M1. A test folder outside the audio corpus with 1 000 subfolders of one short generated fixture each (`specs/detection/fixtures.md`, for example `short`): the panel lists 1 000 albums and scrolls without visible stutter; the window stays responsive during the run.
 - M2. Visual check against the reference screenshots: dark panel, dense items, verdict icons aligned in one column.
 
-## Open questions for G1
+## G1 decisions
 
-Each has a default; this spec and the contract are written with the defaults.
+Decided at G1 (2026-10-25): every default below is accepted, and this spec and the contract are written with them. Q14 and Q15 were raised during the review.
 
-| # | Question | Default |
+| # | Question | Decision |
 |---|---|---|
 | Q1 | **Where the summary is computed.** In the backend (`fakeflac-core`, sent with every `trackDone`, commands.md version 5) or in the frontend from the rows already received (no contract change, but the rule would be duplicated in TypeScript outside the core)? | Backend |
 | Q2 | **Where it appears.** A left Albums panel (as written), header rows grouping the table by album (conflicts with column sort, virtualisation, keyboard navigation and RF-08 filters), an "Album" verdict column on every row (sortable, but no counts at a glance), or a line in the detail panel for the selected track's album? | Left Albums panel |
@@ -150,3 +150,5 @@ Each has a default; this spec and the contract are written with the defaults.
 | Q11 | **Album = direct parent folder** (album-summary.md, approved in H0): `Album\CD1` and `Album\CD2` are two albums, and the folder `Album` (no files of its own) is none. Merging discs or using the `album` tag (lofty, not read yet) would be a new rule and a new requirement | Direct parent folder |
 | Q12 | The status bar does not show the number of albums or of bad albums (for example "· 2 albums with fakes") | Unchanged |
 | Q13 | **Table scroll-into-view** (`components.md`, `ResultsTable`, proposed): selecting an album needs the table to scroll to its row (A5), and the same rule makes ↑/↓/Home/End keep the selected row visible, which the approved RF-06 keyboard rule did not state and the table does not do today. Alternatively scroll only when the selection comes from the panel | Scroll for every selection change |
+| Q14 | Edits to approved specs: one cross-reference sentence each in `main-screen.md` and `components.md`, and the scroll-into-view note on `ResultsTable` in `components.md` | Approved |
+| Q15 | A core scenario relied on a panic in the progress sink propagating out of `analyze_folder`, which no spec states. Specify panic behaviour here? | No: that scenario is dropped. Panic semantics are not RF-10's subject; the ordering guarantee stays covered by the event-order scenarios and A2, and the UI `INTERNAL` scenario (store check S3) uses a stubbed rejection |

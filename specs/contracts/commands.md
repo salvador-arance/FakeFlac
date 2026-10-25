@@ -216,7 +216,7 @@ Version 5 (RF-10; rule: `specs/detection/album-summary.md`, unchanged; UI: `spec
   | `\\nas\music` (UNC share root) | `\\nas\music` | `\\nas\music` |
   | `\\nas\music` | `\\nas\music\Album B` | `\\nas\music\Album B` |
 
-- **Unchanged:** the commands and their inputs and outputs, `AppError` codes, `AnalysisSummary`, `TrackAnalysis`, the results kept for export and the CSV file. **The CSV export does not include album summaries**: it stays one record per track, `csv_format_version` 1 (csv-export.md unchanged); the `folder` column already lets a spreadsheet group the tracks (open question Q8 of `ui/album-summary.md`).
+- **Unchanged:** the commands and their inputs and outputs, `AppError` codes, `AnalysisSummary`, `TrackAnalysis`, the results kept for export and the CSV file. **The CSV export does not include album summaries**: it stays one record per track, `csv_format_version` 1 (csv-export.md unchanged); the `folder` column already lets a spreadsheet group the tracks (G1 decision Q8 of `ui/album-summary.md`).
 
 - **Consequence on existing tests (declared).** `ProgressEvent::TrackDone` (`crates/fakeflac-core/src/analyze_folder.rs`) and its DTO gain `album`, so tests derived from approved specs that build a `trackDone` event or match it without `..` stop compiling or type-checking. **Updating them is a declared consequence of this spec**: the test author does it in the `test(RF-10)` commit (stage `test`); it only adds the `album` field or `..`, and their assertions on the other fields do not change. The implementer does not touch them.
   - `crates/fakeflac-core/tests/analyze_folder.rs`: `done_by_index` matches `TrackDone { index, analysis }` exhaustively.

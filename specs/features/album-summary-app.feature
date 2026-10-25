@@ -115,16 +115,6 @@ Feature: Album summaries in the application (H2)
     And the album updates recorded are all of index 0, folder "C:\Music\Big\Album 1", with totals 1, 2, 3 in channel order and files 12
     And no album update has the folder "C:\Music\Big\Album 2"
 
-  Scenario: A run that fails after some events leaves valid album updates
-    src-tauri turns a run whose task fails (a panic) into INTERNAL, after the
-    events already sent (commands.md). Here the panic comes from the test sink.
-    Given the root "C:\Music\Big" with 12 files in "Album 1" and 12 files in "Album 2", all real
-    And the test sink records each event and panics right after recording the 4th trackDone
-    When the use case runs with 1 worker and the test catches the panic
-    Then the recorded events end with that 4th trackDone: no "finished" or "cancelled" event follows
-    And the album updates recorded are all of folder "C:\Music\Big\Album 1", with totals 1, 2, 3, 4 in channel order and files 12
-    And each of them equals summarize_album of its folder over the tracks recorded up to and including it
-
   Scenario: Other events carry no album data
     Given the root "C:\Music\Album A" with 2 files
     When the use case runs
