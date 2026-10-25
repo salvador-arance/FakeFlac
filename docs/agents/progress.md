@@ -2,6 +2,29 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-25 - After RF-08: Dependabot alert dismissed, agent models committed
+
+**Done**
+- #76 (RF-08 feature) merged. `just prune-branches` deleted `feat/RF-08` and `spec/RF-08`.
+- Dependabot alert #1 (`glib` 0.18, GHSA-wrw7-89jp-8q8g, medium) dismissed as "vulnerable code not used":
+  - `glib` only comes in through Tauri's Linux backend (gtk/webkit2gtk via tao, wry, muda). `cargo tree -i glib` for the Windows host target prints nothing; only `--target all` shows it.
+  - It can't be fixed by an upgrade: glib >= 0.20 needs gtk-rs 0.20, and Tauri 2.12 uses 0.18.
+  - Revisit if a Linux build is ever added (RNF-07).
+- `.claude/agents/{rust-implementer,test-author}.md` now run on `opus` (`6dd1662`): the owner's local edit, committed at the owner's request.
+
+**Pending**
+- H2 requirements still `draft`:
+  - RF-11 (result cache, medium).
+  - RF-13 (Spanish/English interface, low). It carries the #76 review notes: the locale-dependent Format sort key cache, and `getLocale()` inside `ResultsTable`'s `$derived`.
+  - RNF-01, 06, 07, 08, 10 and 11 (high).
+- RF-08: manual checks M1–M3 and P1–P2, if they were not run before the merge.
+- There is still no frontend implementer agent type. RF-08 and RF-10 used `general-purpose` with a brief. Consider a `frontend-implementer.md` before the next UI feature.
+
+**Blockers / questions for the human**
+- Which requirement comes next.
+
+**Next step:** the owner picks the next H2 requirement, then `/new-spec RF-xx`.
+
 ## 2026-10-25 - RF-08 (sort and filter the results table) implemented; feature PR #76 waiting for G2
 
 **Done**
