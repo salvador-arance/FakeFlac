@@ -142,15 +142,17 @@ Version 3 (RF-14 H2, RF-15; ADR-0040, ADR-0041; rules: `specs/detection/lossy-so
 
 Version 4 (RF-09; file format and layers: `specs/contracts/csv-export.md`, ADR-0012; UI: `specs/ui/export-csv.md`; scenarios: `specs/features/export-csv.feature`):
 
-- **New command `export_csv`**, no input. It opens the native **save** dialog (modal to the window, like `pick_folder`) with the default file name `FakeFlac - <name of the analysed folder>.csv` (`FakeFlac.csv` for a drive root) and the filter "CSV (*.csv)"; the app does not set the dialog's initial folder (csv-export.md Q8). The dialog asks before replacing an existing file. When the user confirms, the backend writes the CSV of the results it keeps (below) to the chosen path and resolves with `ExportResult`; when the user cancels, it resolves with `null` and writes nothing.
+- **New command `export_csv`**, no input. It opens the native **save** dialog (modal to the window, like `pick_folder`) with the default file name `FakeFlac - <name of the analysed folder>.csv` (`FakeFlac.csv` for a drive root or a UNC share root; rules in csv-export.md section 5.1, `default_file_name`) and the filter "CSV (*.csv)", whose extension the Windows dialog appends to a name typed without one (csv-export.md Q9); the app does not set the dialog's initial folder (csv-export.md Q8). The dialog asks before replacing an existing file. When the user confirms, the backend writes the CSV of the results it keeps (below) to the chosen path and resolves with `ExportResult`; when the user cancels, it resolves with `null` and writes nothing.
 - **The destination never comes from the frontend** (csv-export.md Q7): the page cannot ask the app to write anywhere. Capabilities do not change.
 - **Results kept for export.** The backend keeps in memory the `TrackAnalysis` of every `trackDone` event of the **latest run**, with that run's `root`; nothing is persisted. They are replaced when a new run sends its `scanned` event. A `start_analysis` that fails before the run starts (`NOT_A_FOLDER`, `FOLDER_UNREADABLE`, `NO_AUDIO_FOUND`, `ANALYSIS_RUNNING`) keeps them, as the table keeps its rows (`ui/main-screen.md`, state Error). A cancelled run keeps the tracks done before it stopped; a run that ends with `INTERNAL` keeps the tracks it reported. The CSV lists them **in `index` order** (scan order), whatever the order `trackDone` arrived in and whatever the table's sort.
 - **Snapshot.** The results are taken when `export_csv` is called, before the dialog opens: a run started while the dialog is open does not change what is written.
-- **Errors**, all before the dialog opens unless stated:
+- **One export at a time** (csv-export.md section 5.2). A second `export_csv` call while one is in progress (its dialog open or its file being written) fails at once with `INTERNAL`, message `an export is already in progress`: no second dialog opens, nothing is written, and the first call is not affected. The UI never makes it (the button is disabled while exporting).
+- **Errors**, all before the dialog opens unless stated, checked in this order:
+  - `INTERNAL`: another export is in progress (above).
   - `ANALYSIS_RUNNING`: a run holds the analysis (scanning or analysing). Nothing is exported.
   - `NOT_ANALYZED`: there are no results (no run yet, or the latest run reported no track). The dialog does not open.
   - `EXPORT_FAILED` (after the dialog): the chosen path does not end in `.csv` (case-insensitive; nothing is written), or the file cannot be written (csv-export.md section 6). A failed export leaves the destination as it was.
-  - `INTERNAL`: an unexpected failure (for example the export task panicked).
+  - `INTERNAL` (at any point): an unexpected failure (for example the export task panicked).
 - **Read-only (RNF-05).** The export reads no audio file and writes no file other than the chosen CSV (and its temporary file while writing).
 - `NOT_ANALYZED` gets its first use here (csv-export.md Q10); `AppErrorCode` does not change.
 

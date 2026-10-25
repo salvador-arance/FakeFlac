@@ -9,14 +9,15 @@ Feature: Export the results to CSV (H2)
   Command: export_csv in specs/contracts/commands.md (version 4).
   UI: specs/ui/export-csv.md.
   The app writes the CSV only where the user chooses in the save dialog. The
-  automated tests stub the dialog: they call the step after it with a
-  destination inside a test folder, never in the audio corpus; the native
-  dialog itself is checked by hand (export-csv.md, M1 to M5).
+  automated tests stub the dialog: they call the steps before and after it
+  (run::begin_export, run::export_csv) with a destination inside a test
+  folder, never in the audio corpus; the native dialog itself and the export
+  time are checked by hand (ui/export-csv.md, M1 to M7).
 
   # --- Document (serialiser, stubbed TrackAnalysis values, no audio) ---------
-  # "{LF}" stands for U+000A, "{CR}" for U+000D and "{SP}" for U+0020 (Gherkin
-  # trims the spaces around a table cell). "none" is an absent value in a
-  # given table and an empty field in an expected one.
+  # "{LF}" stands for U+000A, "{CR}" for U+000D, "{TAB}" for U+0009 and "{SP}"
+  # for U+0020 (Gherkin trims the spaces around a table cell). "none" is an
+  # absent value in a given table and an empty field in an expected one.
   # Every expected document has its lines separated by CR LF and ends with
   # CR LF after its last line.
 
@@ -48,21 +49,31 @@ Feature: Export the results to CSV (H2)
       ```
 
   Scenario Outline: A field is quoted only when it must be (RFC 4180)
+    <field> is the exact text written between the separators around the
+    error_detail field (the comma before it and the comma after it), quotes
+    included; <quoted> says whether it starts and ends with '"'.
     Given a stubbed TrackAnalysis whose error detail is "<value>"
     When the CSV document is built
-    Then its error_detail field is written as <written>
+    Then the bytes of its error_detail field are exactly <field>
+    And the field is quoted: <quoted>
 
     Examples:
-      | value              | written                    |
-      | plain text         | plain text, unquoted       |
-      | a, b               | "a, b" in double quotes    |
-      | say "hi"           | "say ""hi""" (quotes doubled) |
-      | line{LF}break      | "line{LF}break", the LF kept as a single LF |
-      | line{CR}{LF}break  | "line{CR}{LF}break", kept as it is |
-      | {SP}leading space  | {SP}leading space, unquoted, the space kept |
-      | semi;colon         | semi;colon, unquoted       |
-      | =1+1               | =1+1, unquoted and unchanged |
-      | none               | an empty, unquoted field   |
+      | value               | field                 | quoted |
+      | plain text          | plain text            | no     |
+      | a, b                | "a, b"                | yes    |
+      | say "hi"            | "say ""hi"""          | yes    |
+      | "                   | """"                  | yes    |
+      | line{LF}break       | "line{LF}break"       | yes    |
+      | line{CR}break       | "line{CR}break"       | yes    |
+      | line{CR}{LF}break   | "line{CR}{LF}break"   | yes    |
+      | {SP}leading space   | {SP}leading space     | no     |
+      | trailing space{SP}  | trailing space{SP}    | no     |
+      | tab{TAB}inside      | tab{TAB}inside        | no     |
+      | semi;colon          | semi;colon            | no     |
+      | it's                | it's                  | no     |
+      | =1+1                | =1+1                  | no     |
+      | Ñandú ″x″           | Ñandú ″x″             | no     |
+      | none                | none                  | no     |
 
   Scenario: File names are quoted by the same rule
     Given a stubbed TrackAnalysis of "C:\Music\Rock, Pop\Live, 1999.flac"
@@ -112,11 +123,21 @@ Feature: Export the results to CSV (H2)
 
   @RNF-04
   Scenario: Unknown values of an error track are empty cells
-    Given a stubbed TrackAnalysis of an M4A file that could not be probed: codec none, sample rate 0, channels 0, duration 0, size 2048, verdict "error" and error "corruptStream"
+    Given a stubbed TrackAnalysis of an M4A file that could not be probed: codec none, sample rate 0, channels 0, duration 0, bit depth none, declared bitrate none, bitrate mode none, size 2048, verdict "error" and error "corruptStream"
     When the CSV document is built
     Then its codec, sample_rate_hz, bit_depth, channels and duration_ms fields are empty
-    And its cutoff_hz, cutoff_steepness_db_per_khz, noise_floor_db, declared_bitrate_kbps, bitrate_mode and estimated_source_bitrate_kbps fields are empty
+    And its declared_bitrate_kbps and bitrate_mode fields are empty, as their stored values are none
+    And its cutoff_hz, cutoff_steepness_db_per_khz, noise_floor_db and estimated_source_bitrate_kbps fields are empty
     And its size_bytes field is "2048" and its format field is "m4a"
+
+  @RNF-04
+  Scenario: An error track keeps the values learnt before the error
+    Given a stubbed TrackAnalysis of an MP3 file that is too short: codec "mp3", sample rate 44100, channels 1, duration 2011, declared bitrate 320, bitrate mode "cbr", no cutoff, no estimate, verdict "error" and error "tooShort"
+    When the CSV document is built
+    Then its codec field is "mp3", its sample_rate_hz field "44100", its channels field "1" and its duration_ms field "2011"
+    And its declared_bitrate_kbps field is "320" and its bitrate_mode field is "cbr"
+    And its cutoff_hz, cutoff_steepness_db_per_khz, noise_floor_db, estimated_source_bitrate_kbps and reasons fields are empty
+    And its verdict field is "error", its error field "tooShort" and its error_detail field is empty
 
   Scenario: A non-finite cutoff is written as no cutoff
     Given a stubbed TrackAnalysis whose cutoff has frequency 16000 Hz and a NaN noise floor
@@ -132,6 +153,38 @@ Feature: Export the results to CSV (H2)
     And "″" is encoded as E2 80 B3 and "🎵" as F0 9F 8E B5
     And every record ends with 0D 0A, the last one included, and no LF appears without a CR before it
     And there is no empty line after the last record
+
+  # --- Default file name (fakeflac-export, pure: default_file_name) ----------
+  # csv-export.md section 5.1. No dialog and no file system: the function only
+  # reads the path it is given.
+
+  @RNF-09
+  Scenario Outline: Default file name
+    When default_file_name is called with the root "<root>"
+    Then it returns "<name>"
+
+    Examples:
+      | root                     | name                         |
+      | C:\Music\Album A         | FakeFlac - Album A.csv       |
+      | C:\Music\Album A\        | FakeFlac - Album A.csv       |
+      | C:\Music\Album A\\       | FakeFlac - Album A.csv       |
+      | C:/Music/Album A/        | FakeFlac - Album A.csv       |
+      | C:\Music\Álbum ″Ñandú″   | FakeFlac - Álbum ″Ñandú″.csv |
+      | C:\Music\02 «Ça va» 🎵   | FakeFlac - 02 «Ça va» 🎵.csv |
+      | C:\Music\Rock, Pop       | FakeFlac - Rock, Pop.csv     |
+      | D:\                      | FakeFlac.csv                 |
+      | D:                       | FakeFlac.csv                 |
+      | \\nas\music              | FakeFlac.csv                 |
+      | \\nas\music\             | FakeFlac.csv                 |
+      | \\nas\music\Album A      | FakeFlac - Album A.csv       |
+      | \\?\C:\Music\Album A     | FakeFlac - Album A.csv       |
+      | \\?\UNC\nas\music        | FakeFlac.csv                 |
+
+  Scenario: The default file name does not touch the file system
+    Given the root "Gone" inside the test folder, which does not exist
+    When default_file_name is called with its absolute path
+    Then it returns "FakeFlac - Gone.csv"
+    And no file or folder is created
 
   # --- Use case (fakeflac-core, fake exporter) --------------------------------
 
@@ -156,20 +209,33 @@ Feature: Export the results to CSV (H2)
       | C:\Music\Album A\lp16k.flac  | it fails with error "EXPORT_FAILED" and the exporter is not called |
       | out\results.csv              | it fails with error "EXPORT_FAILED" and the exporter is not called |
 
-  # --- Command (backend after the dialog: run::export_csv, test folders) -----
+  # --- Command (backend around the dialog: run::begin_export, run::export_csv,
+  #     test folders) ----------------------------------------------------------
+  # Audio files here are generated inside the test, never taken from the
+  # corpus: "<id>.flac" / "<id>.wav" are the lossless fixtures of
+  # specs/detection/fixtures.md and "<id>.mp3" / "<id>.m4a" the lossy fixtures
+  # written by the writers of specs/detection/lossy-fixtures.md, both with the
+  # id named. A file named otherwise ("a.flac", "01 – Canción ‘x’.flac") holds
+  # the samples of full_band: its content does not matter. These scenarios check
+  # that the CSV carries what the analysis reported; the detection outcome of
+  # each fixture is covered by detection-lossless.feature, decode-lossy.feature
+  # and detection-lossy.feature.
+  # "I export" means: run::begin_export on the results kept, then, with the
+  # dialog stubbed to return the destination named, run::export_csv.
 
   @RNF-04
   Scenario: Export after a finished analysis
-    Given a folder "Mixed" with "full_band.flac", "corrupt.flac", "lp16k.flac" and the lossy fixture "mp3_320_lp17k.mp3"
-    And an analysis of "Mixed" has finished
+    Given a test folder "Mixed" holding "full_band.flac", "corrupt.flac" and "lp16k.flac" (fixtures full_band, corrupt and lp16k of specs/detection/fixtures.md) and "mp3_320_lp17k.mp3" (fixture mp3_320_lp17k of specs/detection/lossy-fixtures.md)
+    And an analysis of "Mixed" has finished with the default DetectionParams, and its trackDone events were recorded
     When I export and choose "results.csv" in an empty output folder
     Then the export resolves with rows 4 and the absolute path of "results.csv"
-    And "results.csv" has the header and 4 records, in this order: "corrupt.flac", "full_band.flac", "lp16k.flac", "mp3_320_lp17k.mp3"
-    And the "corrupt.flac" record has verdict "error", error "corruptStream" and empty cutoff cells
-    And the "lp16k.flac" record has verdict "fake" and a cutoff_hz within 200 of 16000
-    And the "mp3_320_lp17k.mp3" record has verdict "fake", declared_bitrate_kbps "320", bitrate_mode "cbr" and estimated_source_bitrate_kbps "128"
-    And the "full_band.flac" record has empty declared_bitrate_kbps, bitrate_mode and estimated_source_bitrate_kbps fields
-    And every record has algorithm_version "6"
+    And "results.csv" reads back as the header of csv-export.md section 3 and 4 records of 21 fields each
+    And the records are in the index order of their trackDone events
+    And in each record the verdict, cutoff_hz, declared_bitrate_kbps, bitrate_mode, estimated_source_bitrate_kbps, reasons and error fields equal the trackDone values of that file, encoded as in csv-export.md sections 3 and 4
+    And in each record the file, folder, path, format, codec and size_bytes fields equal the trackDone TrackInfo of that file
+    And the "corrupt.flac" record is an error row: its verdict field is "error" and its cutoff_hz, cutoff_steepness_db_per_khz and noise_floor_db fields are empty
+    And the "mp3_320_lp17k.mp3" record has non-empty declared_bitrate_kbps and bitrate_mode fields, and the "full_band.flac" record has empty declared_bitrate_kbps, bitrate_mode and estimated_source_bitrate_kbps fields
+    And every record's algorithm_version field is the algorithm_version of the DetectionParams the analysis used
 
   Scenario: Rows follow the scan order, not the arrival order or the table sort
     Given an analysis of a folder with "a.flac", "b.flac" and "c.flac" whose trackDone events arrived in the order "c.flac", "a.flac", "b.flac"
@@ -195,14 +261,14 @@ Feature: Export the results to CSV (H2)
     And an analysis of "Album B" with 2 files has finished after it
     When I export
     Then the CSV has the 2 records of "Album B" and none of "Album A"
-    And the default file name is "FakeFlac - Album B.csv"
+    And the snapshot's root is the folder "Album B", so the dialog is given default_file_name of it, "FakeFlac - Album B.csv"
 
   Scenario: An analysis that fails before it starts keeps the previous results
     Given an analysis of "Album A" with 3 files has finished
     And an analysis of the folder "Docs" failed with error "NO_AUDIO_FOUND"
     When I export
     Then the CSV has the 3 records of "Album A"
-    And the default file name is "FakeFlac - Album A.csv"
+    And the snapshot's root is the folder "Album A", so the dialog is given default_file_name of it, "FakeFlac - Album A.csv"
 
   Scenario: No export while an analysis is running
     Given an analysis of "Big" is running
@@ -227,18 +293,32 @@ Feature: Export the results to CSV (H2)
     Then export_csv resolves with null
     And no file is written
 
-  @RNF-09
-  Scenario Outline: Default file name
-    Given an analysis of "<root>" has finished
-    When I export
-    Then the save dialog proposes the file name "<name>" with the filter "CSV (*.csv)"
+  Scenario: A second export while one is in progress
+    Given an analysis of "Album A" with 3 files has finished
+    And run::begin_export has returned a snapshot and its export guard, as when the dialog is open
+    When run::begin_export is called again while that guard lives
+    Then the second call fails with error "INTERNAL" and the message "an export is already in progress"
+    And no second dialog would open and no file is written for it
+    When the first export goes on and I choose "results.csv"
+    Then "results.csv" has the 3 records of "Album A" and the first export resolves with rows 3
+
+  Scenario Outline: The export guard is released however the export ends
+    Given an analysis of "Album A" with 3 files has finished
+    When an export ends by <ending>
+    Then a new run::begin_export succeeds
 
     Examples:
-      | root                     | name                         |
-      | C:\Music\Album A         | FakeFlac - Album A.csv       |
-      | C:\Music\Album A\        | FakeFlac - Album A.csv       |
-      | C:\Music\Álbum ″Ñandú″   | FakeFlac - Álbum ″Ñandú″.csv |
-      | D:\                      | FakeFlac.csv                 |
+      | ending                                          |
+      | resolving with null (dialog cancelled)          |
+      | resolving with rows 3                           |
+      | rejecting with "EXPORT_FAILED" (results.txt)    |
+
+  Scenario: An export in progress is reported before a running analysis
+    Given an analysis of "Album A" with 3 files has finished
+    And run::begin_export has returned a snapshot and its export guard
+    And an analysis of "Album B" is running
+    When run::begin_export is called again
+    Then it fails with error "INTERNAL", not "ANALYSIS_RUNNING"
 
   Scenario: Replacing an existing file
     Given an analysis of "Album A" with 2 files has finished
@@ -247,7 +327,27 @@ Feature: Export the results to CSV (H2)
     Then "results.csv" holds exactly the new document, with nothing of the old file left at its end
     And the output folder holds no other new file
 
+  Scenario: The temporary file never overwrites an existing file
+    The first temporary name of an export is "results.csv.<pid>-0.tmp", <pid>
+    being the test process id (csv-export.md section 6).
+    Given an analysis of "Album A" with 2 files has finished
+    And the output folder has a file "results.csv.<pid>-0.tmp" with known content
+    When I export and choose "results.csv"
+    Then the export resolves with rows 2
+    And "results.csv" holds exactly the new document
+    And "results.csv.<pid>-0.tmp" keeps its known content
+    And the output folder holds no other new file
+
+  Scenario: All temporary names taken
+    Given an analysis of "Album A" with 2 files has finished
+    And the output folder has the files "results.csv.<pid>-0.tmp" to "results.csv.<pid>-15.tmp", each with known content
+    When I export and choose "results.csv"
+    Then it fails with error "EXPORT_FAILED"
+    And no "results.csv" is created and the 16 files keep their content
+
   Scenario Outline: A file that cannot be written is a typed error
+    The read-only and folder rows fail at the rename, after the temporary
+    file was written: it must be deleted (csv-export.md section 6, Cleanup).
     Given an analysis of "Album A" with 2 files has finished
     And <setup>
     When I export and choose "<dest>"
@@ -270,7 +370,7 @@ Feature: Export the results to CSV (H2)
 
   @RNF-05
   Scenario: Exporting never touches the audio files
-    Given a folder "Album A" with 2 FLAC files and the lossy fixture "mp3_320_lp20k5.mp3"
+    Given a test folder "Album A" holding "full_band.flac" and "lp16k.flac" (fixtures full_band and lp16k of specs/detection/fixtures.md) and "mp3_320_lp20k5.mp3" (fixture mp3_320_lp20k5 of specs/detection/lossy-fixtures.md)
     And an analysis of "Album A" has finished
     When I export and choose "Album A\results.csv", inside the analysed folder
     Then the size, modification time and content hash of the 3 audio files are unchanged
@@ -278,14 +378,16 @@ Feature: Export the results to CSV (H2)
 
   @RNF-05
   Scenario: Exporting reads no audio file
-    Given an analysis of "Album A" with "lp16k.flac" has finished
+    Given a test folder "Album A" holding "lp16k.flac" (fixture lp16k of specs/detection/fixtures.md)
+    And an analysis of "Album A" has finished and its trackDone event was recorded
     And "lp16k.flac" was deleted after the analysis
     When I export
-    Then the CSV has the "lp16k.flac" record with verdict "fake", as analysed
+    Then the export resolves with rows 1
+    And the CSV has the "lp16k.flac" record whose verdict, cutoff_hz and size_bytes fields equal the recorded trackDone values
 
   @RNF-09
   Scenario: Unicode names survive a round-trip
-    Given a folder "Álbum ″Ñandú″" with the files "01 – Canción ‘x’.flac", "02 «Ça va» 🎵.flac" and "03 Live, 1999.flac"
+    Given a test folder "Álbum ″Ñandú″" with the files "01 – Canción ‘x’.flac", "02 «Ça va» 🎵.flac" and "03 Live, 1999.flac", each holding the samples of full_band (specs/detection/fixtures.md)
     And an analysis of "Álbum ″Ñandú″" has finished
     When I export and choose "résultats ″1″.csv"
     And I read the file back as UTF-8 with an RFC 4180 reader
@@ -293,10 +395,14 @@ Feature: Export the results to CSV (H2)
     And each folder field equals the analysed folder path and each path field the analysed file path, code point for code point
 
   Scenario: Large result sets
-    Given 10 000 stubbed TrackAnalysis values
+    Structure only: no automated test asserts wall-clock time. The 1-second
+    budget is checked by hand in a release build (ui/export-csv.md, M7;
+    csv-export.md section 7, criterion 5).
+    Given 10 000 stubbed TrackAnalysis values with distinct paths
     When they are exported to a file in the output folder
-    Then the export finishes in under 1 second in the test profile
-    And the file has the header and 10 000 records
+    Then the export resolves with rows 10000
+    And the file reads back as the header and exactly 10 000 records of 21 fields
+    And the path fields are in the order given
 
   # --- Interface (stubbed API client; specs/ui/export-csv.md) -------------------
 
@@ -354,3 +460,20 @@ Feature: Export the results to CSV (H2)
     Given the status bar shows "· Saved 3 rows to a.csv"
     When I start an analysis of "Album B"
     Then the status bar shows "Scanning…" without the notice
+
+  Scenario Outline: A start that fails before Scanning replaces the notice with its error
+    Given an analysis has finished with 3 tracks and the status bar ends with "· Saved 3 rows to a.csv"
+    When I open the folder "Docs" and start_analysis rejects with "<code>" before any event
+    Then the status bar shows the error text of "<code>" (main-screen.md, state Error) and not "Saved 3 rows to a.csv"
+    And the table keeps its 3 rows and the toolbar button "Export CSV" is enabled
+
+    Examples:
+      | code              |
+      | NO_AUDIO_FOUND    |
+      | FOLDER_UNREADABLE |
+      | NOT_A_FOLDER      |
+
+  Scenario: A drop of files only keeps the notice
+    Given an analysis has finished with 3 tracks and the status bar ends with "· Saved 3 rows to a.csv"
+    When I drop two files and start_analysis rejects with "NOT_A_FOLDER" for both
+    Then the status bar still ends with "· Saved 3 rows to a.csv"
