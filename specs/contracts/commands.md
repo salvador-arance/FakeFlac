@@ -1,13 +1,13 @@
 ---
 id: SPEC-CONTRACT-H1
-requirements: [RF-01, RF-02, RF-05, RF-06, RF-07, RF-09, RF-10, RF-14, RF-15]
+requirements: [RF-01, RF-02, RF-05, RF-06, RF-07, RF-09, RF-10, RF-14, RF-15, RF-16]
 status: proposed
-version: 5
+version: 6
 ---
 
 # Backend ↔ frontend contract (H1, with the H2 lossy formats, CSV export and album summaries)
 
-> The commands, events and types the frontend can use. They are defined once in Rust and the TypeScript bindings are **generated** with `tauri-specta` (S3, ADR-0003); this document is the readable reference. Field names are camelCase on the TS side. Settings and cache commands arrive later in H2. Version 3 adds MP3 and M4A files (RF-14 H2) and the source-bitrate estimate (RF-15); changes are listed in "Lossy formats (version 3)". Version 4 adds `export_csv` (RF-09); changes are listed in "CSV export (version 4)". Version 5 adds the album summary to every `trackDone` event (RF-10); changes are listed in "Album summary (version 5)".
+> The commands, events and types the frontend can use. They are defined once in Rust and the TypeScript bindings are **generated** with `tauri-specta` (S3, ADR-0003); this document is the readable reference. Field names are camelCase on the TS side. Settings and cache commands arrive later in H2. Version 3 adds MP3 and M4A files (RF-14 H2) and the source-bitrate estimate (RF-15); changes are listed in "Lossy formats (version 3)". Version 4 adds `export_csv` (RF-09); changes are listed in "CSV export (version 4)". Version 5 adds the album summary to every `trackDone` event (RF-10); changes are listed in "Album summary (version 5)". Version 6 adds the reason `streamingSampleRate` (RF-16, detection v7, ADR-0043); changes are listed in "Streaming sample rate (version 6)".
 
 ## Commands
 
@@ -59,6 +59,7 @@ type SuspicionReason =
   | 'lowHighFrequencyContent' | 'gradualRolloff' | 'ambiguousCutoff'
   | 'highBandGaps'           // algorithm_version 2 (lossless files)
   | 'cutoffBelowDeclared'    // algorithm_version 5 (lossy files: cutoff lower than expected for the declared bitrate)
+  | 'streamingSampleRate'    // version 6, algorithm_version 7 (lossy files: full band at a streaming sample rate, 48 kHz; RF-16)
 
 type TrackInfo = {
   path: string; folder: string; format: AudioFormat
@@ -81,10 +82,10 @@ type TrackAnalysis = {
   info: TrackInfo
   verdict: Verdict
   cutoff: CutoffEstimate | null
-  estimatedSourceBitrateKbps: number | null          // RF-15: lossy codecs only (specs/detection/lossy-source.md section 5)
+  estimatedSourceBitrateKbps: number | null          // RF-15: lossy codecs only (specs/detection/lossy-source.md section 5); null with streamingSampleRate (version 6)
   reasons: SuspicionReason[]
   error: TrackError | null
-  algorithmVersion: number                           // 6 with the default DetectionParams (detection v6: lossless rules of rules.md, lossy rules of lossy-source.md)
+  algorithmVersion: number                           // 7 with the default DetectionParams (detection v7: lossless rules of rules.md, lossy rules of lossy-source.md)
 }
 
 type AnalysisSummary = {
@@ -134,6 +135,8 @@ Detection v3 (ADR-0038) does not change these types: a track that the full-band 
 Detection v4 (ADR-0039) does not change them either. It adds the optional field `full_band.max_lossy_step_db` to `DetectionParams` (internal to the backend; values: `specs/detection/detection-params.v4.toml`) and narrows `FullBand`, so with the defaults a guarded track is always `suspicious` with `highBandGaps`. The only visible change is `algorithmVersion` = 4, which invalidates cached results (ADR-0008).
 
 Detection v6 (ADR-0042) does not change them either. It adds the optional section `edge` to `DetectionParams` (internal to the backend; values: `specs/detection/detection-params.v6.toml`), which can only turn a lossless `fake` into `suspicious` with `ambiguousCutoff` (or `highBandGaps`). The only visible change is `algorithmVersion` = 6 with the defaults, which invalidates cached results (ADR-0008); lossy results equal version 5's.
+
+Detection v7 (RF-16, ADR-0043) **does** change them: it adds the reason `streamingSampleRate` (contract version 6, "Streaming sample rate (version 6)").
 
 ## Lossy formats (version 3)
 
@@ -230,6 +233,19 @@ Version 5 (RF-10; rule: `specs/detection/album-summary.md`, unchanged; UI: `spec
 ## Sort and filter (RF-08): no change
 
 RF-08 (UI: `specs/ui/sort-filter.md`; scenarios: `specs/features/sort-filter.feature`) sorts and filters the results table in the frontend, over the rows the store already holds. **The contract does not change**: version 5 stays, no command, event, type or `AppError` code is added or changed, and `just gen` produces the same bindings (`just gen-check` passes). `export_csv` keeps exporting every track of the latest run in scan order, whatever the table's sort and filters ("CSV export (version 4)"); exporting only the shown rows would be a new contract version (sort-filter.md Q12).
+
+## Streaming sample rate (version 6)
+
+Version 6 (RF-16; ADR-0043; rule L6a of `specs/detection/lossy-source.md` section 11, detection v7, `detection-params.v7.toml`; UI: `specs/ui/lossy-formats.md`, "Streaming sample rate (RF-16)"; scenarios: `specs/features/detection-streaming-source.feature`):
+
+- **New reason** `streamingSampleRate` (lossy files only: `mp3` and `aac` codecs). The track's decoded sample rate is a streaming rate (48 kHz with the defaults) and its content reaches near full band: the signature of a rip of a full-band lossy streaming source such as Opus from YouTube, but also of a genuine 48 kHz release. Such a track is always `suspicious` with exactly `reasons: ['streamingSampleRate']`; the reason never appears on a `real`, `fake` or `error` track, nor together with another reason, and never on a lossless (`pcm`, `flac`, `alac`) or Opus track.
+- **`estimatedSourceBitrateKbps`** is `null` for a track with `streamingSampleRate` (lossy-source.md section 11.2, Q19), in addition to the cases of version 3.
+- **`algorithmVersion`** is 7 with the defaults (cached results of version 6 are recomputed, ADR-0008). For WAV, FLAC and ALAC the verdicts, reasons and cutoffs equal version 6's; for MP3 and AAC they equal version 6's except tracks that move from `real` to `suspicious` with the new reason.
+- **CSV export** (csv-export.md): the `reasons` column may now hold `streamingSampleRate`. The column's encoding does not change, so `csv_format_version` stays 1 (lossy-source.md Q23).
+- **Unchanged:** the commands and their inputs and outputs, events, `AppError` codes, `TrackInfo` (the sample rate the rule reads is the existing `sampleRate`), `AlbumSummary`, `AlbumUpdate` (a flagged track counts as `suspicious` in its album, like any other), `AnalysisSummary`, `Spectrogram`, `ExportResult`. The new `DetectionParams` section `[lossy.streaming]` is internal to the backend.
+- **Layers.** The core's `SuspicionReason` gains the variant `StreamingSampleRate`; `src-tauri/src/dto.rs` maps it like the others (serialised `streamingSampleRate`); the CSV serialiser (`fakeflac-export`) and the calibration tool write the same identifier. No new type, port or dependency.
+
+`just gen` produces new bindings (one more `SuspicionReason` member); `just gen-check` must pass. The API client does not change. The frontend needs the text `reason.streamingSampleRate` (`ui/lossy-formats.md`).
 
 ## Supported files (RF-14)
 

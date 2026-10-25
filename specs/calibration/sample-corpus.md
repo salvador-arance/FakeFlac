@@ -84,7 +84,7 @@ Track 5 (`low_hf`, bandwidth extent $\le 16\text{ kHz}$) transcoded to `fx128` (
 
 ## 4. Candidate parameters
 
-`candidate.toml` = `detection-params.v2.toml` with `algorithm_version` set to the next free version (1 + the highest `algorithm_version` in `specs/detection/`, 7 today; never 3, 4, 5 or 6, which are detection v3, v4, v5 and v6) and `verdict.gap_fake_db = 4.0`. Only rule values change, so it shares v2's fingerprint. With it, the 6 `fxweak` entries (`G` ≈ 5 dB) become `Fake`, and no negative changes (`full_band` and `hf_bursts` have `G < 4` because they are `Real` under v2; `low_hf` is decided by rule V2 first). The fake row becomes 0 / 0 / 25 / 0, and the verdict-change table against v2 has exactly 6 changes, all `Suspicious → Fake` on positives.
+`candidate.toml` = `detection-params.v2.toml` with `algorithm_version` set to the next free version (1 + the highest `algorithm_version` in `specs/detection/`, 8 today; never 3, 4, 5, 6 or 7, which are detection v3, v4, v5, v6 and v7) and `verdict.gap_fake_db = 4.0`. Only rule values change, so it shares v2's fingerprint. With it, the 6 `fxweak` entries (`G` ≈ 5 dB) become `Fake`, and no negative changes (`full_band` and `hf_bursts` have `G < 4` because they are `Real` under v2; `low_hf` is decided by rule V2 first). The fake row becomes 0 / 0 / 25 / 0, and the verdict-change table against v2 has exactly 6 changes, all `Suspicious → Fake` on positives.
 
 ### v3 side by side (detection v3, ADR-0038)
 
@@ -108,6 +108,6 @@ With `--params detection-params.v2.toml --params detection-params.v3.toml --para
 
 Grid: baseline `detection-params.v2.toml`, `must_catch = ["fx128"]`, default weights, `[values] "verdict.gap_fake_db" = [4.0, 6.0]`.
 
-- With `holdout_fraction = 0.0` (everything `tune`): the baseline costs `0.5 · 1 + 0.1 · 6 = 1.1` (1 Suspicious negative, 6 Suspicious positives; `Error` rows left out), and the point `gap_fake_db = 4.0` costs `0.5`. Proposal: `detection-params.v7.toml` with `algorithm_version = 7` (the next free version, evaluation.md section 7) and `gap_fake_db = 4.0`, the rest of the baseline text unchanged.
+- With `holdout_fraction = 0.0` (everything `tune`): the baseline costs `0.5 · 1 + 0.1 · 6 = 1.1` (1 Suspicious negative, 6 Suspicious positives; `Error` rows left out), and the point `gap_fake_db = 4.0` costs `0.5`. Proposal: `detection-params.v8.toml` with `algorithm_version = 8` (the next free version, evaluation.md section 7) and `gap_fake_db = 4.0`, the rest of the baseline text unchanged.
 - From the v4 baseline with `"full_band.max_lossy_step_db" = [3.0, 10.0, 12.0]` and `holdout_fraction = 0.0`: 12.0 breaks `max_lossy_step_db ≤ step_fake_db` and is skipped. The baseline costs 1.1, as v2 (same verdicts). With 10.0 the `fxv0` step (≈ 6 dB) no longer removes the guard, the 6 `fxv0` entries become `Suspicious`, and the point costs `1.1 + 0.1 · 6 = 1.7`. Output: "no change proposed", no file written.
 - With `holdout_fraction = 1.0` (everything `holdout`): there is no tune data, every point ties with the baseline, and the output is "no change proposed" with no file written. This shows that holdout rows are never used to choose.

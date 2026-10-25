@@ -13,7 +13,10 @@ Feature: Verdict for lossless files (WAV, FLAC)
   is "suspicious" with v6 and "fake" with v4 and v5. So in the two scenarios
   that analyse every synthetic signal, "DetectionParams v4" means the
   parameters of specs/detection/detection-params.v5.toml (the defaults without
-  [edge]), not the defaults (rules.md Q22 (b)).
+  [edge]), not the defaults (rules.md Q22 (b)). Since detection v7 the
+  defaults are detection-params.v7.toml, which adds [lossy.streaming]; no
+  lossless rule reads it, so every lossless result is the same as with v6
+  (lossy-source.md section 11.4).
   Changed for v4 (the test author updates the derived tests listed in ADR-0039,
   "Consequences"): sfb21_gaps and shelf19k5_bursts are fake again (their deepest
   step lies in the lossy range, so they are not full band); only
@@ -221,11 +224,15 @@ Feature: Verdict for lossless files (WAV, FLAC)
     defaults are v5, which keeps every lossless value of v4 and adds [lossy].
     Changed for detection v6 (specs/detection/rules.md, Q22 (b)): the defaults
     are v6, which keeps every section of v5 and adds [edge].
+    Changed for detection v7 (specs/detection/lossy-source.md, Q25 (b); RF-16):
+    the defaults are v7, which keeps every section of v6 and adds
+    [lossy.streaming], read by lossy files only.
     Given the default DetectionParams of the code
-    Then they are equal to specs/detection/detection-params.v6.toml
-    And their sections other than [edge] are equal to those of specs/detection/detection-params.v5.toml
+    Then they are equal to specs/detection/detection-params.v7.toml
+    And their sections other than [lossy.streaming] are equal to those of specs/detection/detection-params.v6.toml
+    And their sections other than [lossy.streaming] and [edge] are equal to those of specs/detection/detection-params.v5.toml
     And their lossless sections other than [edge] are equal to those of specs/detection/detection-params.v4.toml
-    And every TrackAnalysis carries algorithmVersion 6
+    And every TrackAnalysis carries algorithmVersion 7
 
   @RF-03 @RNF-04
   Scenario: Stream without a declared length

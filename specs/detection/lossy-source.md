@@ -1,22 +1,43 @@
 ---
 id: SPEC-DETECTION-LOSSY
-requirements: [RF-14, RF-15]
+requirements: [RF-14, RF-15, RF-16]
 status: proposed
-algorithm_version: 5
-params: specs/detection/detection-params.v5.toml
-lossless_rules: specs/detection/rules.md (v4 rules and values, unchanged in v5)
-adr: [ADR-0040, ADR-0041]
+algorithm_version: 7
+params: specs/detection/detection-params.v7.toml
+lossless_rules: specs/detection/rules.md (v4 rules and values, unchanged in v5; v6 adds [edge]; unchanged in v7)
+adr: [ADR-0040, ADR-0041, ADR-0043]
+history: algorithm_version 5 (detection-params.v5.toml, sections 1-10); algorithm_version 7 (detection-params.v7.toml, RF-16, adds rule L6a, section 11)
 ---
 
-# Detection rules v5: lossy files (MP3, M4A) and their source bitrate
+# Detection rules v5 and v7: lossy files (MP3, M4A) and their source bitrate
 
 > For an MP3 or an AAC file in M4A: read what the stream **declares** (codec, bitrate, bitrate mode, the LAME tag's low-pass), measure where its content **ends** with the band spectra and measurements of `rules.md` (unchanged), compare that edge with the **expected cutoff** of an honest encode at the declared bitrate, and decide **real / suspicious / fake** with an **estimated source bitrate**. The expected cutoffs are a per-codec table in `DetectionParams` (`[lossy.cutoffs]`), and every threshold is a named parameter of `detection-params.v5.toml`; the code never hard-codes them (S4, ADR-0011). Design decision: ADR-0041. Decoding (RF-14 H2): ADR-0040.
 
 The verdict answers ADR-0031's question for lossy files: *is the content consistent with the declared quality?* A 320 kbps MP3 whose content stops at 17 kHz is `Fake`, with an estimated source of ≈128 kbps (planning section 2.5, `docs/architecture/backend.md` section 9).
 
+**What changes in v7 (RF-16).** One rule, L6a (section 4), between L5 and L6, and an optional section `[lossy.streaming]` with five parameters (section 11). A lossy MP3 or AAC file that L6 would call `Real` becomes `Suspicious` with the new reason `streamingSampleRate` and no estimate when its decoded sample rate is a streaming rate (48 kHz) and its cutoff is near full band: the signature of a rip of a full-band lossy streaming source, typically Opus from YouTube. Against v6, for the same spectra, the only possible verdict change is `Real → Suspicious` on lossy files; lossless files are unchanged. Design decision: ADR-0043 (proposed, written in this PR). Sections 1–10 describe v5 and stay valid under v7 except where they point to section 11.
+
 **Names used here.** `b` is the declared bitrate in kbps (section 2), `fc` the measured content edge, `c_exp` the expected cutoff, `s` the shortfall `c_exp − fc` (section 3). `D`, `fs`, `fe`, `H`, `G` are the measurements of `rules.md` section 2. "Lossy codec" means `mp3`, `aac` or `opus`; "lossless codec" means `pcm` (WAV), `flac` or `alac` (ALAC in M4A). **Opus** is specified only as far as the rules go: its decoder is pending the ADR-0030 spike, and every Opus scenario lives in `specs/pending/opus.feature`, outside `specs/features/` (Q9).
 
-## Open questions for G1
+## Open questions for G1 (v7, RF-16)
+
+The owner decided the approach (2026-10-25): the cheap, deterministic 48 kHz indicator, `Suspicious` only, every threshold as data, MDCT fingerprints left as future work. The questions below are the details left open; each has a default, and the spec is written with the defaults.
+
+| # | Question | Status |
+|---|---|---|
+| Q18 | **Name of the new reason.** `streamingSampleRate` describes the evidence (a streaming sample rate with a full-band edge), as the existing reasons describe theirs (`cutoffBelowDeclared`, `highBandGaps`, `gradualRolloff`). The alternative `possibleStreamingSource` names the conclusion instead | Open. Default: `streamingSampleRate` |
+| Q19 | **Estimate of an L6a track.** `null` (shown "—"): the spectrum agrees with the declared bitrate, so it says nothing about the source's bitrate, and an Opus 128–160 kbps source has no equivalent row in the MP3 or AAC table. Alternatives: `b` (shows "320 kbps" next to `Suspicious`, which reads as "the source was 320") or `min(b, r*)` as L3–L5 (gives ≈256 kbps for the motivating case, `fc` = 20050 Hz being nearest the 19700 Hz row: a number with no meaning here) | Open. Default: `null` |
+| Q20 | **Where the parameters live.** A subsection `[lossy.streaming]` of `[lossy]` (optional; absent in v5 and v6) rather than a top-level `[streaming]`: the rule only exists where the lossy rules run, a top-level section without `[lossy]` would mean nothing, and the calibration tool already rejects `lossy.*` grid keys (calibration/lossy.md C10) | Open. Default: `[lossy.streaming]` |
+| Q21 | **Starting values** (section 11.3), indicative and not measured: `sample_rates_hz = [48000]`, `codecs = ["mp3", "aac"]`, `min_declared_bitrate_kbps = 192`, `min_cutoff_hz = 19500`, `max_cutoff_hz = 21000`. In particular the **upper bound**: 21000 Hz only clears encodes without a low-pass (content to Nyquist); 20300 Hz would also clear honest LAME 320 encodes of 48 kHz masters (low-pass about 20.5 kHz) by using the about 500 Hz between Opus's full-band edge (about 20 kHz) and LAME's 320 kbps low-pass, but that margin is not verified here and the reported cutoff moves in 100 Hz bands. Acceptance K6 reports the `fc` distributions that decide it in a later version. **Consequence of the default, by design:** with 21000, honest 48 kHz LAME 320 encodes (low-pass about 20.5 kHz) and honest 48 kHz AAC 256 encodes of full-band masters (edge about 19.5–20 kHz) fall inside the window and are flagged `Suspicious` with `streamingSampleRate` (section 11.6; K5 counts them); 20300 would clear the LAME 320 ones but not the AAC 256 ones, and risks missing Opus rips whose edge lands in a higher band | **G1 decision (owner): 21000 or 20300.** Default: as written (21000) |
+| Q22 | **Gate values** K3 (generated `opus128_cbr320` caught ≥ 90 % of detectable rows) and K4 (confirmed lossy fakes at 48 kHz, strong labels, caught ≥ 90 %, applied only from **N = 10** such labels; below that K4 is reported as n/a and does not block). They are targets, not measurements, as Q12 for v5; N is indicative too (a 90 % rate over fewer than about 10 files is one file's noise) | Open. Default: as written (90 %, 90 %, N = 10) |
+| Q23 | **Contract and CSV.** A new `SuspicionReason` value changes the generated bindings, so the contract becomes **version 6** (`specs/contracts/commands.md`, "Streaming sample rate (version 6)"). The CSV's column 12 gains one possible identifier, but its encoding (identifiers joined with `;`) does not change, so `csv_format_version` **stays 1** (csv-export.md section 3). Agree? | Open. Default: contract 6, CSV 1 |
+| Q24 | **Calibration report additions** (calibration/lossy.md section 6.8): a lossy verdict-change table between params files, a `streaming` count column in the per-group table, per-sample-rate rows for the negative groups and `fc` percentiles per group. Without them, K2, K5 and K6 cannot be read from `summary.md` (the existing verdict-change table covers lossless rows only, lossy.md section 6.1) | Open. Default: yes |
+| Q25 | **Changes to approved specs and protected tests** in this PR: (a) `rules.md` section 4 and its introduction: the defaults and `algorithmVersion` become v7/7 and the next free `algorithm_version` becomes **8**; no lossless rule or value changes; `detection-edge-step.feature`'s header says that the v7 defaults give v6's lossless results and that a step checking `algorithmVersion 6` uses the v6 file; (b) `detection-lossless.feature`: "Parameters come from the versioned file" names `detection-params.v7.toml` and `algorithmVersion 7`; (c) `detection-lossy.feature`: its header says that "DetectionParams v5" means a params set **without** `[lossy.streaming]` (`detection-params.v5.toml` or `.v6.toml`), not the v7 defaults, because the row "48 kHz MP3 from Opus (known limitation)" and the fixture `mp3_320_48k_lp20k` are `suspicious` with v7; (d) `decode-lossy.feature`: header and "A lossy row has the same fields as a lossless row" expect `algorithmVersion 7`; (e) `calibration.feature`: the proposals of "The grid search proposes new parameters from tune data" and "The full-band guard can be searched from a v3 baseline" are `detection-params.v8.toml` / `algorithm_version 8`; `calibration/evaluation.md` section 7 and `calibration/sample-corpus.md` sections 4–5: next free version 8; `calibration/evaluation.md` section 9: the v7 file belongs to the v2 rule family and its `[lossy.streaming]` checks fail with exit 2 like the others; (f) `contracts/commands.md` version 6 (section "Streaming sample rate (version 6)"); `contracts/csv-export.md` section 3 (a note, no format change); (g) `ui/lossy-formats.md` (the reason text); (h) `calibration/lossy.md` section 6.8 (Q24), and `calibration-lossy.feature`'s header, which says that "Lossy table per group" ("contains the rows") stays valid unchanged: its rows keep their counts, the new `@ <bucket>` sub-rows are extra rows (only `@ 44100`, every lossy fixture of the variant being 44.1 kHz), the step compares only the columns it names, and the run's v2 and v5 files have no `[lossy.streaming]`; (i) `lossy-fixtures.md`: three new fixtures and a v7 truth column note; (j) the protected tests that change in the test stage, as a declared consequence: `crates/fakeflac-core/tests/detect_lossy.rs` (its `v5()` returns the defaults; it must load a params set without `[lossy.streaming]`, or the 48 kHz rows, `rf15_known_limitation_a_48k_mp3_from_opus_is_real` included, fail), `crates/fakeflac-audio/tests/detection_lossy.rs` (`rf15_the_default_params_give_the_same_analysis_as_the_v5_file` expects `algorithm_version` 6), `crates/fakeflac-audio/tests/detection_lossless.rs` and any other test that asserts the defaults equal `detection-params.v6.toml` or carry `algorithmVersion` 6 (for example `crates/fakeflac-core/tests/{detect_rules,params_lossy}.rs`, `crates/fakeflac-audio/tests/params_edge.rs`, `src-tauri/tests/run_analysis_lossy_v5.rs`), the calibration tests that expect the next free version 7 (`tools/fakeflac-calibrate/tests/{grid,sample_corpus}.rs` and their common module), and the lossy calibration tests that compare the whole per-group table or `summary.md` of the lossy sample corpus as exact text (`tools/fakeflac-calibrate/tests/lossy_acceptance.rs` if it does; they gain the 6.8 columns and sub-rows, no other figure changes). The test author lists the exact set in the `test(RF-16)` commit; assertions on other values do not change. Agree? | Open. Default: yes to all |
+| Q26 | **ADR.** Every detection version so far has its ADR (v2 ADR-0035, v3 ADR-0038, v4 ADR-0039, v5 ADR-0041, v6 ADR-0042). Using the **sample rate as evidence** about a lossy file's history is a new kind of signal (not spectral, not from the stream's declared quality) and a new reason in the contract. So it has its ADR: `docs/adr/0043-detection-v7-streaming-sample-rate-as-evidence.md` (ADR-0043, status proposed), written in this spec PR and approved with it at G1 | Open. Default: ADR-0043 approved with this spec |
+| Q27 | **Priority and milestone** of RF-16: `medium`, H2 (an indicator that only produces `Suspicious`; RF-15 stays the main lossy rule) | Open. Default: medium, H2 |
+| Q28 | **The reason's text** (`ui/lossy-formats.md`): it names "48 kHz" and "YouTube" literally, so a later params version that adds another rate changes the text too (a spec change anyway). Spanish is not added to the catalogue now: the Spanish catalogue only overrides the verdicts until RF-13; a proposed Spanish text is recorded for RF-13 | Open. Default: as written |
+
+## Open questions for G1 (v5)
 
 | # | Question | Status |
 |---|---|---|
@@ -51,7 +72,7 @@ The verdict answers ADR-0031's question for lossy files: *is the content consist
 
 The cost: a change to a lossy value is a new version for lossless results too, so cached lossless results are recomputed once. Accepted.
 
-**Version numbering.** `algorithm_version` numbers are allocated by the files in `specs/detection/` (rules.md section 4). This spec allocates **5**. With `detection-params.v5.toml` in the repository, the **next free number is 6**: `/calibrate` proposals and the sample corpus's `candidate.toml` take 6 (Q13 (a), (c), (d)); the tool and its tests already compute it from the files (`next_free_version()`), so nothing in the code allocates it by hand. A later change to either part (lossless or lossy) takes 6, and both `rules.md` and this spec then cite the file that introduced it. **v5 becomes the default**: `DetectionParams::default()` equals `detection-params.v5.toml`. **Since detection v6** (rules.md, ADR-0042), which took 6, the default is `detection-params.v6.toml`: its `[lossy]` section and every value these rules read are v5's, so lossy files get exactly their v5 verdicts, reasons and estimates, with `algorithm_version` 6; the next free number is **7**.
+**Version numbering.** `algorithm_version` numbers are allocated by the files in `specs/detection/` (rules.md section 4). This spec allocates **5**. With `detection-params.v5.toml` in the repository, the **next free number is 6**: `/calibrate` proposals and the sample corpus's `candidate.toml` take 6 (Q13 (a), (c), (d)); the tool and its tests already compute it from the files (`next_free_version()`), so nothing in the code allocates it by hand. A later change to either part (lossless or lossy) takes 6, and both `rules.md` and this spec then cite the file that introduced it. **v5 becomes the default**: `DetectionParams::default()` equals `detection-params.v5.toml`. **Since detection v6** (rules.md, ADR-0042), which took 6, the default is `detection-params.v6.toml`: its `[lossy]` section and every value these rules read are v5's, so lossy files get exactly their v5 verdicts, reasons and estimates, with `algorithm_version` 6; the next free number is **7**. **Since detection v7** (section 11, RF-16), which takes 7, the default is `detection-params.v7.toml` (v6 plus `[lossy.streaming]`); lossy files get their v6 results except where rule L6a fires, lossless files get exactly their v6 results, and the next free number is **8**.
 
 **v2, v3 and v4 stay loadable.** `[lossy]` is optional. Without it, lossless files get exactly their v2/v3/v4 verdicts (nothing in `rules.md` reads `[lossy]`), and lossy files are `Error(unsupportedFormat)` (Q8).
 
@@ -128,6 +149,7 @@ For a track whose `codec` is lossy. Rules are evaluated in the order of the tabl
 | L3 | `s` defined, `s ≥ fake_shortfall_hz` and `D ≥ fake_min_step_db` | `Fake` | — | section 5 |
 | L4 | `s` defined, `s ≥ suspicious_shortfall_hz` and `D ≥ step_suspicious_db` | `Suspicious` | `cutoffBelowDeclared` | section 5 |
 | L5 | `s` defined and `s ≥ suspicious_shortfall_hz` | `Suspicious` | `gradualRolloff` | section 5 |
+| L6a | (v7, RF-16) The params have `[lossy.streaming]`, and `StreamingRate` holds (section 11.2): codec, decoded sample rate, declared bitrate and `fc` all match that section | `Suspicious` | `streamingSampleRate` | null |
 | L6 | Otherwise | `Real` | — | `b` |
 
 A silent track is decided after L1b and before L2 (section 3), with the same result as L2 but no cutoff. L0 depends only on the codec and the params, never on the spectra. It comes **after** L1a for every lossy format, MP3 included: an M4A has to be probed to know whether it holds AAC or ALAC, so both formats follow one order, and a broken file keeps the more informative `corruptStream` (or `unreadable`, or the `unsupportedFormat` of an undecoded codec) whatever the params. It comes **before** L1b: with params that cannot judge the codec, a short or bitrate-less lossy file is `unsupportedFormat`, not `tooShort` or `corruptStream`. In v5 the app never meets an Opus file, because the scanner skips `.opus` (Q9); the row exists so that the core has a defined answer.
@@ -135,16 +157,18 @@ A silent track is decided after L1b and before L2 (section 3), with the same res
 Consequences (they rely on the checks of section 6):
 - **`Fake` always rests on a clear step:** L3 needs `D ≥ fake_min_step_db ≥ step_suspicious_db`, so `fc = fs`. A track whose content fades without a step (`D < step_suspicious_db`, `fc = fe`) is at most `Suspicious` (L5), whatever its shortfall, in the spirit of planning section 2.5 ("never `Fake` only because of the spectrum shape").
 - **L4 covers both a moderate shortfall with a clear step and a large shortfall with a step that is clear but not deep** (`step_suspicious_db ≤ D < fake_min_step_db`).
-- **Content above the expected cutoff is never held against a file** (`s < 0`): it is `Real`.
-- **A declared bitrate below the table** (for example a 24 kbps stream) has no `c_exp`, so the file is `Real` unless L2 fires.
+- **Content above the expected cutoff is never held against a file** (`s < 0`): it is `Real` (since v7, `Suspicious` by L6a when its sample rate and cutoff match `[lossy.streaming]`; that is evidence about the sample rate, not a shortfall).
+- **A declared bitrate below the table** (for example a 24 kbps stream) has no `c_exp`, so the file is `Real` unless L2 (or, since v7, L6a) fires.
 - **The lossless rules never apply to a lossy codec**, and the lossy rules never apply to a lossless codec: an honest MP3 has a low-pass by design, so V4 of rules.md would call every one `Fake`.
 - **No `FullBand`, gap or lossy-range logic.** `G`, `U`, `B` and the range `[lossy_min_cutoff_hz, fake_max_cutoff_hz)` of rules.md are not used here (Q7).
+- **L6a (v7) only splits L6.** It is reached only when L1a–L5 did not match, so it never overrides an `Error`, `Fake` or `Suspicious` of an earlier rule and never produces `Fake`. With a params file without `[lossy.streaming]` (v5, v6) it never fires and every v5 consequence above holds unchanged (section 11).
 
 **Reported cutoff.** `CutoffEstimate` exactly as in rules.md section 2 ("Reported cutoff"), so its `frequencyHz` equals `fc`. It is `null` only for `Error` and silent tracks.
 
 ## 5. Estimated source bitrate (`estimatedSourceBitrateKbps`)
 
 - **Lossless codecs, `Error`, silent tracks and L2:** `null`. Nothing reliable can be said.
+- **L6a (v7):** `null` (section 11.2, Q19). The content agrees with the declared bitrate, so it says nothing about the source's bitrate.
 - **L6 (`Real`):** the declared bitrate `b` (Q5): the content is consistent with it.
 - **L3, L4, L5:** `min(b, r*)`, where `r*` is the `bitrate_kbps` of the row of `lossy.cutoffs.<codec>` whose `cutoff_hz` is **nearest to `fc`** (on a tie, the lower bitrate). An `fc` below the first row gives the first row's bitrate, so the value reads as "at most".
 
@@ -174,20 +198,23 @@ Examples with the v5 table: a 320 kbps MP3 with `fc` = 17000 Hz → `Fake`, esti
 
 **Order.** `validate()` runs the checks of rules.md section 4 first, then these in the order listed, codec by codec in the order `mp3`, `aac`, `opus`, and reports the **first** check that fails (so swapping the 112 and 128 kbps rows of `mp3`, which breaks both row checks, is reported as `lossy.cutoffs.mp3: bitrate_kbps increases`). A comparison with a NaN operand does not hold, so NaN is rejected. Every loader calls `validate()` (the calibration tool exits 2, evaluation.md section 9); a test checks that the defaults are valid.
 
-**Invariants.** Deterministic; read-only; `algorithm_version` of every `TrackAnalysis` = that of the params (5 with v5; 6 with the defaults since detection v6); the defaults equal `detection-params.v6.toml` since detection v6, whose `[lossy]` section is v5's (a test checks it, rules.md section 4); `[input]` and `[fft]` are unchanged, so the spectra of lossless files are the same as with v2–v4 (calibration/lossy.md section 5 on `EXTRACTION_VERSION`).
+**v7.** The optional subsection `[lossy.streaming]` has its own shape and value checks, run after the ones above (section 11.3).
+
+**Invariants.** Deterministic; read-only; `algorithm_version` of every `TrackAnalysis` = that of the params (5 with v5; 6 with v6; 7 with the defaults since detection v7); the defaults equal `detection-params.v7.toml` since detection v7, whose `[lossy]` section is v5's plus `[lossy.streaming]` (a test checks it, rules.md section 4); `[input]` and `[fft]` are unchanged, so the spectra of lossless files are the same as with v2–v4 (calibration/lossy.md section 5 on `EXTRACTION_VERSION`).
 
 ## 7. Test signals and scenarios
 
 - Lossy test files are generated inside the tests by small bitstream writers (`specs/detection/lossy-fixtures.md`, ADR-0040, Q11): MP3 and AAC streams whose coded spectrum is noise up to a chosen edge and nothing above it, with chosen bitrates, tag frames and LAME fields. No encoder runs in CI and no audio is committed (ADR-0022).
 - Scenarios: `specs/features/decode-lossy.feature` (RF-14 H2: scan, decoding, stream information, ALAC, errors, Unicode, read-only, spectrogram, table), `specs/features/detection-lossy.feature` (RF-15: verdicts on fixtures, rule-level boundaries from given measurements, parameter files, v4 compatibility), `specs/features/calibration-lossy.feature` (calibration and labels); and, not tested yet, `specs/pending/opus.feature` (Q9).
 - Real encoders (LAME, ffmpeg's AAC, libopus) are exercised only by the calibration tool on the local corpus (section 9).
+- v7 (RF-16): `specs/features/detection-streaming-source.feature` (section 11.8).
 
 ## 8. Known limitations (v5)
 
 Shown in the help as "suspicious with the reason" where they produce `Suspicious`, as backend.md section 9 asks.
 
 - **Close bitrates cannot be told apart.** A 320 kbps MP3 made from 256 kbps (`s` ≈ 800 Hz) is `Real` with the declared bitrate as estimate; one made from 224 kbps (`s` ≈ 1100 Hz) is at most `Suspicious` (`cutoffBelowDeclared`), never `Fake`.
-- **Opus → MP3 (48 kHz) and AAC 256 → MP3 320.** Opus keeps a full-band edge of about 20 kHz at common bitrates (`s` ≈ 500 Hz against LAME's 320 kbps low-pass), so Opus → MP3 320 is `Real`. AAC 256 cuts at 19–20 kHz (`s` ≈ 500–1500 Hz), so AAC 256 → MP3 320 is `Real` or at most `Suspicious`. B6 and B7 report them. Catching them needs codec-domain measurements (section 10).
+- **Opus → MP3 (48 kHz) and AAC 256 → MP3 320.** Opus keeps a full-band edge of about 20 kHz at common bitrates (`s` ≈ 500 Hz against LAME's 320 kbps low-pass), so Opus → MP3 320 is `Real` with v5 and v6. AAC 256 cuts at 19–20 kHz (`s` ≈ 500–1500 Hz), so AAC 256 → MP3 320 is `Real` or at most `Suspicious`. B6 and B7 report them. **Since v7** (section 11, RF-16) an Opus rip kept at 48 kHz is `Suspicious` with `streamingSampleRate` by its sample rate, not by its spectrum; it is still never `Fake`, and its own limitations are in section 11.6. AAC 256 → MP3 320 at 44.1 kHz is unchanged. Proving either needs codec-domain measurements (section 10).
 - **Sources without a low-pass.** A lower-bitrate source encoded without a low-pass (LAME V0 through ffmpeg, rules.md Q5; `--lowpass -1`) leaves no edge: the re-encode is `Real`. This is the H3 double-compression case.
 - **Little treble.** A track with `H < low_hf_threshold_db` is `Suspicious` (`lowHighFrequencyContent`) with no estimate.
 - **Genuine sources that end early.** A recording whose own mastering low-pass or natural roll-off lies more than `suspicious_shortfall_hz` below `c_exp` is `Suspicious`, and `Fake` if its edge is a sharp step `fake_shortfall_hz` below (R1). The calibration tool counts these "source-limited" honest encodes apart (calibration/lossy.md section 6), and B2 reports them.
@@ -220,10 +247,116 @@ Measured locally on the real corpus with `just accept --config specs/calibration
 
 If B2, B3, B4, B5, B7 or B8 fails, the implementer does not tune the parameters: the run's figures (and, locally, the listed tracks with `fc`, `c_exp`, `s` and `D`) go back to G1, where the owner decides between new values (a new params version) and accepting the result. B1 holds by construction, so its failure is an implementation bug. A B10 failure is handled like any red test.
 
+The acceptance criteria of v7 (RF-16) are K1–K7 in section 11.7. B1–B11 are not re-run for v7: K1 and K2 show that v7 changes nothing they measure except `Real → Suspicious` on lossy rows matched by L6a.
+
 ## 10. Candidates for a later version (not specified here)
 
 - The 16 kHz gap step `G` as evidence of an **MP3 origin in an AAC or Opus file** (an AAC 256 made from an MP3 inherits its sfb21 holes).
 - **Per-frame bitrate and padding** of VBR MP3s: a VBR encode of a band-limited source spends fewer bits.
 - **Encoder-specific tables** keyed by `encoder` (LAME, Fraunhofer, ffmpeg's AAC, Apple).
 - **Opus rows** with the Opus decoder (ADR-0030 spike).
-- **MDCT-domain double-compression fingerprints** (H3), which also cover sources without a low-pass and close bitrates.
+- **MDCT-domain double-compression fingerprints** (H3), which also cover sources without a low-pass and close bitrates. They are also the way to turn the v7 streaming-rate indicator (section 11) into evidence: an Opus origin leaves traces of its own transform (band energies quantised per CELT band, a hard 20 kHz band edge) that a fingerprint could confirm, and they would catch an Opus rip resampled to 44.1 kHz, which v7 cannot see (section 11.6). Not specified (owner's decision, 2026-10-25).
+- **The Opus edge as a narrower window** (`lossy.streaming.max_cutoff_hz` near 20.3 kHz, Q21) once acceptance K6 has measured how far apart the Opus edge and LAME's 320 kbps low-pass lie at 48 kHz.
+
+## 11. Streaming sample rate (detection v7, RF-16)
+
+### 11.1 What and why
+
+Streaming sites serve music as lossy streams. YouTube's highest-quality audio stream is Opus, and **Opus always decodes at 48 kHz**. Opus keeps a **full-band edge of about 20 kHz** at common bitrates (section 8), so when such a stream is re-encoded to MP3 320 or AAC 256 the result has an edge close to what an honest encode of that bitrate keeps, the shortfall `s` stays below `suspicious_shortfall_hz` and rule L6 calls it `Real` with the declared bitrate as estimate. A ripper that does not resample writes the MP3 or AAC file at **48 kHz**, while most music is released at 44.1 kHz (the CD rate), and the streaming sites' AAC streams are usually 44.1 kHz (the observation that `[labels.upstream_by_rate]` of `calibration.v2.toml` already encodes as data: a 48 kHz rip comes from the Opus stream).
+
+So **a 48 kHz MP3 or AAC file whose content reaches near full band is a cheap, deterministic hint** of an Opus (streaming) origin. It is only a hint: legitimate 48 kHz releases exist (section 11.6). That is why the rule gives `Suspicious` with a reason that says what was seen, never `Fake`, and only where the spectral rules found nothing (owner's decision, 2026-10-25).
+
+**The case that motivated it** (described without names, ADR-0022): nine MP3 CBR 320 kbps files at 48 kHz, most likely rips of a streaming site's Opus stream. Under v6 every one has a reported cutoff of 20 050 Hz with a steepness of 69–99 dB/kHz and is `Real` with estimate 320 (`c_exp` = 20500, `s` = 450 < 1000). Under v7 each is `Suspicious` with `streamingSampleRate` and no estimate: `mp3` is a listed codec, 48000 a listed rate, 320 ≥ 192 and 19500 ≤ 20050 < 21000.
+
+### 11.2 Rule L6a
+
+`StreamingRate` holds when the params have a `[lossy.streaming]` section `P` and **all** of:
+
+1. the track's codec is in `P.codecs` (`mp3` or `aac`; Opus can never be listed, section 11.3);
+2. the track's **decoded sample rate** (`TrackInfo.sampleRate`, section 2) equals one of `P.sample_rates_hz` exactly;
+3. the declared bitrate `b ≥ P.min_declared_bitrate_kbps` (for VBR and ABR files `b` is the average, section 2.1);
+4. the reported cutoff `fc` (section 3) satisfies `P.min_cutoff_hz ≤ fc < P.max_cutoff_hz`.
+
+Otherwise, and always for a params file without `[lossy.streaming]` (v5, v6), it is `false`.
+
+Rule L6a (section 4): when no rule from L1a to L5 matched and `StreamingRate` holds, the verdict is **`Suspicious`** with reasons **`[streamingSampleRate]`** and `estimatedSourceBitrateKbps` **null** (Q19). The reported cutoff is the one of section 4 ("Reported cutoff"), unchanged.
+
+Consequences:
+- **Never `Fake`**, and **never overrides an earlier rule**: an `Error` (L1a, L0, L1b), a silent track, little treble (L2), a `Fake` (L3) and a `Suspicious` from L4 or L5 keep their own verdict, reasons and estimate, whatever the sample rate. A 48 kHz MP3 320 made from an MP3 128 is still `Fake` with estimate 128.
+- **Only `Real → Suspicious`.** For the same spectra and stream information, every v7 result equals the v6 result except tracks that L6 made `Real` and L6a now makes `Suspicious`; those gain the reason and lose their estimate (`b` → null). Apart from that and `algorithmVersion`, nothing changes (the reported cutoff included).
+- **Reached only with no larger shortfall.** L6a is evaluated after L5, so it only sees tracks with `s < suspicious_shortfall_hz` or `s` undefined (a declared bitrate below the table): the "near full band" files that would otherwise be `Real`.
+- **Content above the window is not flagged.** A 48 kHz encode without a low-pass (content to Nyquist, so `fc` = `fe` ≥ `max_cutoff_hz`) has more treble than Opus codes, so it is not an Opus rip and stays `Real`.
+- **Lossless codecs are never judged by it** (`pcm`, `flac`, `alac` use rules.md only, section 4): a 48 kHz FLAC or ALAC is not flagged. **Opus files are out of scope**: they are natively 48 kHz, `opus` cannot be listed in `P.codecs`, and in v7 an Opus track is `Error(unsupportedFormat)` by L0 anyway (no `[lossy.cutoffs]` rows for it).
+- **Where it is computed.** `StreamingRate` and L6a are part of the pure lossy verdict function of `fakeflac_core::detect` (section 3, "Where it is computed"), which already receives the codec, the sample rate, the declared bitrate, `fc` and the params. No new measurement, no I/O, no new input from the adapter.
+
+### 11.3 Parameters (`[lossy.streaming]`)
+
+**Values** of `detection-params.v7.toml`. All are **indicative starting values, not measured on the corpus** (Q21); acceptance K (section 11.7) decides, and a failed gate returns to G1 with the run's figures (the implementer never tunes values).
+
+| Parameter | Value | Why this starting value |
+|---|---|---|
+| `lossy.streaming.sample_rates_hz` | `[48000]` | The only rate Opus decodes at. 44100 would flag almost every MP3 and AAC file; 32000 and 96000 are not streaming rates of lossy music |
+| `lossy.streaming.codecs` | `["mp3", "aac"]` | The formats a rip is saved as (RF-16). AAC at 48 kHz is less common than MP3 (streaming AAC is usually 44.1 kHz, section 11.1), so it is listed for the Opus → AAC re-encode |
+| `lossy.streaming.min_declared_bitrate_kbps` | 192 | Below about 192 kbps the encoder's own low-pass (18.6 kHz at 192 in the MP3 table) lies below the Opus edge, so `fc` reflects the encoder, not the source; such files cannot reach the window anyway, the bound makes it explicit. VBR and ABR files are compared by their average `b` (section 2.1) |
+| `lossy.streaming.min_cutoff_hz` | 19500 | "Near full band": about 500 Hz below the Opus edge (about 20 kHz), leaving room for the 100 Hz bands of `fc`; the motivating case is at 20050 Hz |
+| `lossy.streaming.max_cutoff_hz` | 21000 | Above the Opus edge and LAME's 320 kbps low-pass (20.5 kHz); content above it is more than an Opus source holds (section 11.2). The narrower 20300 is Q21 |
+
+**Shape** (serde, at deserialisation; unknown fields rejected): `[lossy.streaming]` may be absent. If present, all five fields are required. `sample_rates_hz` is an array of non-negative integers; `codecs` is an array whose elements are exactly `"mp3"` or `"aac"`, so any other value, `"opus"` included, is a deserialisation error naming that value; `min_declared_bitrate_kbps` is a non-negative integer; `min_cutoff_hz` and `max_cutoff_hz` are floats. A `[lossy.streaming]` without `[lossy]` cannot be written (it is a subtable of `[lossy]`; TOML creates `[lossy]` implicitly, which then fails for its missing required fields).
+
+**Values** (`DetectionParams::validate`, after the checks of section 6, in this order; the error names the check, written as below; a comparison with a NaN operand does not hold, so NaN is rejected):
+1. `lossy.streaming.sample_rates_hz is not empty`
+2. `lossy.streaming.sample_rates_hz: sample rate > 0`
+3. `lossy.streaming.sample_rates_hz increases` (strictly, in file order, so a repeated rate is rejected)
+4. `lossy.streaming.codecs is not empty`
+5. `lossy.streaming.codecs has no duplicates`
+6. `lossy.streaming.min_declared_bitrate_kbps > 0`
+7. `lossy.streaming.min_cutoff_hz > 0`
+8. `lossy.streaming.min_cutoff_hz < lossy.streaming.max_cutoff_hz`
+
+A file that wants no streaming-rate rule omits the section (an empty list is rejected rather than meaning "disabled", so "disabled" has one spelling). The calibration tool's grid search rejects `lossy.streaming.*` keys like every `lossy.*` key (calibration/lossy.md C10), and a proposal from a v7 baseline copies the section unchanged.
+
+### 11.4 Versions
+
+- **v7 = `detection-params.v6.toml` with every section and value unchanged plus `[lossy.streaming]`**, `algorithm_version = 7`. It is the default: `DetectionParams::default()` equals `detection-params.v7.toml` (a test checks it). The next free `algorithm_version` becomes **8** (`/calibrate` proposals and the sample corpus's `candidate.toml` take 8; the tool computes it from the files, so no code allocates it by hand).
+- **v5 and v6 stay loadable.** `[lossy.streaming]` is optional; a params file without it gives exactly its own verdicts, reasons, cutoffs and estimates on every file (L6a never fires). Tests check it, so the calibration tool compares v6 and v7 in one run.
+- **Lossless files** get exactly their v6 results (nothing in rules.md reads `[lossy.streaming]`), with `algorithm_version` 7.
+- `[input]` and `[fft]` are unchanged and L6a uses only values already computed, so `fakeflac-audio::EXTRACTION_VERSION` does not change and cached spectra are reused; the app's result cache is invalidated by the new `algorithm_version` (ADR-0008).
+- **Contract**: version 6 (`specs/contracts/commands.md`, "Streaming sample rate (version 6)"): the new reason `streamingSampleRate`, `algorithmVersion` 7 with the defaults, and a new case where `estimatedSourceBitrateKbps` is null. **CSV**: `csv_format_version` stays 1 (Q23). **UI**: the reason's text (`specs/ui/lossy-formats.md`, "Streaming sample rate (RF-16)"); no new component.
+
+### 11.5 Relation to calibration labels
+
+`upstream=by-rate` (calibration/lossy.md section 1.5) and L6a encode the same observation in two places: the first labels the owner's streaming-site rips for evaluation, the second judges files in the app. They are independent data (`calibration.v*.toml` and `detection-params.v7.toml`): changing one does not change the other, and acceptance K4 is read on labels resolved by the first.
+
+### 11.6 Known limitations (v7)
+
+Shown in the reason's text, which says that genuine 48 kHz releases look the same (`ui/lossy-formats.md`).
+
+- **Legitimate 48 kHz files are flagged (false positives by design).** Audio from video productions (soundtracks, concerts, video game music, podcasts recorded for video), web stores and labels that sell or deliver 48 kHz masters, and a user's own MP3 or AAC encodes of 48 kHz or hi-res masters (an encoder fed 96 kHz may resample to 48 kHz) all have a 48 kHz rate and a near-full-band edge. They are `Suspicious` with `streamingSampleRate`, never `Fake`, and the reason says so; nothing in v7 tells them apart from an Opus rip. Acceptance K5 counts them on the honest groups.
+- **An Opus rip resampled to 44.1 kHz is not caught.** A ripper or converter that resamples to 44.1 kHz (a common default) removes the only evidence v7 reads; such a file is `Real` as under v6. Catching it needs codec-domain measurements (section 10).
+- **Opus rips at low bitrates.** An Opus stream at a low bitrate may keep less than full band; if the rip's `fc` falls below `min_cutoff_hz`, L6a does not fire, and L4 or L5 only fire if the shortfall is large enough. Not measured here.
+- **Opus rips re-encoded below 192 kbps** (for example to MP3 128) are not flagged: the encoder's own low-pass hides the Opus edge (section 11.3).
+- **Other 48 kHz lossy sources.** A 48 kHz rip of another full-band lossy source (for example a 48 kHz AAC stream of a video site) is flagged the same way; the reason does not name the source codec and the text says "possibly".
+- **The estimate is null** for flagged files (Q19): the table cannot express an Opus source in MP3 or AAC terms.
+- **AAC files at 48 kHz** may come from encoders whose honest low-pass at 256–320 kbps lies inside the window (the AAC table is conservative, section 6), so an honest 48 kHz AAC 256 of a full-band master is flagged like an MP3.
+- **Exact rates only.** A rate of 47 999 Hz or a 48 kHz file reported at another rate by a broken header is not matched; rates come from the decoder (section 2), so this needs a broken file.
+
+### 11.7 Acceptance criteria (v7)
+
+Measured locally on the real corpus with `just accept --config specs/calibration/calibration.v3.toml --params specs/detection/detection-params.v6.toml --params specs/detection/detection-params.v7.toml` (v6 is the baseline), split `all` unless a row says otherwise. Groups, tables and columns are those of `specs/calibration/lossy.md` sections 6.3 and 6.8. Only aggregate figures from `summary.md` go into the implementation PR (ADR-0022): no file, folder or artist name. "Detectable" is as in section 9.
+
+| # | Criterion | Pass |
+|---|---|---|
+| K1 | Lossless results unchanged | **Gate.** On the lossless evaluation set, the verdict-change table v6 × v7 is diagonal, and every reason and cutoff is equal (by construction, section 11.4; a failure is an implementation bug) |
+| K2 | Lossy changes are only `Real → Suspicious` by L6a | **Gate.** In the lossy verdict-change table v6 × v7 (calibration/lossy.md 6.8) every off-diagonal count other than `Real → Suspicious` is 0, and its `Real → Suspicious` count equals its "of which `streamingSampleRate`" count (every changed row carries the new reason with v7). By construction (section 11.2); a failure is an implementation bug |
+| K3 | Generated Opus → MP3 320 (`opus128_cbr320`, 48 kHz) | **Gate:** with v7, caught (`Fake` + `Suspicious`) ≥ **90 %** of its detectable rows (Q22). **Report:** caught and `Fake` rates with v6 and v7, the `streaming` count, and the same caught rate over all its rows, undetectable included |
+| K4 | Confirmed lossy fakes at 48 kHz (the per-sample-rate row 48000 of section 6.3, strong labels; and the `upstream = opus` row) | **Gate:** with v7, caught ≥ **90 %** of the strong labels of the 48000 row (Q22), applied once that row has at least **N = 10** strong labels (N indicative, part of Q22). With fewer, K4 is **reported and does not block**: `summary.md` shows the count, and the gate reads "n/a (fewer than 10 strong 48 kHz fakes)" (so 0 such files is also n/a, not a failure). **Report:** caught and `Fake` rates with v6 and v7 for both rows, and their `streaming` counts |
+| K5 | False positives on honest lossy files | **Report** (no gate: they are `Suspicious` by design, section 11.6): with v7, the `streaming` count and the `Suspicious` rate of each honest group per sample rate (6.8: single-stage generated entries, the negative cascade `cbr320_cbr128`, trusted lossy files per class, `confirmed_real`), and their change against v6. **Gate (unchanged from v5):** B2's `Fake` ≤ 1 %, B3's and B4's 0 `Fake` still hold (by construction: L6a produces no `Fake`) |
+| K6 | Where the cutoffs lie (input to Q21) | **Report:** the median, 5th and 95th percentile of `fc` (6.8) of `opus128_cbr320`, of the honest `cbr320` and `aac256` rows at 48 kHz, and of the confirmed lossy fakes at 48000 |
+| K7 | Synthetic | Every scenario of `detection-streaming-source.feature` passes (`just test`), and `detection-lossy.feature`, `decode-lossy.feature`, `detection-lossless.feature`, `detection-edge-step.feature`, `calibration.feature` and `calibration-lossy.feature` still pass |
+
+If K3 or K4 fails (K4 only counts as failed when it applies, that is with at least N = 10 strong 48 kHz labels; an n/a K4 is listed in the PR with its count and blocks nothing), the implementer does not tune the parameters: the run's figures (and, locally, the listed tracks with codec, sample rate, `b`, `fc`, `s` and `D`) go back to G1, where the owner decides between new values (a new params version) and accepting the result. K1, K2 and K5's gate hold by construction, so their failure is an implementation bug. A K7 failure is handled like any red test. No timing criterion: L6a adds a few comparisons and no measurement (RNF-01 unaffected).
+
+### 11.8 Test signals and scenarios
+
+- Fixtures (`lossy-fixtures.md`): the existing `mp3_320_48k_lp20k` (an MP3 320 at 48 kHz with edge 20000 Hz: the motivating case), and three new ones: `mp3_320_lp20k` (the same edge at 44.1 kHz), `m4a_aac_256_48k_lp20k` (AAC 256 at 48 kHz, edge 20000 Hz) and `mp3_320_48k_short` (a 2 s cut of `mp3_320_48k_lp20k`, `tooShort`).
+- Scenarios: `specs/features/detection-streaming-source.feature` (tag `@RF-16`): verdicts on fixtures, rule-level cases from given measurements (the 44.1 kHz control, L3–L5 at 48 kHz, every boundary of the window and of the bitrate), params without the section, Opus, lossless codecs, parameter checks, error tracks (RNF-04), a real run with a Unicode name (RNF-09) that leaves the file unchanged (RNF-05), the CSV cell, the UI text, and the calibration report additions.

@@ -2,7 +2,11 @@
 Feature: Edge step on the step rule V4 (detection v6)
   Rule-level checks of specs/detection/rules.md sections 2 to 4 with
   DetectionParams v6 (the defaults, detection-params.v6.toml), and the
-  edge-step fixtures of specs/detection/fixtures.md. The thresholds are:
+  edge-step fixtures of specs/detection/fixtures.md. Changed for detection v7
+  (lossy-source.md Q25 (a), RF-16): the defaults are detection-params.v7.toml,
+  which adds only [lossy.streaming] and gives the same lossless results; the
+  tests may use the defaults for v6's values, except where a step checks the
+  algorithmVersion 6, which needs the parameters of detection-params.v6.toml. The thresholds are:
   edge.max_median_step_db = 3, edge.min_residual_db = 15, edge.max_step_db = 16,
   edge.floor_min_db = -104 (absolute; F_top is never below it, whatever the
   bit depth), floor window [20900, 22000) Hz,

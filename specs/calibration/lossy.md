@@ -1,6 +1,6 @@
 ---
 id: SPEC-CALIBRATION-LOSSY
-requirements: [RP-11, RF-15, RNF-04, RNF-09]
+requirements: [RP-11, RF-15, RF-16, RNF-04, RNF-09]
 status: proposed
 config: specs/calibration/calibration.v2.toml
 ---
@@ -25,6 +25,7 @@ config: specs/calibration/calibration.v2.toml
 | C10 | The **grid search ignores lossy rows** and rejects `lossy.*` keys in this version (section 7) | Open. Default: yes |
 | C11 | Changed messages of approved scenarios: `not a FLAC or WAV file` becomes `not a supported audio file (FLAC, WAV, MP3, M4A or Opus)`, and `unknown kind 'x' (expected fake or false-positive)` becomes `unknown kind 'x' (expected fake, real or false-positive)` (calibration.feature, "Errors in trusted.txt" and "Errors in confirmed.txt") | Open. Default: yes |
 | C12 | No new `[[targets]]` kind for lossy rows: acceptance B is read from the tables of section 6 | Open. Default: yes |
+| C13 | (RF-16) **Report additions for the streaming-sample-rate rule** (section 6.8): a lossy verdict-change table between params files, a `streaming` column, per-sample-rate sub-rows for the generated, trusted and `confirmed_real` groups, and `fc` percentiles. No new input, label or config key; acceptance K is read from them (same as lossy-source.md Q24) | Open. Default: yes |
 
 ## 0. Compatibility
 
@@ -204,6 +205,17 @@ Lossy rows fill the measurement columns of evaluation.md section 8 (`H`, `F`, `f
 ### 6.7 Watch list
 
 A lossy `false-positive` track is listed in every run with, per params file: verdict, reasons, codec, declared bitrate, `fc`, `c_exp`, `s`, `D` and estimate.
+
+### 6.8 Streaming sample rate (RF-16, C13)
+
+Additions so that acceptance K of `specs/detection/lossy-source.md` section 11.7 can be read from `summary.md`. They apply to every run; with params files without `[lossy.streaming]` they simply show no streaming-rate rows.
+
+- **Lossy verdict changes.** The **lossy baseline** is the first `--params` file with a `[lossy]` section. For each later file with `[lossy]`, a 4 × 4 count table (lossy-baseline verdict × verdict) over the lossy rows that both files evaluate (strong and weak labels; rows not evaluated, such as Opus, are left out), in `summary.md` and `report.md`, followed by one count, **"of which `streamingSampleRate`"**: the off-diagonal rows whose reasons include `streamingSampleRate` with the later file and not with the baseline. `report.md` also lists each changed lossy row with truth, group, codec, sample rate, declared bitrate, `fc`, `s`, `D` and both verdicts. The lossless verdict-change table of evaluation.md section 9 does not change.
+- **Column `streaming`** in every row of the per-group table (6.3): the rows whose reasons include `streamingSampleRate` (0 for a params file without `[lossy.streaming]`).
+- **Per sample rate.** In 6.3, each `[[generate.lossy]]` row, the trusted lossy files rows and the `confirmed_real` row are each followed by one sub-row per decoded sample-rate bucket that has at least one row: `44100`, `48000` and `other`, labelled `<group> @ <bucket>` (for example `cbr320 @ 48000`), with the same columns. The existing per-sample-rate rows of the confirmed lossy fakes do not change. A sub-row is positive or negative as its group.
+- **`fc` percentiles.** Three columns in every row of 6.3: the median, 5th and 95th percentile of `fc` over its rows with a cutoff (empty when there is none), computed like the percentiles of `s`.
+- **Privacy** (6.6): the new rows and columns are group ids, sample-rate buckets, counts, rates and frequencies only.
+- **Consequence on existing tests (declared, lossy-source.md Q25 (h)):** tests that compare the whole per-group table or `summary.md` of the lossy sample corpus with exact text gain the new columns and sub-rows; their other figures do not change (every lossy fixture of the sample corpus is 44.1 kHz, so only `@ 44100` sub-rows appear).
 
 ## 7. Grid search (C10)
 
