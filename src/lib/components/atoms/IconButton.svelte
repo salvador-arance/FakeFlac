@@ -1,12 +1,17 @@
 <script lang="ts">
   import Icon from './Icon.svelte'
   import type { IconName } from './icons'
+  import type { Verdict } from '../../model'
 
   type Props = {
     icon: IconName
     label: string
     disabled?: boolean
     size?: 'toolbar' | 'small'
+    /** RF-08 (sort-filter.md section 10): given = a toggle button with `aria-pressed`. Stub: not used yet. */
+    pressed?: boolean
+    /** RF-08: the icon takes the verdict colour token. Stub: not used yet. */
+    tone?: Verdict
     onclick?: () => void
   }
 

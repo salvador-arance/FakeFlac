@@ -1,14 +1,22 @@
 <script lang="ts">
   import IconButton from '../atoms/IconButton.svelte'
   import { t } from '../../i18n'
+  import type { Verdict } from '../../model'
 
   type Props = {
     canOpen: boolean
     canCancel: boolean
     canExport?: boolean
+    // RF-08 (sort-filter.md section 10). Stub: declared, not used yet.
+    canFilter: boolean
+    verdictFilter: Verdict[]
+    query: string
+    searchFocusRequest?: number
     onopen?: () => void
     oncancel?: () => void
     onexport?: () => void
+    ontoggleverdict?: (verdict: Verdict) => void
+    onquery?: (text: string) => void
   }
 
   let { canOpen, canCancel, canExport = false, onopen, oncancel, onexport }: Props = $props()

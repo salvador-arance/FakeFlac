@@ -1,6 +1,15 @@
 // The `analysis` store: rows, phase, selection, sort and counters (specs/ui/components.md).
 import type { ProgressEvent } from '../api'
-import type { AlbumUpdate, ResultRow, SortColumn, SortState, StatusPhase, StatusSummary } from '../model'
+import type {
+  AlbumUpdate,
+  ResultRow,
+  RowFilter,
+  SortColumn,
+  SortState,
+  StatusPhase,
+  StatusSummary,
+  Verdict,
+} from '../model'
 
 export interface AnalysisStore {
   readonly rows: ResultRow[]
@@ -11,6 +20,10 @@ export interface AnalysisStore {
   readonly message: string | undefined
   readonly selectedIndex: number | null
   readonly sort: SortState
+  /** RF-08 (sort-filter.md section 10): the verdict filter and the name search. */
+  readonly filter: RowFilter
+  /** RF-08: the flushed rows that pass `filter`, in store order (unsorted). */
+  readonly visibleRows: ResultRow[]
   /** Marks the run as requested (scanning). */
   begin(): void
   /** Puts back the screen state saved by the last `begin()` (a start that did not begin a run). */
@@ -25,6 +38,12 @@ export interface AnalysisStore {
   /** Selects the row with the lowest `index` among the rows of the album. */
   selectAlbum(albumIndex: number): void
   toggleSort(column: SortColumn): void
+  /** RF-08: adds or removes a verdict, keeping the canonical order fake, suspicious, real, error. */
+  toggleVerdictFilter(verdict: Verdict): void
+  /** RF-08: stores the search field's text as given. */
+  setQuery(query: string): void
+  /** RF-08: no verdict and no query. */
+  clearFilter(): void
 }
 
 export function createAnalysisStore(): AnalysisStore {
@@ -60,6 +79,8 @@ export function createAnalysisStore(): AnalysisStore {
   let message = $state<string | undefined>(undefined)
   let selectedIndex = $state<number | null>(null)
   let sort = $state<SortState>({ column: 'file', direction: 'asc' })
+  // RF-08 compile-only stub (stage `test`): the filter never changes and the methods throw.
+  const filter: RowFilter = { verdicts: [], query: '' }
 
   let batchTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -222,6 +243,10 @@ export function createAnalysisStore(): AnalysisStore {
     }
   }
 
+  function notImplemented(): never {
+    throw new Error('not implemented')
+  }
+
   return {
     get rows() {
       return rows
@@ -244,6 +269,12 @@ export function createAnalysisStore(): AnalysisStore {
     get sort() {
       return sort
     },
+    get filter() {
+      return filter
+    },
+    get visibleRows(): ResultRow[] {
+      return notImplemented()
+    },
     begin,
     restore,
     reset,
@@ -252,5 +283,14 @@ export function createAnalysisStore(): AnalysisStore {
     select,
     selectAlbum,
     toggleSort,
+    toggleVerdictFilter: (verdict: Verdict) => {
+      void verdict
+      notImplemented()
+    },
+    setQuery: (query: string) => {
+      void query
+      notImplemented()
+    },
+    clearFilter: () => notImplemented(),
   }
 }

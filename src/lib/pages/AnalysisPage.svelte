@@ -252,6 +252,9 @@
       {canOpen}
       {canCancel}
       {canExport}
+      canFilter={false}
+      verdictFilter={[]}
+      query=""
       onopen={handleOpenFolder}
       oncancel={handleCancel}
       onexport={handleExport}

@@ -8,6 +8,8 @@
     summary: StatusSummary
     message?: string
     notice?: string
+    /** RF-08 (sort-filter.md section 9): the number of shown rows. Stub: not used yet. */
+    shown?: number
   }
 
   let { phase, summary, message, notice }: Props = $props()

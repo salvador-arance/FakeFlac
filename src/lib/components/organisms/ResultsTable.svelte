@@ -18,8 +18,12 @@
      * change scrolls the selected row into view.
      */
     revealRequest?: number
+    /** RF-08 (sort-filter.md section 8): no row passes the filters. Stub: not used yet. */
+    noMatches?: boolean
     onselect?: (index: number) => void
     onsort?: (column: SortColumn) => void
+    /** RF-08: the Clear filters button of the no-match state. Stub: not used yet. */
+    onclearfilters?: () => void
   }
 
   let {
