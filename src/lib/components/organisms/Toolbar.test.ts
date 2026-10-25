@@ -79,7 +79,8 @@ describe('Toolbar: Export CSV', () => {
   // Reading chosen: the separator is an element with role "separator", just before the export button
   it('has a separator between the open/cancel group and the export group', () => {
     render(Toolbar, { props: { ...FILTERS, canOpen: true, canCancel: false, canExport: true } })
-    const separator = screen.getByRole('separator')
+    // RF-08 adds a second separator before the verdict filter (sort-filter.md section 2)
+    const separator = screen.getAllByRole('separator')[0]
     const order = Array.from(
       separator.parentElement?.querySelectorAll('button, [role="separator"]') ?? [],
     )
