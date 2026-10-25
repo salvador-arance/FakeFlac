@@ -2,6 +2,37 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-25 - Corpus run of v6 done; E6 `holdout` gate changed (spec PR, waiting for G1)
+
+**Done**
+- Owner's answer to the block below (2026-10-24): judge E6 on `all` and on the new, contaminated `holdout`, with no spec change.
+- `just accept` (v3 config, v5 and v6), run `20261025T010130Z`:
+  - cold run, 18:11–02:01 local time; the PC slept 20:57–01:43, so about 2 h 50 min of work;
+  - 38,305 entries decoded and 36,864 transcoded, 0 failures;
+  - the work also includes the 14 RF-15 lossy groups (19,950 files), not only the 13 lossless settings.
+- Results (rules.md section 8.3):
+  - E1–E5 and E7 pass. W4 is `Suspicious` (`AmbiguousCutoff`) and T1 passes. E7: `just test`, 624 Rust tests and 279 frontend tests.
+  - E6 on `all` passes: cbr192 0.28 pp, exactly as predicted.
+  - E6 on `holdout` failed the original gate by one transcode: cbr192 and cbr192_s24 each lose 2 of at most 392 (0.51 pp). They are the same two source tracks at 16 and 24 bits.
+- The owner chose to keep v6 and its values and to change the `holdout` gate: E6 now fails there only when the lower bound of the 95 % Wilson interval of the drop exceeds 0.5 pp. Q23 records that the choice was made after seeing the result.
+- Spec PR `spec/RF-04-e6-holdout-gate`:
+  - rules.md: Q19 resolved, Q23 added, E6 row and its rationale, a note in 8.2, results in 8.3;
+  - ADR-0042: amended;
+  - README status.
+  - No code or test change: the tool does not compute E6.
+
+**Pending**
+- G1: review and merge the spec PR. After the merge, the README can say that v6 is accepted.
+
+**Blockers / questions for the human**
+- None.
+
+**Notes for the next session**
+- Temporary files go in `target/tmp/` inside the repo, never in the session scratchpad. RP-06 also covers shell redirects, which the `guard-protected` hook does not see: this session wrote to the scratchpad by mistake and cleaned it up. The hook also blocks Claude's memory directory.
+- A corpus run can take hours. Keep Windows awake for the whole run: this one stopped for almost 5 h while the PC slept.
+
+**Next step:** after G1, v6 is accepted on the corpus. Choose the next requirement from `docs/planning/` or the open questions (Q15: W6, via per-frame statistics).
+
 ## 2026-10-24 - #63 merged (G2); the corpus was reorganised
 
 **Done**
