@@ -367,7 +367,7 @@ describe('Albums panel: while the analysis runs', () => {
   })
 
   // @RF-10 Scenario: Panel counts always match the table rows (A1, A3)
-  it('keeps every item equal to the counts of the table rows after every flush', async () => {
+  it('keeps every item equal to the counts of the rows fed after every flush', async () => {
     vi.useFakeTimers()
     const run = fakeRun()
     render(AnalysisPage)
@@ -390,32 +390,54 @@ describe('Albums panel: while the analysis runs', () => {
     let next = 0
     run.scanned(200)
 
+    // A1 compares each item with the store's rows of its album: the verdicts fed so far
+    // (`counted`), all flushed by the 100 ms tick before each check. In jsdom the table is not
+    // virtualised and renders at most 50 rows, so the DOM rows are only a cross-check while the
+    // table holds every row.
+    const byVerdict = (vs: Verdict[]) =>
+      (['real', 'suspicious', 'fake', 'error'] as Verdict[]).map(
+        (v) => vs.filter((x) => x === v).length,
+      )
     const check = () => {
-      const rows = dataRows()
-      const byFolder = new Map<string, Verdict[]>()
-      for (const row of rows) {
-        const folder = cells(row)[2].textContent?.trim() ?? ''
-        const text = cells(row)[0].textContent ?? ''
-        const verdict: Verdict = text.includes('Genuine')
-          ? 'real'
-          : text.includes('Suspicious')
-            ? 'suspicious'
-            : text.includes('Fake')
-              ? 'fake'
-              : 'error'
-        byFolder.set(folder, [...(byFolder.get(folder) ?? []), verdict])
+      const fed = counted.reduce((n, c) => n + c.length, 0)
+      const albums = counted.filter((c) => c.length > 0).length
+      expect(items()).toHaveLength(albums)
+      if (fed <= 50) {
+        const byFolder = new Map<string, Verdict[]>()
+        for (const row of dataRows()) {
+          const folder = cells(row)[2].textContent?.trim() ?? ''
+          const text = cells(row)[0].textContent ?? ''
+          const verdict: Verdict = text.includes('Genuine')
+            ? 'real'
+            : text.includes('Suspicious')
+              ? 'suspicious'
+              : text.includes('Fake')
+                ? 'fake'
+                : 'error'
+          byFolder.set(folder, [...(byFolder.get(folder) ?? []), verdict])
+        }
+        expect(byFolder.size).toBe(albums)
+        specs.forEach((spec, a) => {
+          if (counted[a].length === 0) return
+          expect(byVerdict(byFolder.get(folderOf(spec)) ?? []), spec.name).toEqual(
+            byVerdict(counted[a]),
+          )
+        })
       }
-      expect(items()).toHaveLength(byFolder.size)
-      for (const spec of specs) {
-        const vs = byFolder.get(folderOf(spec))
-        if (!vs) continue
+      for (const [a, spec] of specs.entries()) {
+        const vs = counted[a]
+        if (vs.length === 0) continue
         const n = (v: Verdict) => vs.filter((x) => x === v).length
         const parts = [
-          vs.length === spec.files ? `${vs.length} tracks` : `${vs.length} of ${spec.files} tracks`,
+          vs.length === spec.files
+            ? vs.length === 1
+              ? '1 track'
+              : `${vs.length} tracks`
+            : `${vs.length} of ${spec.files} tracks`,
           n('real') ? `${n('real')} real` : '',
           n('suspicious') ? `${n('suspicious')} suspicious` : '',
           n('fake') ? `${n('fake')} fake` : '',
-          n('error') ? `${n('error')} errors` : '',
+          n('error') ? (n('error') === 1 ? '1 error' : `${n('error')} errors`) : '',
         ].filter(Boolean)
         const o = items().find((el) => within(el).queryByText(spec.name))
         expect(o, spec.name).toBeDefined()
