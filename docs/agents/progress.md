@@ -2,6 +2,45 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-25 - RF-08 (sort and filter the results table) implemented; feature PR #76 waiting for G2
+
+**Done**
+- #74 (RF-10 feature) and #75 (RF-08 spec) merged.
+- `/feature RF-08` on `feat/RF-08`, PR #76 (frontend only, contract v5 unchanged):
+  - Tests:
+    - `1f66eee`: `build(RF-08)` stubs.
+    - `7d87244`: `test(RF-08)`, 239 tests and stories.
+    - `b5e573d`: owner-approved edit to the existing Toolbar separator test (section 2 adds a second separator).
+    - The owner accepted the six readings the test author made, listed in the PR.
+  - Implementation: `248a0f4` `feat(RF-08)`, in `src/lib/` only.
+  - Review round 1: nothing blocking. Improvement 1 (literals instead of tokens) fixed in `511f2e8`.
+  - Traceability: `f525c5d`.
+  - `just ci` (675 vitest), `trace`, `privacy-check`, `guard-tests`: green.
+
+**Pending**
+- G2 of #76 (owner): manual checks M1–M3 and timing P1–P2 on a release build first. Then `just prune-branches`.
+- Review notes for RF-13, written in #76:
+  - the Format sort key cache in `table-view.ts` is locale-dependent (ALAC label);
+  - `ResultsTable` reads `getLocale()` inside a `$derived`.
+- If P1 is tight: make the store's `rows` a `$state.raw` array.
+- Dependabot alert #1 is still open and unexamined.
+- Harness gaps:
+  - The RF-10 one (writes to protected files through Bash) did not repeat.
+  - New, seen once: the test author wrote temporary logs to the session scratchpad through Bash redirects. That is outside the repo, against RP-06, because `guard-protected` only covers Edit/Write. If it repeats, record it in `lessons.md`.
+
+**Blockers / questions for the human**
+- None.
+
+**Notes for the next session**
+- In this session's Bash tool, vitest failed with "Vitest failed to find the runner" (all suites), while the same command passed from PowerShell. The likely trigger was an `npx vitest run <file>` call; the cause is unknown.
+  - Workaround: `powershell.exe -NoProfile -Command "Set-Location C:\Workspaces\FakeFlac; just check"`.
+  - Use `npm run test -- <pattern>`, never `npx vitest`.
+- Temporary files: the session scratchpad is outside the repo and blocked by the hook. Use the ignored `target/` instead (the PR body went through `target/pr-body.md`).
+- One RF-10 page test (`AnalysisPage.albumReveal.test.ts`) timed out once at 5 s under load. It passed in every other run.
+- The owner's local edits in `.claude/agents/{rust-implementer,test-author}.md` are still uncommitted. Never commit them.
+
+**Next step:** after #76 is merged, `just prune-branches`, then the owner picks the next H2 requirement.
+
 ## 2026-10-25 - RF-10 (album summary in the app) implemented; feature PR #74 waiting for G2
 
 **Done**

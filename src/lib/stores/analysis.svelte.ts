@@ -1,6 +1,19 @@
 // The `analysis` store: rows, phase, selection, sort and counters (specs/ui/components.md).
 import type { ProgressEvent } from '../api'
-import type { AlbumUpdate, ResultRow, SortColumn, SortState, StatusPhase, StatusSummary } from '../model'
+import type {
+  AlbumUpdate,
+  ResultRow,
+  RowFilter,
+  SortColumn,
+  SortState,
+  StatusPhase,
+  StatusSummary,
+  Verdict,
+} from '../model'
+import { rowMatches } from '../table-view'
+
+// Canonical order of `RowFilter.verdicts` (the verdict buttons' order)
+const VERDICT_ORDER: Verdict[] = ['fake', 'suspicious', 'real', 'error']
 
 export interface AnalysisStore {
   readonly rows: ResultRow[]
@@ -11,6 +24,10 @@ export interface AnalysisStore {
   readonly message: string | undefined
   readonly selectedIndex: number | null
   readonly sort: SortState
+  /** RF-08 (sort-filter.md section 10): the verdict filter and the name search. */
+  readonly filter: RowFilter
+  /** RF-08: the flushed rows that pass `filter`, in store order (unsorted). */
+  readonly visibleRows: ResultRow[]
   /** Marks the run as requested (scanning). */
   begin(): void
   /** Puts back the screen state saved by the last `begin()` (a start that did not begin a run). */
@@ -25,6 +42,12 @@ export interface AnalysisStore {
   /** Selects the row with the lowest `index` among the rows of the album. */
   selectAlbum(albumIndex: number): void
   toggleSort(column: SortColumn): void
+  /** RF-08: adds or removes a verdict, keeping the canonical order fake, suspicious, real, error. */
+  toggleVerdictFilter(verdict: Verdict): void
+  /** RF-08: stores the search field's text as given. */
+  setQuery(query: string): void
+  /** RF-08: no verdict and no query. */
+  clearFilter(): void
 }
 
 export function createAnalysisStore(): AnalysisStore {
@@ -60,6 +83,13 @@ export function createAnalysisStore(): AnalysisStore {
   let message = $state<string | undefined>(undefined)
   let selectedIndex = $state<number | null>(null)
   let sort = $state<SortState>({ column: 'file', direction: 'asc' })
+  // RF-08 (sort-filter.md section 10): replaced as a whole on every change, kept across runs
+  let filter = $state.raw<RowFilter>({ verdicts: [], query: '' })
+  // The flushed rows that pass `filter`; album names come from the published `albums`
+  let visibleRows = $derived.by(() => {
+    const names = new Map(albums.map((a) => [a.index, a.name]))
+    return rows.filter((row) => rowMatches(row, filter, names.get(row.albumIndex)))
+  })
 
   let batchTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -205,13 +235,22 @@ export function createAnalysisStore(): AnalysisStore {
   }
 
   function selectAlbum(albumIndex: number) {
+    // The lowest index among the rows that pass the filter (pending rows included, judged with the
+    // names of `latest`); with none shown, the lowest index of the album (sort-filter.md section 6)
     let lowest: number | null = null
+    let lowestShown: number | null = null
     for (const row of [...rows, ...pendingRows]) {
-      if (row.albumIndex === albumIndex && (lowest === null || row.index < lowest)) {
-        lowest = row.index
+      if (row.albumIndex !== albumIndex) continue
+      if (lowest === null || row.index < lowest) lowest = row.index
+      if (
+        (lowestShown === null || row.index < lowestShown) &&
+        rowMatches(row, filter, latest.get(row.albumIndex)?.name)
+      ) {
+        lowestShown = row.index
       }
     }
-    if (lowest !== null) selectedIndex = lowest
+    const target = lowestShown ?? lowest
+    if (target !== null) selectedIndex = target
   }
 
   function toggleSort(column: SortColumn) {
@@ -220,6 +259,21 @@ export function createAnalysisStore(): AnalysisStore {
     } else {
       sort = { column, direction: 'asc' }
     }
+  }
+
+  function toggleVerdictFilter(verdict: Verdict) {
+    const pressed = filter.verdicts.includes(verdict)
+      ? filter.verdicts.filter((v) => v !== verdict)
+      : [...filter.verdicts, verdict]
+    filter = { ...filter, verdicts: VERDICT_ORDER.filter((v) => pressed.includes(v)) }
+  }
+
+  function setQuery(query: string) {
+    filter = { ...filter, query }
+  }
+
+  function clearFilter() {
+    filter = { verdicts: [], query: '' }
   }
 
   return {
@@ -244,6 +298,12 @@ export function createAnalysisStore(): AnalysisStore {
     get sort() {
       return sort
     },
+    get filter() {
+      return filter
+    },
+    get visibleRows() {
+      return visibleRows
+    },
     begin,
     restore,
     reset,
@@ -252,5 +312,8 @@ export function createAnalysisStore(): AnalysisStore {
     select,
     selectAlbum,
     toggleSort,
+    toggleVerdictFilter,
+    setQuery,
+    clearFilter,
   }
 }

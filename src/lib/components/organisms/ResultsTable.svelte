@@ -4,7 +4,8 @@
   import ColumnHeader from '../molecules/ColumnHeader.svelte'
   import CutoffValue from '../molecules/CutoffValue.svelte'
   import VerdictCell from '../molecules/VerdictCell.svelte'
-  import { t } from '../../i18n'
+  import { getLocale, t } from '../../i18n'
+  import { compareRows } from '../../table-view'
   import type { ResultRow, SortColumn, SortState, TrackAnalysis } from '../../model'
 
   type Props = {
@@ -18,8 +19,12 @@
      * change scrolls the selected row into view.
      */
     revealRequest?: number
+    /** RF-08 (sort-filter.md section 8): rows were found but none passes the filters. */
+    noMatches?: boolean
     onselect?: (index: number) => void
     onsort?: (column: SortColumn) => void
+    /** RF-08: the Clear filters button of the no-match state. */
+    onclearfilters?: () => void
   }
 
   let {
@@ -30,7 +35,9 @@
     viewportHeight,
     revealRequest = 0,
     onselect,
+    noMatches = false,
     onsort,
+    onclearfilters,
   }: Props = $props()
 
   let scrollTop = $state(0)
@@ -70,56 +77,7 @@
     return declared !== null && estimate !== null && estimate < declared
   }
 
-  /** Numeric order in `dir`; null ("—") cells go last in both directions. */
-  function compareNullable(a: number | null, b: number | null, dir: number): number {
-    if (a === null && b === null) return 0
-    if (a === null) return 1
-    if (b === null) return -1
-    return dir * (a - b)
-  }
-
-  let sortedRows = $derived.by(() => {
-    const copy = [...rows]
-    const dir = sort.direction === 'desc' ? -1 : 1
-
-    copy.sort((a, b) => {
-      switch (sort.column) {
-        case 'file':
-          return dir * a.analysis.info.path.localeCompare(b.analysis.info.path)
-        case 'folder':
-          return dir * (a.analysis.info.folder || getFolderName(a.analysis.info.path)).localeCompare(
-            b.analysis.info.folder || getFolderName(b.analysis.info.path),
-          )
-        case 'state':
-          return dir * a.analysis.verdict.localeCompare(b.analysis.verdict)
-        case 'format':
-          return dir * formatText(a.analysis).localeCompare(formatText(b.analysis))
-        case 'sampleRate':
-          return dir * ((a.analysis.info.sampleRate ?? 0) - (b.analysis.info.sampleRate ?? 0))
-        case 'bitDepth':
-          return dir * ((a.analysis.info.bitDepth ?? 0) - (b.analysis.info.bitDepth ?? 0))
-        case 'duration':
-          return dir * ((a.analysis.info.durationMs ?? 0) - (b.analysis.info.durationMs ?? 0))
-        case 'cutoff':
-          return dir * ((a.analysis.cutoff?.frequencyHz ?? 0) - (b.analysis.cutoff?.frequencyHz ?? 0))
-        case 'bitrate':
-          return compareNullable(
-            a.analysis.info.declaredBitrateKbps,
-            b.analysis.info.declaredBitrateKbps,
-            dir,
-          )
-        case 'realBitrate':
-          return compareNullable(
-            a.analysis.estimatedSourceBitrateKbps,
-            b.analysis.estimatedSourceBitrateKbps,
-            dir,
-          )
-        default:
-          return 0
-      }
-    })
-    return copy
-  })
+  let sortedRows = $derived([...rows].sort((a, b) => compareRows(a, b, sort, getLocale())))
 
   let isVirtualised = $derived(
     viewportHeight !== undefined || (gridElement && gridElement.clientHeight > 0),
@@ -183,23 +141,20 @@
   function handleKeyDown(e: KeyboardEvent) {
     if (sortedRows.length === 0) return
 
+    // A selection that is not among the shown rows (null or hidden by a filter) behaves as no selection
+    const curr = selectedIndex === null ? -1 : sortedRows.findIndex((r) => r.index === selectedIndex)
+
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      if (selectedIndex === null) {
+      if (curr < 0) {
         onselect?.(sortedRows[0].index)
-      } else {
-        const curr = sortedRows.findIndex((r) => r.index === selectedIndex)
-        if (curr >= 0 && curr < sortedRows.length - 1) {
-          onselect?.(sortedRows[curr + 1].index)
-        }
+      } else if (curr < sortedRows.length - 1) {
+        onselect?.(sortedRows[curr + 1].index)
       }
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
-      if (selectedIndex !== null) {
-        const curr = sortedRows.findIndex((r) => r.index === selectedIndex)
-        if (curr > 0) {
-          onselect?.(sortedRows[curr - 1].index)
-        }
+      if (curr > 0) {
+        onselect?.(sortedRows[curr - 1].index)
       }
     } else if (e.key === 'Home') {
       e.preventDefault()
@@ -289,6 +244,14 @@
     style:padding-top="{range.start * rowHeight}px"
     style:padding-bottom="{Math.max(0, (sortedRows.length - range.end) * rowHeight)}px"
   >
+    {#if noMatches && rows.length === 0}
+      <div class="no-matches">
+        <span>{t('table.noMatches')}</span>
+        <button type="button" class="clear-filters" onclick={() => onclearfilters?.()}>
+          {t('table.clearFilters')}
+        </button>
+      </div>
+    {/if}
     {#each visibleRows as row (row.index)}
       {@const nyquist = (row.analysis.info.sampleRate ?? 44100) / 2}
       {@const errTitle = getRowErrorTitle(row)}
@@ -397,6 +360,35 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     box-sizing: border-box;
+  }
+
+  .no-matches {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-4) 0;
+    color: var(--color-text-muted);
+  }
+
+  .clear-filters {
+    padding: var(--space-1) var(--space-3);
+    background: var(--color-surface-raised);
+    border: 1px solid var(--color-border);
+    border-radius: var(--space-1);
+    color: var(--color-text);
+    font-family: var(--font-ui);
+    font-size: var(--font-size);
+    cursor: pointer;
+  }
+
+  .clear-filters:hover {
+    border-color: var(--color-accent);
+  }
+
+  .clear-filters:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 1px;
   }
 
   .rate-cell,

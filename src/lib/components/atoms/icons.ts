@@ -12,3 +12,4 @@ export type IconName =
   | 'verdict-error'
   | 'sort-asc'
   | 'sort-desc'
+  | 'search'

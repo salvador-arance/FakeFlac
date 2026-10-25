@@ -61,6 +61,18 @@ const EN: Record<string, string> = {
   'spectrogram.label': 'Spectrogram',
   'spectrogram.loading': 'Loading spectrogram…',
   'spectrogram.unavailable': 'Cannot show the spectrogram of this file',
+  // specs/ui/sort-filter.md, "Texts"
+  'filter.label': 'Filter by verdict',
+  'filter.fake': 'Show fake tracks',
+  'filter.suspicious': 'Show suspicious tracks',
+  'filter.real': 'Show genuine tracks',
+  'filter.error': 'Show tracks with errors',
+  'search.label': 'Search by name',
+  'search.placeholder': 'Search (Ctrl+F)',
+  'search.clear': 'Clear search',
+  'table.noMatches': 'No tracks match the filters',
+  'table.clearFilters': 'Clear filters',
+  'status.shown': '{n} shown',
 }
 
 const ES: Record<string, string> = {

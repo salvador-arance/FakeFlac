@@ -34,6 +34,9 @@
   --font-size: 12px;
   --row-height: 22px;
   --sidebar-width: 240px;
+  --search-width: 240px;
+  --control-height: 28px;
+  --disabled-opacity: 0.5;
 }
 
 html,

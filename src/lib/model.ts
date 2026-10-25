@@ -1,6 +1,6 @@
 // UI model types shared by the presentational components, the store and the page.
 // Components may not import `src/lib/api`, so the domain types they need are re-exported here.
-import type { AnalysisSummary, TrackAnalysis } from './api/bindings'
+import type { AnalysisSummary, TrackAnalysis, Verdict } from './api/bindings'
 
 export type {
   AlbumSummary,
@@ -38,6 +38,13 @@ export type SortColumn =
   | 'realBitrate'
 
 export type SortState = { column: SortColumn; direction: 'asc' | 'desc' }
+
+/**
+ * The table's verdict filter and name search (specs/ui/sort-filter.md section 10, "Model"). UI type,
+ * not a contract type. `verdicts` empty = no verdict filter; otherwise each pressed verdict once, in
+ * the canonical order fake, suspicious, real, error. `query` is the search field's raw text.
+ */
+export type RowFilter = { verdicts: Verdict[]; query: string }
 
 export type StatusPhase = 'ready' | 'scanning' | 'analysing' | 'finished' | 'cancelled' | 'error'
 export type AnalysisPhase = StatusPhase

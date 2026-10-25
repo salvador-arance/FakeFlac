@@ -30,3 +30,20 @@ export const ExportLabelled: Story = {
     label: 'Export CSV',
   },
 }
+
+/** RF-08 (sort-filter.md section 10): the search magnifier, decorative. */
+export const Search: Story = {
+  args: {
+    name: 'search',
+    size: 16,
+  },
+}
+
+/** RF-08: the search magnifier, labelled. */
+export const SearchLabelled: Story = {
+  args: {
+    name: 'search',
+    size: 24,
+    label: 'Search by name',
+  },
+}

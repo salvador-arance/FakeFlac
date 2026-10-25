@@ -8,9 +8,11 @@
     summary: StatusSummary
     message?: string
     notice?: string
+    /** RF-08 (sort-filter.md section 9): the number of shown rows. */
+    shown?: number
   }
 
-  let { phase, summary, message, notice }: Props = $props()
+  let { phase, summary, message, notice, shown }: Props = $props()
 
   let statusText = $derived.by(() => {
     switch (phase) {
@@ -31,10 +33,17 @@
     }
   })
 
+  // RF-08 (sort-filter.md section 9): only while the table has run rows to count
+  let shownCount = $derived(
+    shown !== undefined && (phase === 'analysing' || phase === 'finished' || phase === 'cancelled')
+      ? ` · ${t('status.shown', { n: shown })}`
+      : '',
+  )
+
   let shownText = $derived(
     notice && phase !== 'scanning' && phase !== 'analysing'
-      ? `${statusText} · ${notice}`
-      : statusText,
+      ? `${statusText}${shownCount} · ${notice}`
+      : `${statusText}${shownCount}`,
   )
 
   let progressValue = $derived.by(() => {

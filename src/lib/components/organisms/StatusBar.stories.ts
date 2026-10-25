@@ -76,3 +76,48 @@ export const ErrorWithNotice: Story = {
     notice: 'Cannot save the CSV file',
   },
 }
+
+// RF-08 (sort-filter.md sections 9 and 10): the shown count.
+
+export const FinishedWithShown: Story = {
+  args: {
+    phase: 'finished',
+    summary: { total: 31, done: 31, real: 28, suspicious: 2, fake: 1, errors: 0 },
+    shown: 3,
+  },
+}
+
+export const AnalysingWithShown: Story = {
+  args: {
+    phase: 'analysing',
+    summary: { total: 31, done: 18, real: 15, suspicious: 2, fake: 1, errors: 0 },
+    shown: 1,
+  },
+}
+
+export const CancelledWithShown: Story = {
+  args: {
+    phase: 'cancelled',
+    summary: { total: 10, done: 3, real: 2, suspicious: 0, fake: 1, errors: 0 },
+    shown: 1,
+  },
+}
+
+/** The error message alone: the shown count is not appended in the error phase. */
+export const ErrorWithShown: Story = {
+  args: {
+    phase: 'error',
+    summary: { total: 2, done: 2, real: 1, suspicious: 0, fake: 0, errors: 1 },
+    message: 'The analysis stopped because of an unexpected error',
+    shown: 1,
+  },
+}
+
+export const WithShownAndNotice: Story = {
+  args: {
+    phase: 'finished',
+    summary: { total: 31, done: 31, real: 30, suspicious: 0, fake: 1, errors: 0 },
+    shown: 1,
+    notice: 'Saved 31 rows to results.csv',
+  },
+}
