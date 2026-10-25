@@ -1,13 +1,13 @@
 ---
 id: SPEC-CONTRACT-H1
-requirements: [RF-01, RF-02, RF-05, RF-06, RF-07, RF-14, RF-15]
+requirements: [RF-01, RF-02, RF-05, RF-06, RF-07, RF-09, RF-14, RF-15]
 status: proposed
-version: 3
+version: 4
 ---
 
-# Backend ↔ frontend contract (H1, with the H2 lossy formats)
+# Backend ↔ frontend contract (H1, with the H2 lossy formats and CSV export)
 
-> The commands, events and types the frontend can use. They are defined once in Rust and the TypeScript bindings are **generated** with `tauri-specta` (S3, ADR-0003); this document is the readable reference. Field names are camelCase on the TS side. `export_csv`, settings and cache commands arrive in H2. Version 3 adds MP3 and M4A files (RF-14 H2) and the source-bitrate estimate (RF-15); changes are listed in "Lossy formats (version 3)".
+> The commands, events and types the frontend can use. They are defined once in Rust and the TypeScript bindings are **generated** with `tauri-specta` (S3, ADR-0003); this document is the readable reference. Field names are camelCase on the TS side. Settings and cache commands arrive later in H2. Version 3 adds MP3 and M4A files (RF-14 H2) and the source-bitrate estimate (RF-15); changes are listed in "Lossy formats (version 3)". Version 4 adds `export_csv` (RF-09); changes are listed in "CSV export (version 4)".
 
 ## Commands
 
@@ -17,6 +17,7 @@ version: 3
 | `start_analysis` | `root: string` (absolute path), `onProgress: Channel<ProgressEvent>` | `AnalysisSummary` when the run ends (finished or cancelled) | `NOT_A_FOLDER`, `FOLDER_UNREADABLE`, `NO_AUDIO_FOUND`, `ANALYSIS_RUNNING`, `INTERNAL` | RF-01..06 |
 | `cancel_analysis` | — | `void` (no-op if nothing is running) | — | RF-05 |
 | `get_spectrogram` | `path: string` | `Spectrogram` | `NOT_ANALYZED` is not used in H1; `INTERNAL` if the file cannot be decoded | RF-07 |
+| `export_csv` (version 4) | — (the destination comes from the native save dialog, never from the frontend) | `ExportResult \| null` (`null` if the dialog is cancelled) | `NOT_ANALYZED`, `ANALYSIS_RUNNING`, `EXPORT_FAILED`, `INTERNAL` | RF-09 |
 
 Drag and drop uses Tauri's native drag-drop event. The frontend cannot tell a folder from a file (it has no file-system access), so it calls `start_analysis` with each dropped path in order until one does not fail with `NOT_A_FOLDER`. Dropped files are ignored in H1: if every dropped path is a file, nothing starts and no error is shown. Any other error is shown as usual.
 
@@ -101,6 +102,11 @@ type Spectrogram = {
   data: number[]           // width*height bytes (0–255), row-major by time (ADR-0009); sent as a JSON array of numbers
 }
 
+type ExportResult = {     // version 4 (RF-09)
+  path: string             // absolute path of the CSV written (the one chosen in the dialog)
+  rows: number             // tracks written (header not counted), ≥ 1
+}
+
 type AppError = {
   code: 'NO_AUDIO_FOUND' | 'NOT_A_FOLDER' | 'FOLDER_UNREADABLE' | 'ANALYSIS_RUNNING' | 'NOT_ANALYZED' | 'EXPORT_FAILED' | 'INTERNAL'
   message: string
@@ -131,6 +137,24 @@ Version 3 (RF-14 H2, RF-15; ADR-0040, ADR-0041; rules: `specs/detection/lossy-so
 - `encoder` and the LAME tag's low-pass are internal to the backend (not in the contract).
 
 `just gen` produces new bindings (`AudioCodec`, `BitrateMode`, the two `TrackInfo` fields and the reason); `just gen-check` must pass. UI impact: `specs/ui/lossy-formats.md`.
+
+## CSV export (version 4)
+
+Version 4 (RF-09; file format and layers: `specs/contracts/csv-export.md`, ADR-0012; UI: `specs/ui/export-csv.md`; scenarios: `specs/features/export-csv.feature`):
+
+- **New command `export_csv`**, no input. It opens the native **save** dialog (modal to the window, like `pick_folder`) with the default file name `FakeFlac - <name of the analysed folder>.csv` (`FakeFlac.csv` for a drive root) and the filter "CSV (*.csv)"; the app does not set the dialog's initial folder (csv-export.md Q8). The dialog asks before replacing an existing file. When the user confirms, the backend writes the CSV of the results it keeps (below) to the chosen path and resolves with `ExportResult`; when the user cancels, it resolves with `null` and writes nothing.
+- **The destination never comes from the frontend** (csv-export.md Q7): the page cannot ask the app to write anywhere. Capabilities do not change.
+- **Results kept for export.** The backend keeps in memory the `TrackAnalysis` of every `trackDone` event of the **latest run**, with that run's `root`; nothing is persisted. They are replaced when a new run sends its `scanned` event. A `start_analysis` that fails before the run starts (`NOT_A_FOLDER`, `FOLDER_UNREADABLE`, `NO_AUDIO_FOUND`, `ANALYSIS_RUNNING`) keeps them, as the table keeps its rows (`ui/main-screen.md`, state Error). A cancelled run keeps the tracks done before it stopped; a run that ends with `INTERNAL` keeps the tracks it reported. The CSV lists them **in `index` order** (scan order), whatever the order `trackDone` arrived in and whatever the table's sort.
+- **Snapshot.** The results are taken when `export_csv` is called, before the dialog opens: a run started while the dialog is open does not change what is written.
+- **Errors**, all before the dialog opens unless stated:
+  - `ANALYSIS_RUNNING`: a run holds the analysis (scanning or analysing). Nothing is exported.
+  - `NOT_ANALYZED`: there are no results (no run yet, or the latest run reported no track). The dialog does not open.
+  - `EXPORT_FAILED` (after the dialog): the chosen path does not end in `.csv` (case-insensitive; nothing is written), or the file cannot be written (csv-export.md section 6). A failed export leaves the destination as it was.
+  - `INTERNAL`: an unexpected failure (for example the export task panicked).
+- **Read-only (RNF-05).** The export reads no audio file and writes no file other than the chosen CSV (and its temporary file while writing).
+- `NOT_ANALYZED` gets its first use here (csv-export.md Q10); `AppErrorCode` does not change.
+
+`just gen` produces new bindings (the command `exportCsv` and the type `ExportResult`); `just gen-check` must pass. The API client adds `exportCsv(): Promise<ExportResult | null>`, which rejects with `ApiError` on a contract error, like `getSpectrogram`.
 
 ## Supported files (RF-14)
 
