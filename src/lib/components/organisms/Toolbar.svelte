@@ -5,8 +5,10 @@
   type Props = {
     canOpen: boolean
     canCancel: boolean
+    canExport?: boolean
     onopen?: () => void
     oncancel?: () => void
+    onexport?: () => void
   }
 
   let { canOpen, canCancel, onopen, oncancel }: Props = $props()

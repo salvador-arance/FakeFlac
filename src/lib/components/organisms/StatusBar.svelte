@@ -7,6 +7,7 @@
     phase: AnalysisPhase
     summary: StatusSummary
     message?: string
+    notice?: string
   }
 
   let { phase, summary, message }: Props = $props()

@@ -5,7 +5,10 @@ use crate::dto;
 use fakeflac_audio::SymphoniaAnalyzer;
 use fakeflac_core::{analyze_folder, AnalysisSlot, DetectionParams};
 use fakeflac_fs::WalkDirScanner;
-use std::path::Path;
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 
 /// Runs one analysis of `root` with the file-system scanner and the symphonia analyzer.
 ///
@@ -15,6 +18,16 @@ use std::path::Path;
 /// `lib.rs`). Uses `cores − 1` workers (at least 1).
 pub fn run_analysis(
     slot: &AnalysisSlot,
+    root: &Path,
+    send: &(dyn Fn(dto::ProgressEvent) -> bool + Sync),
+) -> Result<dto::AnalysisSummary, dto::AppError> {
+    run_with(slot, None, root, send)
+}
+
+/// Shared body of `run_analysis` and `run_analysis_kept`.
+fn run_with(
+    slot: &AnalysisSlot,
+    state: Option<&ExportState>,
     root: &Path,
     send: &(dyn Fn(dto::ProgressEvent) -> bool + Sync),
 ) -> Result<dto::AnalysisSummary, dto::AppError> {
@@ -28,6 +41,9 @@ pub fn run_analysis(
         worker_count(),
         run.token(),
         &|e| {
+            if let Some(state) = state {
+                state.record(root, &e);
+            }
             if !send((&e).into()) {
                 run.token().cancel();
             }
@@ -60,26 +76,43 @@ pub fn get_spectrogram(path: &Path) -> Result<dto::Spectrogram, dto::AppError> {
 
 // --- RF-09: CSV export (specs/contracts/csv-export.md section 5, commands.md "CSV export") ---
 
+#[derive(Debug, Default)]
+struct Kept {
+    root: Option<PathBuf>,
+    tracks: BTreeMap<u32, fakeflac_core::TrackAnalysis>,
+}
+
 /// The results of the latest run, kept in memory for the CSV export, and the "export in
 /// progress" flag (csv-export.md section 5.2).
 #[derive(Debug, Default)]
-pub struct ExportState {}
+pub struct ExportState {
+    kept: Mutex<Kept>,
+    exporting: Arc<AtomicBool>,
+}
 
 /// The results taken when the export starts, before the dialog opens.
 #[derive(Debug, Clone)]
 pub struct ExportSnapshot {
     /// The `root` of the run the tracks come from (the dialog proposes `default_file_name(root)`).
-    pub root: std::path::PathBuf,
+    pub root: PathBuf,
     /// The tracks of that run in `index` (scan) order.
     pub tracks: Vec<fakeflac_core::TrackAnalysis>,
 }
 
 /// Proof that this export is the one in progress; dropping it frees the export slot.
 #[derive(Debug)]
-pub struct ExportGuard {}
+pub struct ExportGuard {
+    flag: Arc<AtomicBool>,
+}
 
 impl Drop for ExportGuard {
-    fn drop(&mut self) {}
+    fn drop(&mut self) {
+        self.flag.store(false, Ordering::SeqCst);
+    }
+}
+
+fn internal(message: &str) -> dto::AppError {
+    fakeflac_core::AppError::new(fakeflac_core::AppErrorCode::Internal, message).into()
 }
 
 impl ExportState {
@@ -89,36 +122,86 @@ impl ExportState {
 
     /// Records one event of the run of `root`: `Scanned` replaces the kept results, `TrackDone`
     /// adds a track at its `index`; other events change nothing.
-    pub fn record(&self, _root: &Path, _event: &fakeflac_core::ProgressEvent) {
-        todo!("RF-09: keep the results of the latest run")
+    pub fn record(&self, root: &Path, event: &fakeflac_core::ProgressEvent) {
+        use fakeflac_core::ProgressEvent;
+        let mut kept = self
+            .kept
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        match event {
+            ProgressEvent::Scanned { .. } => {
+                kept.root = Some(root.to_path_buf());
+                kept.tracks.clear();
+            }
+            ProgressEvent::TrackDone { index, analysis } => {
+                if kept.root.is_none() {
+                    kept.root = Some(root.to_path_buf());
+                }
+                kept.tracks.insert(*index, analysis.clone());
+            }
+            _ => {}
+        }
     }
 }
 
 /// Like `run_analysis`, and records every event in `state` before passing it to `send`.
 pub fn run_analysis_kept(
-    _slot: &AnalysisSlot,
-    _state: &ExportState,
-    _root: &Path,
-    _send: &(dyn Fn(dto::ProgressEvent) -> bool + Sync),
+    slot: &AnalysisSlot,
+    state: &ExportState,
+    root: &Path,
+    send: &(dyn Fn(dto::ProgressEvent) -> bool + Sync),
 ) -> Result<dto::AnalysisSummary, dto::AppError> {
-    todo!("RF-09: run an analysis and keep its results")
+    run_with(slot, Some(state), root, send)
 }
 
 /// Step before the dialog. Checks, in this order: an export in progress (`INTERNAL`, "an export
 /// is already in progress"), a run holding `slot` (`ANALYSIS_RUNNING`), no results
 /// (`NOT_ANALYZED`). Returns the snapshot and the guard that lives until the export ends.
 pub fn begin_export(
-    _slot: &AnalysisSlot,
-    _state: &ExportState,
+    slot: &AnalysisSlot,
+    state: &ExportState,
 ) -> Result<(ExportSnapshot, ExportGuard), dto::AppError> {
-    todo!("RF-09: begin_export")
+    if state
+        .exporting
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return Err(internal("an export is already in progress"));
+    }
+    // From here on the guard frees the flag on any early return.
+    let guard = ExportGuard {
+        flag: Arc::clone(&state.exporting),
+    };
+    // A run holds the slot while it works; taking and dropping it is the check.
+    drop(slot.begin()?);
+    let kept = state
+        .kept
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let root = match (&kept.root, kept.tracks.is_empty()) {
+        (Some(root), false) => root.clone(),
+        _ => {
+            return Err(fakeflac_core::AppError::new(
+                fakeflac_core::AppErrorCode::NotAnalyzed,
+                "there are no results to export",
+            )
+            .into())
+        }
+    };
+    let tracks = kept.tracks.values().cloned().collect();
+    Ok((ExportSnapshot { root, tracks }, guard))
 }
 
 /// Step after the dialog: writes the snapshot to `dest` (`EXPORT_FAILED` unless `dest` is an
 /// absolute `.csv` path that can be written) and returns the rows written and `dest`.
 pub fn export_csv(
-    _snapshot: &ExportSnapshot,
-    _dest: &Path,
+    snapshot: &ExportSnapshot,
+    dest: &Path,
 ) -> Result<dto::ExportResult, dto::AppError> {
-    todo!("RF-09: export_csv")
+    let rows =
+        fakeflac_core::export_csv(&fakeflac_export::CsvFileExporter, &snapshot.tracks, dest)?;
+    Ok(dto::ExportResult {
+        path: dest.to_string_lossy().into_owned(),
+        rows,
+    })
 }

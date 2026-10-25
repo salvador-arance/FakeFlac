@@ -18,6 +18,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             commands::start_analysis,
             commands::cancel_analysis,
             commands::get_spectrogram,
+            commands::export_csv,
         ])
         // u64/i64 fields (durations, sizes, times) stay far below 2^53: the contract says `number`.
         .dangerously_cast_bigints_to_number()
@@ -37,6 +38,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(Arc::new(AnalysisSlot::new()))
+        .manage(Arc::new(run::ExportState::new()))
         .invoke_handler(builder.invoke_handler())
         // A reload (F5, dev server) leaves no listener for the running analysis: cancel it so the
         // new page is not told `ANALYSIS_RUNNING` until the old run ends.
