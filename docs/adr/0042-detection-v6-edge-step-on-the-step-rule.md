@@ -1,7 +1,7 @@
 # ADR-0042: Detection v6: the step rule V4 does not apply to a content edge (median step and post-step residual)
 
-- Status: accepted (G1, #60: the direction). Amended by the spec PR of detection v6 (`spec/RF-04-detection-v6`): the cap on `D`, the 24-bit floor, the values and the answers to Q1–Q7 of the proposal (rules.md Q12–Q22)
-- Date: 2026-10-23 (amended 2026-10-24)
+- Status: accepted (G1, #60: the direction). Amended by the spec PR of detection v6 (`spec/RF-04-detection-v6`): the cap on `D`, the 24-bit floor, the values and the answers to Q1–Q7 of the proposal (rules.md Q12–Q22). Amended by `spec/RF-04-e6-holdout-gate` after the corpus run: the `holdout` gate of E6 (rules.md Q23 and section 8.3)
+- Date: 2026-10-23 (amended 2026-10-24 and 2026-10-25)
 
 ## Context and rationale
 
@@ -19,7 +19,7 @@ A second gap: the residual depends on bit depth. The whole cache is decoded to 1
 2. `EdgeStep` = `InRange(fs)` ∧ `D_Q < edge.max_median_step_db` ∧ `R ≥ edge.min_residual_db` ∧ `D < edge.max_step_db`. V4 gains "and not `EdgeStep`"; such a track falls through to V5/V6 and is `Suspicious`. `LossyStep`, `FullBand`, V3 and every other rule are unchanged, so against v5 the only possible change is `Fake → Suspicious`, and the caught rate is unchanged by construction. No new reason (Q13), V4 only (Q12), not for lossy files (Q16).
 3. Data, not code (ADR-0011): an optional `[edge]` section in `detection-params.v6.toml`, `algorithm_version` 6, the new default. Values: `max_median_step_db` 3 dB, `min_residual_db` 15 dB, `max_step_db` 16 dB, chosen on split `tune` only (worst protected setting at most 0.25 pp, then the largest smallest margin of W4) and checked on `holdout` (worst protected setting 0.41 pp, cbr192). Without `[edge]`, files v2–v5 give exactly their own verdicts. No extraction change (`EXTRACTION_VERSION` stays), no new input to `measure()` and no contract change.
 4. Calibration: the tool reports `D_Q`, `F_top`, `R` and `EdgeStep`, with an edge report per setting on the high tail of `R` among the transcodes with a low `D_Q`; a per-setting `decode_args` lets `calibration.v3.toml` add four settings decoded to 24 bits (`cbr128_s24`, `cbr192_s24`, `cbr256_s24`, `cbr320_s24`).
-5. Acceptance (rules.md section 8) against the v5 column of the same run: W4 not `Fake`; 15/15 confirmed fakes, none `EdgeStep`; `primary` 0 `Fake`; only `Fake → Suspicious`; and at most 0.5 percentage points of `Fake`-rate drop per protected setting (the seven of v4 and the four 24-bit variants), on `all` and on `holdout`.
+5. Acceptance (rules.md section 8) against the v5 column of the same run: W4 not `Fake`; 15/15 confirmed fakes, none `EdgeStep`; `primary` 0 `Fake`; only `Fake → Suspicious`; and at most 0.5 percentage points of `Fake`-rate drop per protected setting (the seven of v4 and the four 24-bit variants), on `all` and on `holdout`. Amended after the run (2026-10-25, rules.md Q23): on `holdout` the gate applies to the lower bound of the drop's 95 % Wilson interval, not to the drop itself.
 
 ## Alternatives considered
 
@@ -37,6 +37,7 @@ A second gap: the residual depends on bit depth. The whole cache is decoded to 1
 
 - W4 is expected to become `Suspicious` (`AmbiguousCutoff`) and T1 to pass. W5 and W6 stay `Suspicious`: W6's verdict comes from the gap rule, outside this decision (Q15).
 - The evidence for the content-edge side is one false positive; the values were chosen on `tune`, and on `holdout` cbr192 is one transcode away from the gate. If E1, E2, E3 or E6 fails in the corpus run, the figures go back to G1 and are not tuned in the implement stage.
+- **Outcome of the corpus run (2026-10-25, rules.md section 8.3).** E1–E5 pass; E6 passes on `all` (worst protected setting cbr192, 0.28 pp, as predicted) and missed the original `holdout` gate by one transcode: cbr192 and cbr192_s24 lose 2 of at most 392 each (0.51 pp), the same two source tracks at 16 and 24 bits. The run was cold, after a library reorganisation, so `holdout` was drawn again: smaller (392 sources instead of 484) and mixed with albums of the old `tune`. The owner kept v6 and its values and changed the `holdout` gate, after seeing the result (Q23): with about 390 transcodes per setting one track is 0.26 pp, too coarse for a point gate of 0.5 pp, so `holdout` now fails only when it shows a drop above 0.5 pp (Wilson lower bound). Kept against v5, which leaves W4, a purchased track, `Fake`; and against re-choosing the values, which could only be done by looking at this `holdout`.
 - The default `algorithmVersion` becomes 6 (cached app results are recomputed, ADR-0008) and the next free `algorithm_version` becomes 7.
 - Protected tests that change in the test stage:
   - the default-params and `algorithmVersion` checks of `crates/fakeflac-audio/tests/{detection_lossless,detection_lossy,params_files}.rs`, `crates/fakeflac-core/tests/{detect_rules,detect_lossy,params_lossy}.rs` and `src-tauri/tests/run_analysis_lossy_v5.rs` (v5 → v6, 5 → 6);
