@@ -71,3 +71,13 @@ export const LossyRows: Story = {
     sort: { column: 'file', direction: 'asc' },
   },
 }
+
+/** RF-10 (Q16): `revealRequest` changes with the selection unchanged; the row is scrolled back into view. */
+export const RevealRequest: Story = {
+  args: {
+    rows: makeManyRows(60),
+    selectedIndex: 0,
+    sort: { column: 'file', direction: 'asc' },
+    revealRequest: 1,
+  },
+}
