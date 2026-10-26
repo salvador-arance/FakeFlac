@@ -838,6 +838,8 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
 
         // 5. Tables.
         let mut evaluations: Vec<Evaluation> = Vec::new();
+        // The lossy baseline: the first params file with a `[lossy]` section (lossy.md 6.8).
+        let lossy_baseline = runs.iter().position(|r| r.params.lossy.is_some());
         for (i, run) in runs.iter().enumerate() {
             let baseline = (i > 0).then(|| (&runs[0], groups[runs[0].group].rows.as_slice()));
             let mut eval = evaluation(run, &groups[run.group].rows, &config, baseline);
@@ -845,7 +847,18 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
             eval.lossy_not_evaluated = crate::lossy::not_evaluated_count(&run.lossy_evals);
             eval.lossy_watch = crate::lossy::lossy_watch(group, &run.lossy_evals);
             if run.params.lossy.is_some() {
-                eval.lossy = Some(crate::lossy::lossy_tables(group, &run.lossy_evals, &config));
+                let mut tables = crate::lossy::lossy_tables(group, &run.lossy_evals, &config);
+                if let Some(b) = lossy_baseline.filter(|b| *b < i) {
+                    let base = &runs[b];
+                    tables.changes = Some(crate::lossy::lossy_verdict_changes_between(
+                        &base.name,
+                        &groups[base.group],
+                        &base.lossy_evals,
+                        group,
+                        &run.lossy_evals,
+                    ));
+                }
+                eval.lossy = Some(tables);
                 eval.chains = crate::lossy::chains(group, run, &run.lossy_evals);
             }
             evaluations.push(eval);

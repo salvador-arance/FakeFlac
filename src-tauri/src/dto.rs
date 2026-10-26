@@ -52,6 +52,8 @@ pub enum SuspicionReason {
     AmbiguousCutoff,
     HighBandGaps,
     CutoffBelowDeclared,
+    // Contract version 6 (RF-16, rule L6a): a streaming sample rate with Opus's 20 kHz band edge.
+    StreamingSampleRate,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Type)]
@@ -257,6 +259,7 @@ impl From<core::SuspicionReason> for SuspicionReason {
             core::SuspicionReason::AmbiguousCutoff => SuspicionReason::AmbiguousCutoff,
             core::SuspicionReason::HighBandGaps => SuspicionReason::HighBandGaps,
             core::SuspicionReason::CutoffBelowDeclared => SuspicionReason::CutoffBelowDeclared,
+            core::SuspicionReason::StreamingSampleRate => SuspicionReason::StreamingSampleRate,
         }
     }
 }

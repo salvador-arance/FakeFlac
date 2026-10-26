@@ -51,6 +51,7 @@ pub fn reason_name(r: SuspicionReason) -> &'static str {
         SuspicionReason::AmbiguousCutoff => "ambiguousCutoff",
         SuspicionReason::HighBandGaps => "highBandGaps",
         SuspicionReason::CutoffBelowDeclared => "cutoffBelowDeclared",
+        SuspicionReason::StreamingSampleRate => "streamingSampleRate",
     }
 }
 

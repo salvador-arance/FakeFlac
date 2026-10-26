@@ -91,6 +91,9 @@ pub enum SuspicionReason {
     /// Lossy files: the content stops clearly below the expected cutoff of the declared bitrate
     /// (algorithm_version 5, `specs/detection/lossy-source.md` rule L4).
     CutoffBelowDeclared,
+    /// Lossy files: a streaming sample rate (48 kHz) with a cutoff at Opus's 20 kHz band edge
+    /// (algorithm_version 7, `specs/detection/lossy-source.md` rule L6a).
+    StreamingSampleRate,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
