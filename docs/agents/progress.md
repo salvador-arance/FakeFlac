@@ -2,6 +2,38 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-26 - RF-16 implemented (detection v7), PR open for G2
+
+**Done**
+- `/feature RF-16` on `feat/RF-16`:
+  - `acc39aa` test: failing tests, the three new fixtures, and the Q25 (j) edits;
+  - `91d2708` feat: Rust (L6a, `[lossy.streaming]`, v7 default, contract v6, CSV, calibration 6.3/6.8);
+  - `dacf4e3` feat: the i18n reason text;
+  - `dba8bfb` docs: traceability row.
+- Review round 1: nothing blocking. `just ci` green (680/680 vitest). `privacy-check`: 0 matches.
+- The owner accepted one protected-test edit outside Q25 (j): `src-tauri/tests/export_csv.rs`, `algorithm_version` 6 → 7.
+- Corpus acceptance run `20261026T141347Z` (v6 × v7): **K1–K7 all pass.**
+  - K3: 99.5 %.
+  - K4: 134/134 strong labels.
+  - K5: `cbr320 @ 48000` 3/122 (2.5 %), `cbr256 @ 48000` 0/122.
+  - Aggregates are in the PR body.
+- The corpus grew by 50 trusted lossless albums (1,425 → 2,040 generated sources, 122 natively 48 kHz). The run was about 2 h 40 min with 16,659 new transcodes. The cache is now warm for that corpus.
+
+**Pending**
+- G2: review and merge the RF-16 PR. Hand check: the reason text in the app on a 48 kHz MP3 320 rip.
+- Spec observation for a later G1: K5 (11.7) reads "`streaming` ≤ bound × denominator", while the 6.8 `streaming rate` counts only flagged rows inside the denominator. The two differ when an `Undetectable` row is flagged (`opus128_cbr320`: 2,027 against 2,017). Neither reading changes K5 in this run.
+- T2 and T3 (lossless) fail identically with v6 and v7. T2 `all` went from 4 to 5 with the new albums, so it is not caused by RF-16.
+- Carried over: RF-11, RF-13 and the high-priority RNFs are still `draft`; RF-08 manual checks M1–M3 and P1–P2; the optional hand check of the unlabelled 48 kHz MP3s that v7 flags.
+
+**Blockers / questions for the human**
+- None.
+
+**Notes for the next session**
+- **Vitest in the Bash tool** only works when the shell's working directory is `C:/Workspaces/FakeFlac` with an upper-case C (run `cd "C:/Workspaces/FakeFlac" && npm run test`). With the default lower-case `c:` working directory, every file fails with "Vitest failed to find the runner" (the module is loaded twice). Every Bash call also ends with a harmless "claude-…-cwd: No such file" message and exit 1, so read the real output.
+- **Corpus run progress:** `fakeflac-calibrate accept` prints nothing until it ends. Its progress can be read from the feature cache JSONL in `$FAKEFLAC_CALIBRATION/features/`: count the generated sources that have all 27 entries.
+
+**Next step:** after G2 merges the RF-16 PR, run `just prune-branches`, then choose the next requirement.
+
 ## 2026-10-25 - RF-16 spec merged (streaming sample rate, detection v7)
 
 **Done**
