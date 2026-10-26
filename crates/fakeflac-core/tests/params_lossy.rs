@@ -19,11 +19,12 @@ fn lossy(p: &DetectionParams) -> &LossyParams {
         .expect("the defaults have a [lossy] section")
 }
 
-// @RF-15 Scenario: The defaults hold the v5 lossy values
+// @RF-15 Scenario: The defaults hold the v5 lossy values (since detection v7 the defaults carry
+// algorithm_version 7 and add [lossy.streaming], RF-16; lossy-source.md Q25 (j))
 #[test]
 fn rf15_the_defaults_hold_the_v5_lossy_values() {
     let p = DetectionParams::default();
-    assert_eq!(p.algorithm_version, 6);
+    assert_eq!(p.algorithm_version, 7);
     let l = lossy(&p);
     assert_eq!(l.suspicious_shortfall_hz, 1000.0);
     assert_eq!(l.fake_shortfall_hz, 2500.0);

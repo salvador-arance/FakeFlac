@@ -1,7 +1,8 @@
 //! Tests derived from `specs/features/detection-lossless.feature` (@RF-03 @RF-04 @RF-14 @RNF-04).
-//! Spec: `specs/detection/rules.md` (lossless rules of v4, v6 adds the edge step), parameters v6 (the
-//! defaults, ADR-0042; the file and `algorithm_version` 6 in the tests of "Parameters come from the
-//! versioned file"), fixtures of
+//! Spec: `specs/detection/rules.md` (lossless rules of v4, v6 adds the edge step), parameters v7 (the
+//! defaults since detection v7, RF-16: v6's lossless values plus `[lossy.streaming]`, which no
+//! lossless rule reads; the file and `algorithm_version` 7 in the tests of "Parameters come from the
+//! versioned file", lossy-source.md Q25 (b) and (j)), fixtures of
 //! `specs/detection/fixtures.md`. One test per example row of each Scenario Outline.
 //! Protected after the `test(RF-03,RF-04)` commit; updated for detection v3 in the `test(RF-04)`
 //! commit that follows ADR-0038 and for v4 in the one that follows ADR-0039. The rule-level
@@ -540,23 +541,45 @@ fn deterministic() {
     );
 }
 
+/// `p` without its `[lossy.streaming]` section (detection v7, RF-16).
+fn without_streaming(mut p: DetectionParams) -> DetectionParams {
+    if let Some(lossy) = p.lossy.as_mut() {
+        lossy.streaming = None;
+    }
+    p
+}
+
 // ---- Scenario: Parameters come from the versioned file (@RF-04) --------------------------------
 #[test]
 fn default_params_equal_versioned_file() {
     let file = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../specs/detection/detection-params.v6.toml");
+        .join("../../specs/detection/detection-params.v7.toml");
     let text = std::fs::read_to_string(file).unwrap();
     let from_file: DetectionParams = toml::from_str(&text).unwrap();
     assert_eq!(DetectionParams::default(), from_file);
-    assert_eq!(from_file.algorithm_version, 6);
-    assert!(from_file.lossy.is_some(), "v6 keeps the [lossy] section");
-    assert!(from_file.edge.is_some(), "v6 has an [edge] section");
-    // Their sections other than [edge] are those of v5 (and, for the lossless ones, v4).
+    assert_eq!(from_file.algorithm_version, 7);
+    assert!(from_file.lossy.is_some(), "v7 keeps the [lossy] section");
+    assert!(
+        from_file.lossy.as_ref().unwrap().streaming.is_some(),
+        "v7 has a [lossy.streaming] section"
+    );
+    assert!(from_file.edge.is_some(), "v7 keeps the [edge] section");
+    // Their sections other than [lossy.streaming] are those of v6 (RF-16).
+    let v6_file = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../specs/detection/detection-params.v6.toml");
+    let v6: DetectionParams = toml::from_str(&std::fs::read_to_string(v6_file).unwrap()).unwrap();
+    let without_lossy_streaming = DetectionParams {
+        algorithm_version: 6,
+        ..without_streaming(DetectionParams::default())
+    };
+    assert_eq!(without_lossy_streaming, v6);
+    // Their sections other than [edge] and [lossy.streaming] are those of v5 (and, for the lossless
+    // ones, v4).
     let v5 = v5_params();
     let without_edge = DetectionParams {
         algorithm_version: 5,
         edge: None,
-        ..DetectionParams::default()
+        ..without_streaming(DetectionParams::default())
     };
     assert_eq!(without_edge, v5);
     let v4_file = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -572,10 +595,10 @@ fn default_params_equal_versioned_file() {
 }
 
 #[test]
-fn every_analysis_carries_algorithm_version_6() {
+fn every_analysis_carries_algorithm_version_7() {
     // Analysed, too short and corrupt tracks alike.
     for name in ["lp16k", "silence", "short", "corrupt"] {
-        assert_eq!(analyze(name, Flac).algorithm_version, 6, "{name}");
+        assert_eq!(analyze(name, Flac).algorithm_version, 7, "{name}");
     }
 }
 
