@@ -187,14 +187,16 @@ fn rf15_deterministic_result() {
     assert_eq!(first.estimated_source_bitrate_kbps, Some(128), "{first:#?}");
 }
 
-// The defaults of the code are the v6 file (v5's lossy values), so "analysed with DetectionParams v5" and
-// "analysed by the app" agree (scenario "Parameters come from the versioned file").
+// The defaults of the code are the v7 file (v5's lossy values plus [lossy.streaming], which does not
+// change a 44.1 kHz fixture), so "analysed with DetectionParams v5" and "analysed by the app" agree
+// (scenario "Parameters come from the versioned file"; lossy-source.md Q25 (c) and (j)).
 #[test]
 fn rf15_the_default_params_give_the_same_analysis_as_the_v5_file() {
-    // Since detection v6 the defaults are the v6 file, whose lossy values are v5's: the analysis
-    // is the same but for the algorithmVersion it carries (detection-lossy.feature, header).
+    // Since detection v7 the defaults are the v7 file, whose lossy values are v5's plus
+    // [lossy.streaming]: on this 44.1 kHz fixture the analysis is the same but for the
+    // algorithmVersion it carries (detection-lossy.feature, header).
     let mut by_default = analyze_with("mp3_320_lp17k", &DetectionParams::default());
-    assert_eq!(by_default.algorithm_version, 6);
+    assert_eq!(by_default.algorithm_version, 7);
     by_default.algorithm_version = 5;
     assert_eq!(by_default, analyze_with("mp3_320_lp17k", &v5()));
 }

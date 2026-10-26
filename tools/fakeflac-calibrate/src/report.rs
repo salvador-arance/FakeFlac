@@ -163,7 +163,7 @@ pub struct LossyMatrix {
 #[derive(Debug, Clone, PartialEq)]
 pub struct LossyGroupRow {
     /// A `[[generate.lossy]]` id, `trusted <class>`, `confirmed_real`, `confirmed_fake <upstream>`,
-    /// `confirmed_fake <rate>` or `weak`.
+    /// `confirmed_fake <rate>`, `weak`, or a sample-rate sub-row `<group> @ <bucket>` (6.8).
     pub group: String,
     pub counts: LossyCounts,
     pub median_estimate_kbps: Option<f64>,
@@ -177,6 +177,52 @@ pub struct LossyGroupRow {
     pub s_p5_hz: Option<f64>,
     /// The group holds positives (rate shown: caught) rather than negatives (rate shown: FP).
     pub positive: bool,
+    /// Rows whose reasons include `streamingSampleRate` (lossy.md section 6.8).
+    pub streaming: u32,
+    /// The numerator of the `streaming rate` (lossy.md section 6.8): the rows of the rate
+    /// denominator (`Real`, `Suspicious`, `Fake`) whose reasons include `streamingSampleRate`.
+    pub streaming_in_denominator: u32,
+    /// Median, 5th and 95th percentile of the reported cutoff `fc` over the rows with a cutoff
+    /// (lossy.md section 6.8).
+    pub fc_median_hz: Option<f64>,
+    pub fc_p5_hz: Option<f64>,
+    pub fc_p95_hz: Option<f64>,
+}
+
+/// One lossy row whose verdict differs from the lossy baseline's (lossy.md section 6.8), listed in
+/// `report.md` only.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LossyChangedRow {
+    /// Relative to its root, `/` separators (never shown in `summary.md`).
+    pub path: String,
+    pub truth: String,
+    /// The per-group row the track belongs to (a `[[generate.lossy]]` id, `trusted <class>`,
+    /// `confirmed_real`, `confirmed_fake <upstream>` or `weak`).
+    pub group: String,
+    pub codec: Option<String>,
+    pub sample_rate: Option<u32>,
+    pub declared_bitrate_kbps: Option<u32>,
+    pub fc_hz: Option<f64>,
+    pub shortfall_hz: Option<f64>,
+    pub step_db: Option<f64>,
+    pub from: Verdict,
+    pub to: Verdict,
+}
+
+/// The lossy verdict-change table of one params file against the lossy baseline, the first
+/// `--params` file with a `[lossy]` section (lossy.md section 6.8).
+#[derive(Debug, Clone, PartialEq)]
+pub struct LossyVerdictChanges {
+    /// Name of the lossy baseline params file.
+    pub against: String,
+    /// Keys are (baseline verdict, verdict) as lower-case names, as in [`VerdictChanges`]; all 16
+    /// pairs are present, with 0 when empty.
+    pub counts: BTreeMap<(String, String), u32>,
+    /// "Of which `streamingSampleRate`": the off-diagonal rows whose reasons include
+    /// `streamingSampleRate` with this file and not with the baseline.
+    pub streaming: u32,
+    /// The off-diagonal rows, for `report.md`.
+    pub rows: Vec<LossyChangedRow>,
 }
 
 /// A lossy `false-positive` track (lossy.md section 6.7).
@@ -202,6 +248,8 @@ pub struct LossyWatchEntry {
 pub struct LossyEvaluation {
     pub matrix: BTreeMap<SplitSel, LossyMatrix>,
     pub groups: Vec<LossyGroupRow>,
+    /// Against the lossy baseline; `None` for the lossy baseline itself (lossy.md section 6.8).
+    pub changes: Option<LossyVerdictChanges>,
 }
 
 /// One track of a chain (lossy.md section 6.5).

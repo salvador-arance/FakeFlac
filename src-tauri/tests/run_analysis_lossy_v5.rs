@@ -13,7 +13,8 @@
 //!                          estimatedSourceBitrateKbps 128, verdict real
 //!   a WAV file             declaredBitrateKbps, bitrateMode and estimatedSourceBitrateKbps null
 //!   mp3_vbr_lp19k5.mp3     declaredBitrateKbps 240, bitrateMode vbr, estimate 240, verdict real
-//! Every row carries algorithmVersion 6.
+//! Every row carries algorithmVersion 7 (the defaults since detection v7, RF-16; none of these
+//! fixtures is at 48 kHz, so their verdicts are v5's: lossy-source.md Q25 (d) and (j)).
 
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
@@ -96,11 +97,11 @@ fn rf15_a_lossy_row_has_the_same_fields_as_a_lossless_row() {
     let (summary, events) = run(&dir);
     assert_eq!(summary.total, 3);
 
-    // "every trackDone event carries a complete TrackAnalysis with algorithmVersion 6"
+    // "every trackDone event carries a complete TrackAnalysis with algorithmVersion 7"
     let rows = analyses(&events);
     assert_eq!(rows.len(), 3);
     for a in &rows {
-        assert_eq!(a.algorithm_version, 6, "{:?}", a.info.path);
+        assert_eq!(a.algorithm_version, 7, "{:?}", a.info.path);
         assert_eq!(a.error, None, "{:?}", a.info.path);
         assert!(a.cutoff.is_some(), "{:?}: a cutoff", a.info.path);
         assert!(a.info.sample_rate > 0 && a.info.duration_ms > 0);
@@ -149,7 +150,7 @@ fn rf15_a_variable_bitrate_is_marked_in_the_table() {
     assert_eq!(a.info.bitrate_mode, Some(dto::BitrateMode::Vbr));
     assert_eq!(a.estimated_source_bitrate_kbps, Some(240));
     assert_eq!(a.verdict, Verdict::Real, "{a:#?}");
-    assert_eq!(a.algorithm_version, 6);
+    assert_eq!(a.algorithm_version, 7);
 }
 
 // @RNF-09 Scenario: Unicode names of lossy files

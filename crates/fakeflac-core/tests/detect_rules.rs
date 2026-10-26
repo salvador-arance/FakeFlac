@@ -1257,12 +1257,13 @@ fn rf04_v3_without_a_full_band_section_the_guard_is_disabled() {
 
 // ---- Parameters (rules.md section 4) --------------------------------------------------------------
 
-// The defaults of the code are v6 (ADR-0042; v5 in ADR-0041; the audio crate's test compares them with the file).
-// Their [full_band] section is that of v4.
+// The defaults of the code are v7 (RF-16, lossy-source.md section 11; v6 in ADR-0042, v5 in
+// ADR-0041; the audio crate's test compares them with the file). Their [full_band] section is that
+// of v4.
 #[test]
 fn rf04_v3_defaults_are_v3() {
     let p = DetectionParams::default();
-    assert_eq!(p.algorithm_version, 6);
+    assert_eq!(p.algorithm_version, 7);
     assert_eq!(
         p.full_band,
         Some(FullBandParams {

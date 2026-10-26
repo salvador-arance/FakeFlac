@@ -467,7 +467,7 @@ use aac_tables::{SPECTRUM_CODEBOOK1_CODES, SPECTRUM_CODEBOOK1_LENS, SWB_OFFSET_L
 
 #[derive(Debug, Clone)]
 pub struct AacSpec {
-    /// 44.1 kHz only (sampling frequency index 4).
+    /// 44.1 kHz (sampling frequency index 4) or, for LC only, 48 kHz (index 3; RF-16).
     pub sample_rate: u32,
     pub edge_hz: f64,
     pub bitrate_kbps: u32,
@@ -478,7 +478,7 @@ pub struct AacSpec {
     pub seed: u64,
 }
 
-/// "30 s" in AAC frames: 1292 at 44.1 kHz.
+/// "30 s" in AAC frames: 1292 at 44.1 kHz, 1406 at 48 kHz.
 pub fn aac_frames(seconds: f64, sample_rate: u32) -> usize {
     (seconds * f64::from(sample_rate) / 1024.0).round() as usize
 }
@@ -588,17 +588,24 @@ fn descriptor(tag: u8, payload: &[u8]) -> Vec<u8> {
     out
 }
 
-/// AudioSpecificConfig of a 44.1 kHz mono stream (ISO/IEC 14496-3 1.6.2.1).
-fn audio_specific_config(object_type: u8) -> Vec<u8> {
+/// AudioSpecificConfig of a 44.1 or 48 kHz mono stream (ISO/IEC 14496-3 1.6.2.1). HE-AAC is
+/// written at 44.1 kHz only.
+fn audio_specific_config(object_type: u8, sample_rate: u32) -> Vec<u8> {
+    let frequency_index = match sample_rate {
+        44_100 => 4,
+        48_000 => 3,
+        other => panic!("no AAC sampling frequency index written for {other} Hz"),
+    };
     let mut w = BitWriter::new();
     match object_type {
         2 => {
             w.put(2, 5);
-            w.put(4, 4); // 44100 Hz
+            w.put(frequency_index, 4); // 44100 Hz (4) or 48000 Hz (3)
             w.put(1, 4); // one channel
             w.put(0, 3); // frameLengthFlag, dependsOnCoreCoder, extensionFlag
         }
         5 => {
+            assert_eq!(sample_rate, 44_100, "HE-AAC is written at 44.1 kHz only");
             w.put(5, 5);
             w.put(4, 4); // core sampling frequency index
             w.put(1, 4);
@@ -611,9 +618,13 @@ fn audio_specific_config(object_type: u8) -> Vec<u8> {
     w.into_bytes()
 }
 
-/// M4A with AAC-LC frames of a given edge and bitrate (lossy-fixtures.md 1.2).
+/// M4A with AAC-LC frames of a given edge and bitrate (lossy-fixtures.md 1.2). At 48 kHz the
+/// long-window scale-factor band table is the one shared with 44.1 kHz (ISO/IEC 14496-3).
 pub fn write_m4a_aac(spec: &AacSpec) -> Vec<u8> {
-    assert_eq!(spec.sample_rate, 44_100);
+    assert!(
+        [44_100, 48_000].contains(&spec.sample_rate),
+        "AAC is written at 44.1 or 48 kHz"
+    );
     let mut rng = ChaCha8Rng::seed_from_u64(spec.seed);
     let edge_bin = aac_edge_bin(spec.edge_hz, spec.sample_rate);
     let max_sfb = (0..SWB_OFFSET_LONG_48K.len())
@@ -632,7 +643,10 @@ pub fn write_m4a_aac(spec: &AacSpec) -> Vec<u8> {
     }
 
     // esds: ES_Descriptor > DecoderConfigDescriptor > DecoderSpecificInfo, SLConfigDescriptor.
-    let asc = descriptor(0x05, &audio_specific_config(spec.object_type));
+    let asc = descriptor(
+        0x05,
+        &audio_specific_config(spec.object_type, spec.sample_rate),
+    );
     let mut dec_config = vec![0x40, 0x15, 0, 0, 0]; // AAC, audio stream, buffer size
     dec_config.extend_from_slice(&be32(spec.bitrate_kbps * 1000)); // max bitrate
     dec_config.extend_from_slice(&be32(spec.bitrate_kbps * 1000)); // average bitrate
@@ -698,7 +712,7 @@ pub fn write_m4a_alac(samples: &[i16], sample_rate: u32) -> Vec<u8> {
 
 /// Names of the fixtures of section 2 that this module can build alone (the two ALAC fixtures need
 /// a lossless signal and are built by `common::lossy_fixture`).
-pub const BYTE_FIXTURES: [&str; 17] = [
+pub const BYTE_FIXTURES: [&str; 20] = [
     "mp3_320_lp20k5",
     "mp3_320_lp17k",
     "mp3_128_lp17k",
@@ -708,12 +722,15 @@ pub const BYTE_FIXTURES: [&str; 17] = [
     "mp3_vbr_lp19k5",
     "mp3_abr_lp18k6",
     "mp3_320_48k_lp20k",
+    "mp3_320_lp20k",
+    "mp3_320_48k_short",
     "mp3_320_low_hf",
     "mp3_silence",
     "mp3_short",
     "mp3_corrupt",
     "m4a_aac_128_lp16k",
     "m4a_aac_256_lp15k3",
+    "m4a_aac_256_48k_lp20k",
     "m4a_he_aac",
     "m4a_corrupt",
 ];
@@ -752,15 +769,18 @@ fn cbr(
 /// not know). Deterministic.
 pub fn fixture_bytes(name: &str) -> Option<Vec<u8>> {
     let mp3 = |spec: Mp3Spec| Some(write_mp3(&spec));
-    let aac = |bitrate_kbps: u32, edge_hz: f64, object_type: u8, seed: u64| {
+    let aac_at = |sample_rate: u32, bitrate_kbps: u32, edge_hz: f64, object_type: u8, seed: u64| {
         Some(write_m4a_aac(&AacSpec {
-            sample_rate: 44_100,
+            sample_rate,
             edge_hz,
             bitrate_kbps,
-            frames: aac_frames(30.0, 44_100),
+            frames: aac_frames(30.0, sample_rate),
             object_type,
             seed,
         }))
+    };
+    let aac = |bitrate_kbps: u32, edge_hz: f64, object_type: u8, seed: u64| {
+        aac_at(44_100, bitrate_kbps, edge_hz, object_type, seed)
     };
     match name {
         "mp3_320_lp20k5" => mp3(cbr(320, 20_500.0, Some(205), 44_100, 30.0, 101)),
@@ -786,6 +806,9 @@ pub fn fixture_bytes(name: &str) -> Option<Vec<u8>> {
             ..cbr(160, 18_600.0, None, 44_100, 30.0, 108)
         }),
         "mp3_320_48k_lp20k" => mp3(cbr(320, 20_000.0, Some(205), 48_000, 30.0, 109)),
+        // RF-16: the 44.1 kHz control of `mp3_320_48k_lp20k`, and a 2 s cut of it (83 frames).
+        "mp3_320_lp20k" => mp3(cbr(320, 20_000.0, Some(205), 44_100, 30.0, 113)),
+        "mp3_320_48k_short" => mp3(cbr(320, 20_000.0, Some(205), 48_000, 2.0, 109)),
         "mp3_320_low_hf" => mp3(cbr(320, 6_000.0, Some(205), 44_100, 30.0, 110)),
         "mp3_silence" => mp3(Mp3Spec {
             edge_hz: None,
@@ -810,6 +833,8 @@ pub fn fixture_bytes(name: &str) -> Option<Vec<u8>> {
         }
         "m4a_aac_128_lp16k" => aac(128, 16_000.0, 2, 201),
         "m4a_aac_256_lp15k3" => aac(256, 15_300.0, 2, 202),
+        // RF-16: an AAC 256 at 48 kHz with the edge of Opus (1406 frames).
+        "m4a_aac_256_48k_lp20k" => aac_at(48_000, 256, 20_000.0, 2, 204),
         "m4a_he_aac" => aac(128, 16_000.0, 5, 203),
         "m4a_corrupt" => {
             // `m4a_aac_128_lp16k` cut in the middle of its `moov` box.

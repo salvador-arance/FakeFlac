@@ -1,8 +1,10 @@
 //! Fixture-level scenarios of `specs/features/detection-edge-step.feature` (@RF-04): the synthetic
 //! signals of `specs/detection/fixtures.md`, "Edge step" (generators in `tests/common/mod.rs`),
 //! analysed with the parameters of `detection-params.v5.toml` and with DetectionParams v6 (the
-//! defaults). The rule-level scenarios are in `crates/fakeflac-core/tests/detect_edge.rs`, the
-//! parameter files in `params_edge.rs`. Spec: `specs/detection/rules.md`, ADR-0042.
+//! defaults, which since detection v7 give v6's lossless results; the step that checks
+//! `algorithmVersion 6` uses `detection-params.v6.toml`, lossy-source.md Q25 (a) and (j)). The
+//! rule-level scenarios are in `crates/fakeflac-core/tests/detect_edge.rs`, the parameter files in
+//! `params_edge.rs`. Spec: `specs/detection/rules.md`, ADR-0042.
 //!
 //! The two "Confirmed by the test stage" scenarios measure the fixtures first; if they do not hold,
 //! the spec returns to G1.
@@ -20,6 +22,14 @@ use fakeflac_core::{DetectionParams, SuspicionReason, TrackAnalysis, Verdict};
 fn v5() -> DetectionParams {
     let file = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../specs/detection/detection-params.v5.toml");
+    toml::from_str(&std::fs::read_to_string(file).unwrap()).unwrap()
+}
+
+/// The parameters of `specs/detection/detection-params.v6.toml` (the defaults carry
+/// `algorithm_version` 7 since detection v7, RF-16).
+fn v6() -> DetectionParams {
+    let file = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../specs/detection/detection-params.v6.toml");
     toml::from_str(&std::fs::read_to_string(file).unwrap()).unwrap()
 }
 
@@ -148,7 +158,7 @@ fn rf04_v6_gives_the_v5_verdicts_on_every_other_fixture() {
         "edge_bump19k3_lp19k5",
         "holes_lp19k5",
     ];
-    let (old_params, new_params) = (v5(), DetectionParams::default());
+    let (old_params, new_params) = (v5(), v6());
     let mut failures = Vec::new();
     for name in signals {
         let (old, new) = (analyze(name, &old_params), analyze(name, &new_params));

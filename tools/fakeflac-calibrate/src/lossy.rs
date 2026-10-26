@@ -1,17 +1,18 @@
 //! Lossy rows (lossy.md section 6): verdicts from the pure functions of `fakeflac_core::detect`, the
-//! lossy confusion matrix, the per-group table, the watch list and the chains.
+//! lossy confusion matrix, the per-group table with its sample-rate sub-rows, the lossy verdict
+//! changes, the watch list and the chains.
 //!
 //! Lossy rows live apart from the lossless ones (`GroupResult::lossy_rows`), so every table of
 //! evaluation.md is computed on lossless-domain rows exactly as before (lossy.md section 6.1).
 
 use crate::cache::{codec_name, Extracted};
 use crate::config::Config;
-use crate::evaluate::{ParamsRun, RowEval};
+use crate::evaluate::{verdict_name, ParamsRun, RowEval};
 use crate::extract::GroupResult;
 use crate::model::{LabelRow, RowMeta, Truth, CLASSES};
 use crate::report::{
-    ChainEntry, ChainReport, LossyCounts, LossyEvaluation, LossyGroupRow, LossyMatrix,
-    LossyWatchEntry, SplitSel,
+    ChainEntry, ChainReport, LossyChangedRow, LossyCounts, LossyEvaluation, LossyGroupRow,
+    LossyMatrix, LossyVerdictChanges, LossyWatchEntry, SplitSel,
 };
 use crate::split::Split;
 use fakeflac_core::detect::{
@@ -210,7 +211,14 @@ fn percentile(values: &mut [f64], pct: f64) -> Option<f64> {
     Some(values[rank.min(values.len() - 1)])
 }
 
-/// The sample rate group of a confirmed lossy fake (lossy.md section 6.3).
+/// The sample-rate buckets of lossy.md sections 6.3 and 6.8, in table order.
+const RATE_BUCKETS: [&str; 3] = ["44100", "48000", "other"];
+
+/// The verdict names of the change tables, in table order.
+const VERDICT_NAMES: [&str; 4] = ["real", "suspicious", "fake", "error"];
+
+/// The sample-rate bucket of a lossy row (lossy.md sections 6.3 and 6.8); `None` when it was not
+/// decoded.
 fn rate_group(row: &LabelRow) -> Option<&'static str> {
     match row.sample_rate()? {
         44_100 => Some("44100"),
@@ -247,14 +255,16 @@ pub fn lossy_tables(
         matrix.insert(sel, m);
     }
 
-    // Groups, in the order of lossy.md section 6.3.
+    // Groups, in the order of lossy.md section 6.3. The flags: shown even without rows; followed by
+    // per-sample-rate sub-rows (6.8).
     type Pick = Box<dyn Fn(&LabelRow, &RowMeta) -> bool>;
-    let mut specs: Vec<(String, Pick, bool)> = Vec::new();
+    let mut specs: Vec<(String, Pick, bool, bool)> = Vec::new();
     for entry in &config.generate.lossy {
         let id = entry.id.clone();
         specs.push((
             id.clone(),
             Box::new(move |r, _| r.origin == "generated" && r.setting == id),
+            true,
             true,
         ));
     }
@@ -263,79 +273,227 @@ pub fn lossy_tables(
             format!("trusted {class}"),
             Box::new(move |r, _| r.origin == "trusted" && r.class == class),
             false,
+            true,
         ));
     }
     specs.push((
         "confirmed_real".to_string(),
         Box::new(|r, _| r.origin == "confirmed_real"),
         false,
+        true,
     ));
+    // The per-upstream and per-sample-rate rows of confirmed lossy fakes hold strong labels only;
+    // a weak label is counted in the `weak` row alone (6.3, 6.8).
     for up in ["aac", "opus", "mp3", "unknown"] {
         specs.push((
             format!("confirmed_fake {up}"),
-            Box::new(move |r, m| r.origin == "confirmed_fake" && m.upstream == up),
+            Box::new(move |r, m| r.origin == "confirmed_fake" && !m.weak && m.upstream == up),
+            false,
             false,
         ));
     }
-    for rate in ["44100", "48000", "other"] {
+    for rate in RATE_BUCKETS {
         specs.push((
             format!("confirmed_fake {rate}"),
-            Box::new(move |r, _| r.origin == "confirmed_fake" && rate_group(r) == Some(rate)),
+            Box::new(move |r, m| {
+                r.origin == "confirmed_fake" && !m.weak && rate_group(r) == Some(rate)
+            }),
+            false,
             false,
         ));
     }
-    specs.push(("weak".to_string(), Box::new(|_, m| m.weak), false));
+    specs.push(("weak".to_string(), Box::new(|_, m| m.weak), false, false));
 
-    let mut groups: Vec<LossyGroupRow> = Vec::new();
-    for (name, pick, always) in &specs {
-        let labelled = group
+    // The labelled rows a pick selects, evaluated or not.
+    let labelled = |pick: &dyn Fn(&LabelRow, &RowMeta) -> bool| -> Vec<&LabelRow> {
+        group
             .lossy_rows
             .iter()
             .filter(|r| group.meta.get(&r.identity()).is_some_and(|m| pick(r, m)))
-            .count();
-        if labelled == 0 && !always {
+            .collect()
+    };
+    let mut groups: Vec<LossyGroupRow> = Vec::new();
+    for (name, pick, always, sub_rows) in &specs {
+        let members = labelled(pick.as_ref());
+        if members.is_empty() && !always {
             continue;
         }
-        let positive = group
-            .lossy_rows
-            .iter()
-            .filter(|r| group.meta.get(&r.identity()).is_some_and(|m| pick(r, m)))
-            .any(|r| r.truth == Truth::Fake);
-        let mut counts = LossyCounts::default();
-        let mut estimates: Vec<f64> = Vec::new();
-        let mut fake_estimates: Vec<f64> = Vec::new();
-        let mut shortfalls: Vec<f64> = Vec::new();
-        let (mut within, mut with_bound) = (0_u32, 0_u32);
-        for (row, meta, e) in rows.iter().filter(|(r, m, _)| pick(r, m)) {
-            let b = bucket(row, e);
-            add(&mut counts, b);
-            if let Some(k) = e.estimate_kbps {
-                estimates.push(f64::from(k));
-                if positive && b == Bucket::Fake {
-                    fake_estimates.push(f64::from(k));
-                }
-                if let (true, Some(bound)) = (positive, meta.source_bitrate_kbps) {
-                    with_bound += 1;
-                    within += u32::from(k <= bound);
-                }
-            }
-            if let Some(s) = e.shortfall_hz {
-                shortfalls.push(s);
-            }
+        let positive = members.iter().any(|r| r.truth == Truth::Fake);
+        groups.push(group_row(name.clone(), &rows, pick.as_ref(), positive));
+        if !*sub_rows {
+            continue;
         }
-        groups.push(LossyGroupRow {
-            group: name.clone(),
-            counts,
-            median_estimate_kbps: percentile(&mut estimates, 50.0),
-            fake_median_estimate_kbps: percentile(&mut fake_estimates, 50.0),
-            within_source: (with_bound > 0).then_some((within, with_bound)),
-            s_median_hz: percentile(&mut shortfalls.clone(), 50.0),
-            s_p5_hz: percentile(&mut shortfalls, 5.0),
-            positive,
-        });
+        for bucket in RATE_BUCKETS {
+            let in_bucket = |r: &LabelRow, m: &RowMeta| pick(r, m) && rate_group(r) == Some(bucket);
+            if labelled(&in_bucket).is_empty() {
+                continue;
+            }
+            // A sub-row is positive or negative as its group (6.8).
+            groups.push(group_row(
+                format!("{name} @ {bucket}"),
+                &rows,
+                &in_bucket,
+                positive,
+            ));
+        }
     }
 
-    LossyEvaluation { matrix, groups }
+    LossyEvaluation {
+        matrix,
+        groups,
+        changes: None,
+    }
+}
+
+/// One row of the per-group table (lossy.md sections 6.3 and 6.8) over the evaluated rows `pick`
+/// selects.
+fn group_row(
+    name: String,
+    rows: &[(&LabelRow, &RowMeta, &LossyRowEval)],
+    pick: &dyn Fn(&LabelRow, &RowMeta) -> bool,
+    positive: bool,
+) -> LossyGroupRow {
+    let mut counts = LossyCounts::default();
+    let mut estimates: Vec<f64> = Vec::new();
+    let mut fake_estimates: Vec<f64> = Vec::new();
+    let mut shortfalls: Vec<f64> = Vec::new();
+    let mut cutoffs: Vec<f64> = Vec::new();
+    let (mut within, mut with_bound) = (0_u32, 0_u32);
+    let (mut streaming, mut streaming_in_denominator) = (0_u32, 0_u32);
+    for (row, meta, e) in rows.iter().filter(|(r, m, _)| pick(r, m)) {
+        let b = bucket(row, e);
+        add(&mut counts, b);
+        if e.reasons.contains(&SuspicionReason::StreamingSampleRate) {
+            streaming += 1;
+            if matches!(b, Bucket::Real | Bucket::Suspicious | Bucket::Fake) {
+                streaming_in_denominator += 1;
+            }
+        }
+        if let Some(k) = e.estimate_kbps {
+            estimates.push(f64::from(k));
+            if positive && b == Bucket::Fake {
+                fake_estimates.push(f64::from(k));
+            }
+            if let (true, Some(bound)) = (positive, meta.source_bitrate_kbps) {
+                with_bound += 1;
+                within += u32::from(k <= bound);
+            }
+        }
+        if let Some(s) = e.shortfall_hz {
+            shortfalls.push(s);
+        }
+        if let Some(fc) = e.fc_hz {
+            cutoffs.push(fc);
+        }
+    }
+    LossyGroupRow {
+        group: name,
+        counts,
+        median_estimate_kbps: percentile(&mut estimates, 50.0),
+        fake_median_estimate_kbps: percentile(&mut fake_estimates, 50.0),
+        within_source: (with_bound > 0).then_some((within, with_bound)),
+        s_median_hz: percentile(&mut shortfalls.clone(), 50.0),
+        s_p5_hz: percentile(&mut shortfalls, 5.0),
+        positive,
+        streaming,
+        streaming_in_denominator,
+        fc_median_hz: percentile(&mut cutoffs.clone(), 50.0),
+        fc_p5_hz: percentile(&mut cutoffs.clone(), 5.0),
+        fc_p95_hz: percentile(&mut cutoffs, 95.0),
+    }
+}
+
+/// The per-group row a lossy track belongs to, for the list of changed rows (lossy.md section 6.8).
+fn group_label(row: &LabelRow, meta: &RowMeta) -> String {
+    if meta.weak {
+        return "weak".to_string();
+    }
+    match row.origin {
+        "generated" => row.setting.clone(),
+        "trusted" => format!("trusted {}", row.class),
+        "confirmed_fake" => format!("confirmed_fake {}", meta.upstream),
+        other => other.to_string(),
+    }
+}
+
+/// The lossy verdict-change table (lossy.md section 6.8) of `evals` against `baseline_evals`, both
+/// evaluations of the lossy rows of `group`.
+pub fn lossy_verdict_changes(
+    against: &str,
+    group: &GroupResult,
+    baseline_evals: &[LossyRowEval],
+    evals: &[LossyRowEval],
+) -> LossyVerdictChanges {
+    lossy_verdict_changes_between(against, group, baseline_evals, group, evals)
+}
+
+/// [`lossy_verdict_changes`] when the baseline was evaluated on another extraction group: rows are
+/// paired by identity. Only rows that both files evaluate count (strong and weak labels).
+pub fn lossy_verdict_changes_between(
+    against: &str,
+    baseline_group: &GroupResult,
+    baseline_evals: &[LossyRowEval],
+    group: &GroupResult,
+    evals: &[LossyRowEval],
+) -> LossyVerdictChanges {
+    let base: BTreeMap<String, &LossyRowEval> = baseline_group
+        .lossy_rows
+        .iter()
+        .zip(baseline_evals.iter())
+        .map(|(r, e)| (r.identity(), e))
+        .collect();
+    let mut counts: BTreeMap<(String, String), u32> = BTreeMap::new();
+    for a in VERDICT_NAMES {
+        for b in VERDICT_NAMES {
+            counts.insert((a.to_string(), b.to_string()), 0);
+        }
+    }
+    let flagged = |e: &LossyRowEval| e.reasons.contains(&SuspicionReason::StreamingSampleRate);
+    let mut streaming = 0_u32;
+    let mut changed = Vec::new();
+    for (row, e) in group.lossy_rows.iter().zip(evals.iter()) {
+        let Some(old) = base.get(&row.identity()) else {
+            continue;
+        };
+        if !e.evaluated || !old.evaluated {
+            continue;
+        }
+        let key = (
+            verdict_name(old.verdict).to_string(),
+            verdict_name(e.verdict).to_string(),
+        );
+        *counts.entry(key).or_default() += 1;
+        if old.verdict == e.verdict {
+            continue;
+        }
+        if flagged(e) && !flagged(old) {
+            streaming += 1;
+        }
+        let meta = group.meta.get(&row.identity()).cloned().unwrap_or_default();
+        let probe = match row.extracted.as_ref() {
+            Extracted::Probe(p) => Some(p),
+            Extracted::Error(_) => None,
+        };
+        changed.push(LossyChangedRow {
+            path: row.path.clone(),
+            truth: row.truth.as_str().to_string(),
+            group: group_label(row, &meta),
+            codec: probe.and_then(|p| p.stream.codec.map(|c| codec_name(c).to_string())),
+            sample_rate: probe.map(|p| p.sample_rate),
+            declared_bitrate_kbps: probe.and_then(|p| p.stream.declared_bitrate_kbps),
+            fc_hz: e.fc_hz,
+            shortfall_hz: e.shortfall_hz,
+            step_db: e.m.as_ref().map(|m| m.step_db),
+            from: old.verdict,
+            to: e.verdict,
+        });
+    }
+    LossyVerdictChanges {
+        against: against.to_string(),
+        counts,
+        streaming,
+        rows: changed,
+    }
 }
 
 /// The lossy `false-positive` tracks with their measurements under one params file (lossy.md

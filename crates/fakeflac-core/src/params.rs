@@ -1,4 +1,4 @@
-//! `DetectionParams` (S4, ADR-0011). Mirrors `specs/detection/detection-params.v6.toml`;
+//! `DetectionParams` (S4, ADR-0011). Mirrors `specs/detection/detection-params.v7.toml`;
 //! a test checks that `Default` equals that file. Values are data, never constants in the algorithm.
 
 use serde::{Deserialize, Serialize};
@@ -132,6 +132,33 @@ pub struct LossyParams {
     pub fake_shortfall_hz: f64,
     pub fake_min_step_db: f64,
     pub cutoffs: LossyCutoffs,
+    /// Rule L6a (v7, lossy-source.md section 11). `None` (a v5 or v6 file): L6a never fires.
+    #[serde(default)]
+    pub streaming: Option<StreamingParams>,
+}
+
+/// A codec that rule L6a may judge (lossy-source.md section 11.3). Only `"mp3"` and `"aac"`
+/// deserialise; any other value, `"opus"` included, is an error naming it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum StreamingCodec {
+    #[serde(rename = "mp3")]
+    Mp3,
+    #[serde(rename = "aac")]
+    Aac,
+}
+
+/// The `[lossy.streaming]` section (lossy-source.md section 11.3).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StreamingParams {
+    /// Decoded sample rates that count, compared exactly.
+    pub sample_rates_hz: Vec<u32>,
+    pub codecs: Vec<StreamingCodec>,
+    /// The declared bitrate `b` must be at or above this.
+    pub min_declared_bitrate_kbps: u32,
+    /// The reported cutoff `fc` must lie in `[min_cutoff_hz, max_cutoff_hz)`.
+    pub min_cutoff_hz: f64,
+    pub max_cutoff_hz: f64,
 }
 
 /// The `[lossy.cutoffs]` tables: expected low-pass per declared bitrate, per codec.
@@ -180,11 +207,11 @@ pub struct SpectrogramParams {
 }
 
 impl Default for DetectionParams {
-    /// DetectionParams v6: the values of `specs/detection/detection-params.v6.toml`
+    /// DetectionParams v7: the values of `specs/detection/detection-params.v7.toml`
     /// (a test checks the equality).
     fn default() -> Self {
         DetectionParams {
-            algorithm_version: 6,
+            algorithm_version: 7,
             input: InputParams {
                 min_duration_s: 5.0,
                 edge_skip_percent: 5.0,
@@ -323,6 +350,13 @@ impl Default for DetectionParams {
                     ],
                     opus: None,
                 },
+                streaming: Some(StreamingParams {
+                    sample_rates_hz: vec![48_000],
+                    codecs: vec![StreamingCodec::Mp3, StreamingCodec::Aac],
+                    min_declared_bitrate_kbps: 192,
+                    min_cutoff_hz: 19_800.0,
+                    max_cutoff_hz: 20_200.0,
+                }),
             }),
             edge: Some(EdgeParams {
                 floor_low_hz: 20900.0,
@@ -528,6 +562,46 @@ fn validate_lossy(l: &LossyParams, step_suspicious_db: f64) -> Result<(), Params
                 "lossy.cutoffs.{name}: cutoff_hz does not decrease"
             )));
         }
+    }
+    if let Some(st) = &l.streaming {
+        validate_streaming(st)?;
+    }
+    Ok(())
+}
+
+/// The `[lossy.streaming]` checks of lossy-source.md section 11.3, in the order listed there.
+fn validate_streaming(s: &StreamingParams) -> Result<(), ParamsError> {
+    if s.sample_rates_hz.is_empty() {
+        return Err(lossy_error("lossy.streaming.sample_rates_hz is not empty"));
+    }
+    if s.sample_rates_hz.contains(&0) {
+        return Err(lossy_error(
+            "lossy.streaming.sample_rates_hz: sample rate > 0",
+        ));
+    }
+    if s.sample_rates_hz.windows(2).any(|w| w[0] >= w[1]) {
+        return Err(lossy_error("lossy.streaming.sample_rates_hz increases"));
+    }
+    if s.codecs.is_empty() {
+        return Err(lossy_error("lossy.streaming.codecs is not empty"));
+    }
+    if s.codecs
+        .iter()
+        .enumerate()
+        .any(|(i, c)| s.codecs[..i].contains(c))
+    {
+        return Err(lossy_error("lossy.streaming.codecs has no duplicates"));
+    }
+    if s.min_declared_bitrate_kbps == 0 {
+        return Err(lossy_error("lossy.streaming.min_declared_bitrate_kbps > 0"));
+    }
+    if !lt(0.0, s.min_cutoff_hz) {
+        return Err(lossy_error("lossy.streaming.min_cutoff_hz > 0"));
+    }
+    if !lt(s.min_cutoff_hz, s.max_cutoff_hz) {
+        return Err(lossy_error(
+            "lossy.streaming.min_cutoff_hz < lossy.streaming.max_cutoff_hz",
+        ));
     }
     Ok(())
 }

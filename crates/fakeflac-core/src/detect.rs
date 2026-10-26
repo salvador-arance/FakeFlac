@@ -1,10 +1,10 @@
 //! Detection rules (RF-03, RF-04, RF-15): the v6 rules for lossless files (v4 plus the edge step,
 //! `specs/detection/rules.md`) and the v5 rules L0 to L6 for lossy files, which estimate the source
-//! bitrate (`specs/detection/lossy-source.md`). Pure functions: no I/O, every number comes from
-//! `DetectionParams`.
+//! bitrate, with rule L6a of v7 (`specs/detection/lossy-source.md`). Pure functions: no I/O, every
+//! number comes from `DetectionParams`.
 
 use crate::domain::{AudioCodec, CutoffEstimate, SuspicionReason, TrackError, Verdict};
-use crate::params::{CutoffRow, DetectionParams, LossyParams};
+use crate::params::{CutoffRow, DetectionParams, LossyParams, StreamingCodec, StreamingParams};
 use crate::spectrum::BandSpectra;
 
 /// Tolerance for comparing frequencies and levels that come out of floating-point arithmetic.
@@ -452,6 +452,27 @@ fn shortfall_estimate(rows: &[CutoffRow], fc: f64, b: u32) -> u32 {
     nearest.map_or(b, |(_, kbps)| kbps.min(b))
 }
 
+/// Lossy-source.md section 11.2, `StreamingRate`: the codec is listed, the decoded sample rate is
+/// one of the listed rates, `b >= min_declared_bitrate_kbps` and `min_cutoff_hz <= fc <
+/// max_cutoff_hz`. Lossless codecs and Opus are never listed.
+pub fn is_streaming_rate(
+    s: &StreamingParams,
+    stream: &StreamInfo,
+    b: Option<u32>,
+    fc: f64,
+) -> bool {
+    let codec = match stream.codec {
+        AudioCodec::Mp3 => StreamingCodec::Mp3,
+        AudioCodec::Aac => StreamingCodec::Aac,
+        AudioCodec::Opus | AudioCodec::Pcm | AudioCodec::Flac | AudioCodec::Alac => return false,
+    };
+    s.codecs.contains(&codec)
+        && s.sample_rates_hz.contains(&stream.sample_rate)
+        && b.is_some_and(|b| b >= s.min_declared_bitrate_kbps)
+        && fc >= s.min_cutoff_hz
+        && fc < s.max_cutoff_hz
+}
+
 /// Lossy-source.md sections 4 and 5, and rules.md section 3 for the lossless codecs.
 pub fn decide_track(
     stream: &StreamInfo,
@@ -511,6 +532,18 @@ pub fn decide_track(
             };
             return decision(Verdict::Suspicious, vec![reason], estimate);
         }
+    }
+    // L6a (v7): only splits L6, so it never overrides an earlier rule.
+    if lossy
+        .streaming
+        .as_ref()
+        .is_some_and(|st| is_streaming_rate(st, stream, b, fc))
+    {
+        return decision(
+            Verdict::Suspicious,
+            vec![SuspicionReason::StreamingSampleRate],
+            None,
+        );
     }
     // L6
     decision(Verdict::Real, vec![], b)

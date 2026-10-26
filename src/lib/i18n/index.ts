@@ -21,6 +21,9 @@ const EN: Record<string, string> = {
   'reason.ambiguousCutoff': 'Sharp cutoff at a high frequency',
   'reason.highBandGaps': 'Frequent gaps above 16 kHz, as in an MP3',
   'reason.cutoffBelowDeclared': 'Cutoff lower than expected for its bitrate',
+  // specs/ui/lossy-formats.md, "Streaming sample rate (RF-16)"; Spanish falls back to English
+  'reason.streamingSampleRate':
+    'Full band at 48 kHz: possibly a streaming rip; genuine 48 kHz files look the same.',
   'error.tooShort': 'Too short to analyse',
   'error.corruptStream': 'Corrupt stream',
   'error.unreadable': 'Cannot read the file',

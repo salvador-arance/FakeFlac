@@ -7,7 +7,7 @@ use crate::evaluate::{reason_name, verdict_name};
 use crate::fmt;
 use crate::lossy::is_near;
 use crate::render::{Md, ReportData};
-use crate::report::{ChainReport, LossyCounts, LossyWatchEntry, SplitSel};
+use crate::report::{ChainReport, LossyCounts, LossyVerdictChanges, LossyWatchEntry, SplitSel};
 use fakeflac_core::Verdict;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -164,6 +164,10 @@ pub(crate) fn lossy_section(md: &mut Md, data: &ReportData<'_>, idx: usize, full
         md.blank();
     }
 
+    if let Some(changes) = &lossy.changes {
+        lossy_changes_table(md, changes, full);
+    }
+
     md.line("### Lossy per group (split `all`)");
     md.blank();
     let rows: Vec<Vec<String>> = lossy
@@ -180,8 +184,21 @@ pub(crate) fn lossy_section(md: &mut Md, data: &ReportData<'_>, idx: usize, full
             } else {
                 fmt::rate(c.fake, n)
             });
+            cells.push(g.streaming.to_string());
+            // Empty when the rate denominator is 0 (lossy.md section 6.8).
+            cells.push(if n == 0 {
+                String::new()
+            } else {
+                format!(
+                    "{} %",
+                    fmt::pct_value(f64::from(g.streaming_in_denominator) / f64::from(n))
+                )
+            });
             cells.push(fmt::opt_db(g.s_median_hz));
             cells.push(fmt::opt_db(g.s_p5_hz));
+            cells.push(fmt::opt_hz(g.fc_median_hz));
+            cells.push(fmt::opt_hz(g.fc_p5_hz));
+            cells.push(fmt::opt_hz(g.fc_p95_hz));
             cells.push(fmt::opt_db(g.median_estimate_kbps));
             cells.push(fmt::opt_db(g.fake_median_estimate_kbps));
             cells.push(
@@ -204,8 +221,13 @@ pub(crate) fn lossy_section(md: &mut Md, data: &ReportData<'_>, idx: usize, full
             "total",
             "Fake rate",
             "caught rate (positives) or FP rate (negatives)",
+            "streaming",
+            "streaming rate",
             "s median (Hz)",
             "s 5th percentile (Hz)",
+            "fc median (Hz)",
+            "fc 5th percentile (Hz)",
+            "fc 95th percentile (Hz)",
             "median estimate (kbps)",
             "median estimate of the Fake rows (kbps)",
             "estimates at most the source bitrate",
@@ -220,6 +242,85 @@ pub(crate) fn lossy_section(md: &mut Md, data: &ReportData<'_>, idx: usize, full
     if full {
         full_lossy_lists(md, data, idx);
     }
+}
+
+/// The lossy verdict-change table against the lossy baseline and its "of which
+/// `streamingSampleRate`" count (lossy.md section 6.8); `report.md` also lists the changed rows.
+fn lossy_changes_table(md: &mut Md, changes: &LossyVerdictChanges, full: bool) {
+    md.line(format!(
+        "### Lossy verdict changes against {}",
+        changes.against
+    ));
+    md.blank();
+    let names = ["real", "suspicious", "fake", "error"];
+    let mut head = vec!["baseline \\ this file"];
+    head.extend(names);
+    let table: Vec<Vec<String>> = names
+        .iter()
+        .map(|from| {
+            let mut cells = vec![(*from).to_string()];
+            for to in names {
+                let n = changes
+                    .counts
+                    .get(&((*from).to_string(), to.to_string()))
+                    .copied()
+                    .unwrap_or(0);
+                cells.push(n.to_string());
+            }
+            cells
+        })
+        .collect();
+    md.table(&head, &table);
+    md.line(format!(
+        "Of which `streamingSampleRate`: {}",
+        changes.streaming
+    ));
+    md.blank();
+    if !full {
+        return;
+    }
+    md.line(format!(
+        "### Lossy rows whose verdict changed against {}",
+        changes.against
+    ));
+    md.blank();
+    let rows: Vec<Vec<String>> = changes
+        .rows
+        .iter()
+        .map(|r| {
+            vec![
+                r.path.clone(),
+                r.truth.clone(),
+                r.group.clone(),
+                r.codec.clone().unwrap_or_default(),
+                r.sample_rate.map(|x| x.to_string()).unwrap_or_default(),
+                r.declared_bitrate_kbps
+                    .map(|x| x.to_string())
+                    .unwrap_or_default(),
+                fmt::opt_hz(r.fc_hz),
+                fmt::opt_hz2(r.shortfall_hz),
+                fmt::opt_db(r.step_db),
+                verdict_name(r.from).to_string(),
+                verdict_name(r.to).to_string(),
+            ]
+        })
+        .collect();
+    md.table(
+        &[
+            "path",
+            "truth",
+            "group",
+            "codec",
+            "sample rate",
+            "declared (kbps)",
+            "fc (Hz)",
+            "s (Hz)",
+            "D",
+            "from",
+            "to",
+        ],
+        &rows,
+    );
 }
 
 /// The lossy watch list (lossy.md section 6.7), shown for every params file.
