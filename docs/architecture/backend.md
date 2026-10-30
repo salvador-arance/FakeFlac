@@ -28,13 +28,13 @@ See `crates/fakeflac-core/src/domain.rs`: `Verdict { Real, Suspicious, Fake, Err
 |---|---|---|
 | `FileScanner` | Recursively list supported files and read `TrackInfo` | `fakeflac-fs` |
 | `SpectrumAnalyzer` | `analyze(path, params, cancel)` | `fakeflac-audio` |
-| `ResultStore` | `get(key)`, `put(analysis)`, `clear()` | `fakeflac-store` |
+| `ResultStore` | `get(entry, params)`, `put(entry, params, analysis)`; no `clear()`: clearing is the adapter function `fakeflac_store::clear_cache_files`, which works even when the database cannot be opened (`specs/contracts/result-cache.md`) | `fakeflac-store` |
 | `CsvExporter` | `export(&[TrackAnalysis], dest)` | `fakeflac-export` |
 | `Clock` / `Cancel` | Injectable time and cancellation token | `core` / `src-tauri` |
 
 ## 4. Use cases
 
-- `AnalyzeFolder(root, params, cancel, progress)`: scan → per track (`workers` std scoped threads, ADR-0034): cache lookup → analyse → store → report progress. A `TrackError` becomes `Verdict::Error` and the batch continues (RNF-04).
+- `AnalyzeFolder(root, params, cancel, progress)`: scan → per track (`workers` std scoped threads, ADR-0034): cache lookup → analyse → store → report progress. A `TrackError` becomes `Verdict::Error` and the batch continues (RNF-04). The cache is passed as `ResultCache` (`Off`, `Unavailable` or `Store`) to `analyze_folder_cached`; `analyze_folder` keeps its signature and uses no cache. A cache failure never fails the run: after the first one the run stops using the store and reports `cache: 'degraded'` (`specs/contracts/result-cache.md`, ADR-0044).
 - `GetSpectrogram(path)`: on demand, with no use case in `core` and no port method: `src-tauri` calls the inherent `SymphoniaAnalyzer::spectrogram(path, &SpectrogramParams)` through `run::get_spectrogram` (the display STFT is not part of the analysis contract, and a port method would break the `SpectrumAnalyzer` fakes of the protected tests); decoded on a blocking thread; not cached on disk in v1 (measured in phase 5; if it misses the 2 s target, add thumbnails via a new ADR).
 - `ExportCsv(results, dest)`; `SummarizeByFolder(results)` (RF-10).
 

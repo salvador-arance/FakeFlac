@@ -35,7 +35,7 @@ In the main `Toolbar`, as in the reference tool (`docs/architecture/frontend.md`
 ```
 
 - A separator after Export CSV, then the **verdict filter** group in this order: Fake, Suspicious, Genuine, Error (most severe first, as the reference's "thumb down / middle / up"; our own icons: the existing `verdict-*` icons, D12).
-- The **search field** is pushed to the right end of the toolbar. Width: new layout token `--search-width: 240px` in `src/lib/tokens/tokens.css` (sizes come from tokens, `src/CLAUDE.md`). At the minimum window width (900 px) everything fits on one line (7 toolbar buttons, 2 separators and the field take about 600 px).
+- The **search field** is pushed to the right end of the toolbar. Width: new layout token `--search-width: 240px` in `src/lib/tokens/tokens.css` (sizes come from tokens, `src/CLAUDE.md`). At the minimum window width (900 px) everything fits on one line (7 toolbar buttons, 2 separators and the field take about 600 px). RF-11 adds an eighth button, "Clear results cache", after Export CSV, which brings the line to about 650 px (`result-cache.md` section 2).
 
 ## 3. Sorting
 
@@ -224,7 +224,7 @@ New: `filter.label` Filter by verdict · `filter.fake` Show fake tracks · `filt
 
 - The verdict buttons are a `role="group"` named "Filter by verdict"; each is a toggle button (`aria-pressed`) whose accessible name and tooltip are its label ("Show fake tracks"). The verdict is shown by the icon's shape (the State column's icons) and the name, never by colour alone (RNF-08). The pressed state is shown by `aria-pressed` and the accent border, not by the icon colour.
 - The search field is a `searchbox` named "Search by name"; the clear button is named "Clear search". The shortcut is in the placeholder ("Search (Ctrl+F)") and in `aria-keyshortcuts="Control+F"` on the input.
-- Tab order: toolbar buttons (open, cancel, export, the four verdict buttons), search field (and its clear button when shown), Albums panel, table. Every control has the visible focus ring of `components.md`.
+- Tab order: toolbar buttons (open, cancel, export, the four verdict buttons), search field (and its clear button when shown), Albums panel, table. Every control has the visible focus ring of `components.md`. RF-11 adds one stop, "Clear results cache", right after export (`result-cache.md` section 6).
 - The no-match message is plain text in the table body; the Clear filters button is a normal button reachable with Tab. Activating it moves the focus to the search field (4.3), so the focus is never lost on a removed element.
 - The status bar is a `role="status"` region, so the shown count is announced when it changes.
 - `ColumnHeader` keeps `aria-sort`.

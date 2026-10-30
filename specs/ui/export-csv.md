@@ -70,7 +70,7 @@ The save dialog's own texts (title, buttons, the overwrite question) are Windows
 
 ## Accessibility
 
-The export button has a visible focus ring and its label as accessible name; when disabled it stays focusable through the toolbar like the other buttons (as `IconButton` does today). The status bar is a `role="status"` region, so the notice is announced.
+The export button has a visible focus ring and its label as accessible name; when disabled it is skipped by Tab, like the other toolbar buttons, because `IconButton` sets the native `disabled` attribute. The status bar is a `role="status"` region, so the notice is announced.
 
 ## Manual checks (native dialog, not automatable)
 
