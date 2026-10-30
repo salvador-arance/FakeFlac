@@ -2,6 +2,48 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-30 - RF-11 implemented (result cache), PR #85 open for G2
+
+**Done**
+- #84 (spec handoff), #81 and #82 (Dependabot) merged. `feat/RF-11` was rebased onto them with no conflict.
+- `/feature RF-11` on `feat/RF-11`, PR #85:
+  - `258d397` build: stubs, `rusqlite` 0.40.2 bundled (the latest for rust-version 1.85), `serde_json` `float_roundtrip`, v7 bindings;
+  - `c2d2195` test: failing tests on every layer, with only the five protected-test edits declared in section 12.1;
+  - `b6b12fb` feat: the Rust side (core, `fakeflac-store`, `src-tauri`);
+  - `1f7ae79` feat: the frontend;
+  - a docs commit: the traceability row and this block.
+- Review: nothing blocking. I checked two mutations by hand, and both are caught:
+  - removing the engine deletion;
+  - switching to WAL before the header read.
+- `just ci` green (vitest 752/752, all Rust test binaries). `privacy-check`: 0 matches.
+
+**Pending**
+- G2: review and merge #85.
+- Manual checks:
+  - M1: the warm run takes at most 10 % of the cold run's time on 200 or more tracks;
+  - M2: the cache file is in `%LOCALAPPDATA%\io.github.fakeflac.appesults-cache.sqlite3`;
+  - M3: two windows with the same engine;
+  - UI M1 and M3: the toolbar at 900 px, and the icon.
+  - The Tauri wiring (`.setup`, the commands) was only reviewed by reading.
+- Improvements from the review that were not done, possible small follow-ups:
+  - `SqliteResultStore::open` is not panic-guarded in `run_analysis_cached` (a panic there gives `INTERNAL`, not `unavailable`);
+  - no test pins that the store is dropped before the slot is released;
+  - the race in which step 6 finds a newer or foreign file has no test.
+- Carried over:
+  - RF-13 and the high-priority RNFs are still `draft`;
+  - RF-08 manual checks M1–M3 and P1–P2;
+  - the RF-16 K5 wording observation;
+  - the optional hand check of the unlabelled 48 kHz MP3s that v7 flags.
+
+**Blockers / questions for the human**
+- None.
+
+**Notes for the next session**
+- The vitest and Bash notes of the RF-16 block below still apply.
+- A detection fix that bumps neither `algorithm_version` nor `EXTRACTION_VERSION` is hidden by the cache while the app version stays 0.0.1. Use "Clear results cache" before checking such a fix by hand.
+
+**Next step:** after G2 merges #85, run `just prune-branches`, then the owner picks the next requirement (RF-13, Opus, or a high-priority RNF).
+
 ## 2026-10-30 - RF-11 spec approved (result cache), ADR-0044 accepted
 
 **Done**
