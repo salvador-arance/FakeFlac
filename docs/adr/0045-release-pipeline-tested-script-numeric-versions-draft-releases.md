@@ -1,6 +1,6 @@
 # ADR-0045: Releases: one tested Node script behind `just` recipes, numeric versions only, tags on `main`, draft releases with NSIS, MSI, checksums and provenance, and GitHub-generated notes as the changelog
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-30
 
 ## Context and rationale
