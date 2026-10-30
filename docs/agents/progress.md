@@ -2,6 +2,46 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-30 - RNF-11 + RNF-06 implemented (release pipeline), feature PR ready for G2
+
+**Done**
+- #87 (spec handoff) merged.
+- `/feature RNF-11` on `feat/RNF-11`:
+  - `b12b79b` build: the stub;
+  - `e6f76bc` test: `scripts/release.test.mjs` (160 tests) and 17 cases appended to `hooks.test.mjs`;
+  - `8c71423` feat: `scripts/release.mjs`;
+  - `03e4a5a` feat: the five `just` recipes, `ci.yml`, `release.yml` (`verify`, `package`, `publish`, dry run), the two `guard-bash` rules and the `overview.md` rows;
+  - `c8aca22` fix: two review improvements, and a `workflow.md` note on how `guard-bash` matches text.
+- The first implementer was cut off twice by the usage limit. Its finished script was committed, and a fresh agent did the wiring.
+- Review: nothing blocking. 9 mutations were caught. Two survived, both on env pass-through (I1 below).
+- Local end-to-end run: `just build` then `just release-assets`.
+  - The real Tauri names match the spec.
+  - `SHA256SUMS.txt` has LF line endings and passes `sha256sum -c`.
+  - M2 sizes: NSIS 2 752 333 bytes, MSI 3 809 280 bytes, against a limit of 20 000 000.
+- `just ci` green: node 218/218, vitest 752/752, all Rust test binaries. `privacy-check`: 0 matches.
+
+**Pending**
+- G2: review and merge the feature PR.
+- After the merge, the owner's manual checks:
+  - M1: the dry run from the Actions tab on `main`;
+  - M3–M6: install, SmartScreen, attestation and checksums, uninstall;
+  - M7: the first real tag. Check that the notes come before the PR list.
+- Spec follow-ups for a small `spec/…` PR. None of them blocks:
+  - `release.feature` line 543: two "Usage errors" Examples rows share one line. The tests already treat them as two cases.
+  - Review I1: no test pins that `run()` passes its env to `git` and `gh`. Mutating either one to `process.env` survives. Fix with a scenario that uses a fake `git`/`gh` on PATH and a sentinel variable.
+  - Review I2: `release.test.mjs` takes 4.8–5.9 s against the 5 s budget of release.md 8.1. The time is the three git spawns per `release-check` case that the contract requires, not waste. Relax the figure, or share more git setup in the tests.
+- Possible small follow-up (review I4): `set-version` reads manifests as UTF-8, so invalid bytes would become U+FFFD. This is theoretical, since real manifests are valid UTF-8.
+- Carried over from the blocks below: the RF-11 follow-ups, RF-13 and the draft RNFs, the RF-08 manual checks, RF-16 K5, the 48 kHz MP3 check, and Dependabot alert #2 (`deepmerge`, low).
+
+**Blockers / questions for the human**
+- None.
+
+**Notes for the next session**
+- `guard-bash` matches command text, so a commit message that quotes a blocked command is blocked. Reword it or use `git commit -F`.
+- The release tests run in about 5 s on Windows, which is most of the `check-fast` time added.
+
+**Next step:** after G2 merges the feature PR, `just prune-branches`; then the owner runs M1, the dry run, and picks the next requirement.
+
 ## 2026-10-30 - RNF-11 + RNF-06 spec approved (release pipeline), ADR-0045 accepted
 
 **Done**

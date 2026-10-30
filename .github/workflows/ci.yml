@@ -44,6 +44,7 @@ jobs:
       - run: just trace
       - run: just lint-arch
       - run: just guard-tests
+      - run: just version-check
       # S3 (contract drift) runs in build-windows (`just check-app`): generating needs Tauri.
 
   # Windows only: v1 ships for Windows (RNF-07). Platform-independent jobs stay on Linux.
@@ -102,21 +103,15 @@ jobs:
       - run: npm ci
       - name: Tauri adapter checks (clippy, tests, bindings up to date)
         run: just check-app
-      - run: npm run tauri build
-      - name: Installer size (RNF-06, < 20 MB)
-        shell: pwsh
-        run: |
-          $files = Get-ChildItem -Recurse -Path target/release/bundle -Include *.exe,*.msi
-          $files | ForEach-Object { "{0}  {1:N1} MB" -f $_.Name, ($_.Length/1MB) }
-          $big = $files | Where-Object { $_.Length -gt 20MB }
-          if ($big) { throw "Installer exceeds 20 MB: $($big.Name -join ', ')" }
+      - run: just build
+      - name: Installer size gate (RNF-06), checksums and release notes
+        run: just release-assets
       - uses: actions/upload-artifact@v7
         with:
           name: installers
-          path: |
-            target/release/bundle/nsis/*.exe
-            target/release/bundle/msi/*.msi
+          path: target/release-staging/
           retention-days: 7
+          if-no-files-found: error
 
   # Single required check for branch protection.
   ci-ok:

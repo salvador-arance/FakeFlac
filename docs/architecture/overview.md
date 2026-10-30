@@ -42,10 +42,11 @@ Why hexagonal: the detection core is the most valuable and most delicate asset (
 | RNF-03 privacy | No network dependencies; Tauri CSP without external `connect-src`; minimal capabilities |
 | RNF-04 reliability | Typed per-track errors (ADR-0013) |
 | RNF-05 read-only | No write port over audio; cache stored outside the music folder |
-| RNF-06 size | No bundled ffmpeg (ADR-0030); `lto` + `strip` in release |
+| RNF-06 size | No bundled ffmpeg (ADR-0030); `lto` + `strip` in release; size gate `just release-assets` on every PR and release (ADR-0045) |
 | RNF-07 platform | WebView2 on Windows |
 | RNF-08 usability | Verdict = icon + text + colour (`frontend.md`) |
 | RNF-09 Unicode | `PathBuf`/`OsString` in the core; CSV in UTF-8 (ADR-0012) |
+| RNF-11 releases | Tagged releases built by `release.yml`, draft published by the human (ADR-0028, ADR-0032, ADR-0045) |
 
 ## Tauri security
 

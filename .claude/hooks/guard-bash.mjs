@@ -16,6 +16,8 @@ const rules = [
   [/\bgit\s+reset\s+--hard\b/i, 'git reset --hard discards work; ask the human'],
   [/\bgit\s+clean\s+-[a-z]*f/i, 'git clean -f discards work; ask the human'],
   [/--no-verify\b/i, 'skipping hooks is not allowed'],
+  [/\bgit\s+push\b[^\n;|&]*(\s--tags\b|\s--follow-tags\b|[\s:+](refs\/tags\/|v\d+\.\d+\.\d+))/i, 'pushing a tag is a human act (releases, ADR-0045)'],
+  [/\bgh\s+release\s+(create|edit|upload)\b/i, 'creating or changing a release is a human act (ADR-0045)'],
 ]
 for (const [re, why] of rules) {
   if (re.test(cmd)) block(`Blocked by guard-bash: ${why}.\nCommand: ${cmd}`)

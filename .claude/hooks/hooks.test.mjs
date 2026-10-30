@@ -82,6 +82,25 @@ for (const [cmd, expected] of [
   ['git commit --no-verify -m x', 2],
   ['just check', 0],
   ['cargo test --workspace', 0],
+  // Agents never release (RNF-11, Q11; specs/contracts/release.md 8.1; release.feature
+  // "Agents cannot push a release tag or create a release" @RNF-11).
+  ['git push origin v0.1.0', 2],
+  ['git push --delete origin v0.1.0', 2],
+  ['git push origin :v0.1.0', 2],
+  ['git push origin +v0.1.0', 2],
+  ['git push origin refs/tags/v0.1.0', 2],
+  ['git push --tags', 2],
+  ['git push --follow-tags origin feat/RNF-11', 2],
+  ['gh release create v0.1.0', 2],
+  ['gh release edit v0.1.0 --draft=false', 2],
+  ['gh release upload v0.1.0 SHA256SUMS.txt', 2],
+  ['gh release delete v0.1.0', 2],
+  ['git push -u origin feat/v2-ui', 0],
+  ['git push origin chore/release-0.1.0', 0],
+  ['git push origin feat/RNF-11', 0],
+  ['git tag --list', 0],
+  ['gh release view v0.1.0', 0],
+  ['gh release list', 0],
 ]) {
   test(`guard-bash: "${cmd}" -> exit ${expected}`, () => {
     assert.equal(run('guard-bash.mjs', { tool_input: { command: cmd } }).code, expected)

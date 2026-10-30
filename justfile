@@ -57,11 +57,36 @@ fixtures:
     @echo "fixtures: not implemented yet"
 
 # Everything CI runs (check-app runs in the Windows build job; the installer build is not included).
-ci: check-fast test trace guard-tests check-app
+ci: check-fast test trace guard-tests version-check check-app
 
 # Tauri release build (NSIS + MSI).
 build:
     npm run tauri build
+
+# Release (RNF-11, RNF-06, ADR-0045, specs/contracts/release.md). All release outputs are staged
+# under target/release-staging/ (cargo owns target/release/). release-check with no argument takes
+# the tag from GITHUB_REF_NAME (release workflow). release-assets gates each installer at 20 MB
+# (decimal, RNF-06). set-version never commits, tags or pushes; only the human tags and publishes.
+
+# The manifests agree on a releasable version (MAJOR.MINOR.PATCH within the MSI range).
+version-check:
+    node scripts/release.mjs version
+
+# The tag names the manifests' version and HEAD is on origin/main: release-check [vX.Y.Z]
+release-check *args:
+    node scripts/release.mjs release-check {{args}}
+
+# Collect the installers, gate their size (RNF-06), write SHA256SUMS.txt and the release notes.
+release-assets:
+    node scripts/release.mjs assets --bundle target/release/bundle --out target/release-staging/assets --notes target/release-staging/release-notes.md --max-bytes 20000000
+
+# Create the draft release (GitHub Actions only; the human publishes it).
+release-draft:
+    node scripts/release.mjs draft --assets target/release-staging/assets --notes target/release-staging/release-notes.md
+
+# Bump the version in every manifest: set-version X.Y.Z
+set-version version:
+    node scripts/release.mjs set-version {{version}}
 
 # Calibration and acceptance tool (RP-11, ADR-0036, specs/calibration/). Needs FAKEFLAC_CORPUS and
 # FAKEFLAC_CALIBRATION (and ffmpeg for new transcodes). The release build runs from the repository root.
