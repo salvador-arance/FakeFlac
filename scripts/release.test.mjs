@@ -1566,3 +1566,95 @@ test('@RNF-11 Scenario: The dry run never publishes', () => {
     assert.ok(!text.split('\n').some((l) => /^ {4}if:/.test(l)), `job ${id} has a job-level if:`)
   }
 })
+
+// =============================================================================================
+// The given env reaches git and gh (release.md 3 "The environment", 3.2 step 4, 3.6 step 8, 8.1)
+// =============================================================================================
+
+test('@RNF-11 release.md 3.2 step 4 and 8.1: release-check runs git with the env given to run, not process.env', async () => {
+  // --root is a repository whose HEAD is on origin/main, so git run there passes. The given env
+  // names, through GIT_DIR, a second repository whose HEAD is not on origin/main. Only a git that
+  // received the given env answers "not on origin/main". process.env has no GIT_* (8.1 isolation).
+  assert.ok(!Object.keys(process.env).some((k) => /^GIT_DIR$/i.test(k)), 'process.env has no GIT_DIR')
+  const root = gitCase('B', 'B')
+  const other = gitCase('B', 'A')
+  const control = await cli(['release-check', 'v0.1.0', '--root', root])
+  assert.equal(control.code, 0, `control without GIT_DIR passes: ${show(control)}`)
+
+  const r = await cli(['release-check', 'v0.1.0', '--root', root], { GIT_DIR: path.join(other, '.git') })
+  assert.equal(r.code, 1, show(r))
+  assert.deepEqual(r.stderr, [`release: commit ${short('B')} is not on origin/main; tag a commit of main`])
+  assert.deepEqual(r.stdout, [])
+})
+
+test('@RNF-11 release.md 3.6 step 8 and 8.1: draft in GitHub Actions starts gh with the env given to run, not process.env', async () => {
+  const c = await writtenAssets()
+  const emptyPath = path.join(c.t, 'empty-path')
+  const fakeBin = path.join(c.t, 'fake-bin')
+  fs.mkdirSync(emptyPath)
+  fs.mkdirSync(fakeBin)
+  const record = path.join(c.t, 'gh-record.json')
+  const recorder = path.join(c.t, 'gh-recorder.cjs')
+  // The fake gh is node itself (an .exe on Windows, so spawn finds it without a shell). The
+  // recorder is preloaded only through NODE_OPTIONS of the given env; it writes the sentinel it
+  // sees and its arguments, then exits 0 before node would look for a script named "release".
+  fs.writeFileSync(
+    recorder,
+    [
+      "const fs = require('node:fs')",
+      `fs.writeFileSync(${JSON.stringify(record)}, JSON.stringify({ sentinel: process.env.FAKEFLAC_GH_SENTINEL ?? null, argv: process.argv.slice(1) }))`,
+      'process.exit(0)',
+      '',
+    ].join('\n'),
+  )
+  if (process.platform === 'win32') fs.copyFileSync(process.execPath, path.join(fakeBin, 'gh.exe'))
+  else fs.symlinkSync(process.execPath, path.join(fakeBin, 'gh'))
+
+  const sentinel = `sentinel-${process.pid}-${Date.now()}`
+  const env = isolatedEnv(
+    { GITHUB_ACTIONS: 'true', FAKEFLAC_GH_SENTINEL: sentinel, NODE_OPTIONS: `--require "${fwd(recorder)}"` },
+    { pathDir: fakeBin },
+  )
+  assert.deepEqual(
+    Object.keys(env).filter((k) => k.toUpperCase() === 'PATH'),
+    ['PATH'],
+  )
+
+  // SAFETY: while run() executes, the in-process environment can start no gh at all, real or
+  // fake: every PATH variant points to an empty folder and no token is set. A script that spawns
+  // gh with process.env (or with no env) therefore fails to start it.
+  const saved = Object.entries(process.env).filter(([k]) => /^(PATH|GH_TOKEN|GITHUB_TOKEN)$/i.test(k))
+  let r
+  try {
+    for (const [k] of saved) {
+      if (/^PATH$/i.test(k)) process.env[k] = emptyPath
+      else delete process.env[k]
+    }
+    process.env.PATH = emptyPath
+    r = await release.run(['draft', '--root', c.root, '--assets', c.out, '--notes', c.notes], env)
+  } finally {
+    for (const k of Object.keys(process.env)) if (/^(PATH|GH_TOKEN|GITHUB_TOKEN)$/i.test(k)) delete process.env[k]
+    for (const [k, v] of saved) process.env[k] = v
+  }
+
+  assert.ok(fs.existsSync(record), `the fake gh did not run: ${JSON.stringify(r)}`)
+  const seen = JSON.parse(fs.readFileSync(record, 'utf8'))
+  assert.equal(seen.sentinel, sentinel, 'the given env reached gh')
+  assert.equal(path.basename(seen.argv[0]), 'release')
+  assert.deepEqual(seen.argv.slice(1), [
+    'create',
+    'v0.1.0',
+    '--draft',
+    '--verify-tag',
+    '--title',
+    'FakeFlac 0.1.0',
+    '--generate-notes',
+    '--notes-file',
+    c.notes,
+    path.join(c.out, NSIS),
+    path.join(c.out, MSI),
+    path.join(c.out, 'SHA256SUMS.txt'),
+  ])
+  assert.equal(r.code, 0, JSON.stringify(r))
+  assert.deepEqual(r.stderr, [])
+})

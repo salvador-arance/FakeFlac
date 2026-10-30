@@ -2,6 +2,31 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-31 - Fix PR for the RF-11 and RNF-11 follow-ups, ready for G2
+
+**Done**
+- Branch `fix/rf-11-rnf-11-followups`. It closes the code follow-ups of the block below:
+  - `75a15b8` build: a seam, `run_analysis_cached_with`, that takes the open step as a closure. `run_analysis_cached` is unchanged.
+  - `200868e` test: six new tests.
+    - RNF-11 I1: env pass-through to `git` (a given `GIT_DIR` changes the answer) and to `gh` (a fake `gh` built from node, with a recorder loaded through `NODE_OPTIONS`). The in-process PATH is emptied for safety.
+    - RF-11: a panic in open gives `unavailable`; the store is dropped before the slot is freed; two step-6 race tests (newer schema, and a foreign file), reproduced through WAL and a second connection.
+  - `80d9c29` fix: `catch_unwind` around the open step, so a panic gives `unavailable` instead of `INTERNAL`.
+  - `07b0b58` test: wider timing margins for the race tests (commit after 500 ms, minimum wait 250 ms, against a 1000 ms `busy_timeout`).
+- Mutation checks: every pinning test fails under at least one mutation, and the panic test fails without the fix.
+- Review: nothing blocking.
+- `just ci` green: node 220/220, vitest 752/752, all Rust test binaries including `check-app`. `release.test.mjs` takes about 6–7 s against its 10 s budget.
+
+**Pending**
+- G2: review and merge the fix PR.
+- The fake-`gh` test has run on Windows only. Its Linux path (a symlink to node) runs for the first time in CI on this PR.
+- Still open: RNF-11 I4 (`set-version` reads manifests as UTF-8; theoretical, and a fix would change behaviour, so it needs a spec change first).
+- The owner's RNF-11 manual checks M3–M7 at the first real release, and the carried-over items of the block below.
+
+**Blockers / questions for the human**
+- None.
+
+**Next step:** after G2, `just prune-branches`; then the owner picks the next requirement (Opus, RNF-01 performance, RF-13 i18n).
+
 ## 2026-10-30 - RNF-11 merged, M1 passed; documentation refresh
 
 **Done**
