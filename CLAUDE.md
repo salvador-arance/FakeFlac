@@ -26,10 +26,17 @@ just check-fast   # fmt, clippy, svelte-check, arch lint, quick tests
 just check        # check-fast plus all tests
 just test         # all tests
 just gen          # regenerate TS bindings from Rust (tauri-specta)
+just check-app    # src-tauri adapter checks: bindings up to date, clippy, tests (Windows; not in `just check`)
 just trace        # validate the traceability matrix
 just lint-arch    # crate dependency rules + atomic design import rules
 just fixtures     # not implemented yet: fixtures are generated inside the tests
-just ci           # what CI runs
+just ci           # what CI runs (includes version-check and check-app)
+just build        # Tauri release build (NSIS + MSI)
+just version-check   # the manifests agree on a releasable MAJOR.MINOR.PATCH (RNF-11)
+just release-check [vX.Y.Z]  # the tag names the manifests' version and HEAD is on origin/main
+just release-assets  # collect installers, size gate (RNF-06), SHA256SUMS.txt, release notes
+just release-draft   # create the draft release (GitHub Actions only; the human publishes)
+just set-version X.Y.Z  # bump the version in every manifest (never commits, tags or pushes)
 just accept       # acceptance on the local corpus (RP-11); just calibrate adds the grid search
 just privacy-check --base main  # no corpus paths or names in the branch diff (ADR-022)
 just prune-branches  # delete merged branches and clean agent worktrees (after G2); --dry-run lists

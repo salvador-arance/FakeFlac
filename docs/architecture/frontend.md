@@ -7,17 +7,19 @@
 | Level | What | May contain | Knows app state | Examples |
 |---|---|---|---|---|
 | Tokens | Design values | — | No | verdict colours, spacing, typography, spectrogram palette |
-| Atoms | Indivisible element | tokens | No | `Button`, `Icon`, `Text`, `Badge`, `ProgressBar`, `Input`, `Tooltip`, `Splitter`, `TreeNode`, `Spinner` |
-| Molecules | Small group with one function | atoms | No | `VerdictCell` (icon+text+colour), `SearchField`, `ToolbarButton`, `ToolbarGroup`, `ColumnHeader` |
-| Organisms | Section with its own meaning | molecules, atoms | Via props/events | `Toolbar`, `FolderTree`, `ResultsTable` (with column chooser), `DetailPanel`/`SpectrogramView`, `StatusBar` |
-| Templates | Layout without real data | organisms | No | `MainLayout`, `EmptyLayout` |
-| Pages | Template + real data + store connection | templates | **Yes (only place)** | `AnalysisPage`, `SettingsPage` |
+| Atoms | Indivisible element | tokens | No | `Icon`, `IconButton`, `ProgressBar`, `Splitter` |
+| Molecules | Small group with one function | atoms | No | `VerdictCell` (icon+text+colour), `VerdictFilter`, `SearchField`, `ColumnHeader`, `CutoffValue`, `BitrateValue`, `WindowControls` |
+| Organisms | Section with its own meaning | molecules, atoms | Via props/events | `TitleBar`, `Toolbar`, `FolderDropZone`, `AlbumSummaryList`, `ResultsTable`, `DetailPanel`, `SpectrogramView`, `StatusBar` |
+| Templates | Layout without real data | organisms | No | `MainLayout` |
+| Pages | Template + real data + store connection | templates | **Yes (only place)** | `AnalysisPage` |
 
 Rules (linted by `scripts/lint-arch.mjs`): see `dependencies.md`. Every atom/molecule has a spec in `specs/ui/` and a Storybook story before it is built (S6).
 
 ```
 src/lib/{tokens, components/{atoms,molecules,organisms,templates}, pages, stores, api, i18n}
 ```
+
+The examples in the table are what exists today. The folder tree, the column chooser and a settings page of the UI style below are decided but not built yet: the left panel is `FolderDropZone` plus `AlbumSummaryList`. State lives in `stores/analysis.svelte.ts` (runes); messages in `i18n/` (English is the default and the only locale the UI uses today; an `es` catalogue exists, with missing keys falling back to English, but nothing switches to it until RF-13 is specified).
 
 The spectrogram canvas palette lives in `src/lib/tokens/spectrogram.ts`, a TS token rather than CSS, because the canvas needs numeric colours; the `tokens.css` rule (no literal colours outside the tokens) applies to it too.
 

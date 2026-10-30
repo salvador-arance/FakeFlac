@@ -30,7 +30,7 @@ Why hexagonal: the detection core is the most valuable and most delicate asset (
 
 ## Use cases
 
-`AnalyzeFolder`, `GetSpectrogram`, `ExportCsv`, `SummarizeByFolder`. See `backend.md`.
+`AnalyzeFolder` (with the optional result cache), `GetSpectrogram`, `ExportCsv`, `SummarizeByFolder`. See `backend.md`.
 
 ## Quality attributes → design
 
@@ -47,6 +47,10 @@ Why hexagonal: the detection core is the most valuable and most delicate asset (
 | RNF-08 usability | Verdict = icon + text + colour (`frontend.md`) |
 | RNF-09 Unicode | `PathBuf`/`OsString` in the core; CSV in UTF-8 (ADR-0012) |
 | RNF-11 releases | Tagged releases built by `release.yml`, draft published by the human (ADR-0028, ADR-0032, ADR-0045) |
+
+## CI and releases
+
+`ci.yml` runs only `just` recipes: `lint`, `specs`, `test-rust`, `test-web`, `supply-chain` and `build-windows` (`just check-app`, `just build`, `just release-assets`), gated by the single required check `ci-ok`. `release.yml` runs on a `vX.Y.Z` tag pushed by the human (jobs `verify`, `package`, `publish`: draft release with NSIS, MSI and `SHA256SUMS.txt`) or by hand as a dry run (`verify` and `package` only). Details: `specs/contracts/release.md`, ADR-0045.
 
 ## Tauri security
 
