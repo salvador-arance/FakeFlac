@@ -1,34 +1,36 @@
 # Data model and cache
 
-> Results are cached in SQLite (`rusqlite`, WAL) in `%APPDATA%\FakeFlac`, never next to the music. Key = (path, size, mtime, algorithm_version). Settings are a JSON file in the same folder.
+> Results are cached in SQLite (`rusqlite`, WAL; ADR-0007, ADR-0044) in `%LOCALAPPDATA%\io.github.fakeflac.app\results-cache.sqlite3` (Tauri's `app_cache_dir()`), never next to the music and never derived from the analysed folder (RNF-05). Key = (canonical path, size, mtime, engine). The engine is the exact JSON of the run's `DetectionParams` (which contains `algorithm_version`), plus `EXTRACTION_VERSION`, plus the app version (ADR-0008 as extended by ADR-0044). Full spec: `specs/contracts/result-cache.md` (RF-11).
 
-## SQLite schema (ADR-0007, ADR-0008)
+## SQLite schema version 1 (ADR-0007, ADR-0044)
 
 ```sql
-CREATE TABLE track_analysis (
-  path              TEXT    NOT NULL,   -- canonical path, UTF-8 (RNF-09)
-  size_bytes        INTEGER NOT NULL,
-  modified_unix     INTEGER NOT NULL,
-  algorithm_version INTEGER NOT NULL,
-  verdict           TEXT    NOT NULL,   -- real | suspicious | fake | error
-  cutoff_hz         REAL,
-  steepness         REAL,
-  noise_floor_db    REAL,
-  reasons           TEXT,               -- JSON
-  format            TEXT    NOT NULL,   -- wav | flac | mp3 | m4a | opus
-  declared_bitrate  INTEGER,            -- kbps, lossy formats only
-  estimated_bitrate INTEGER,            -- kbps, RF-15
-  sample_rate       INTEGER NOT NULL,
-  bit_depth         INTEGER,
-  duration_ms       INTEGER NOT NULL,
-  error             TEXT,
-  analyzed_at       INTEGER NOT NULL,
-  PRIMARY KEY (path, size_bytes, modified_unix, algorithm_version)
+-- PRAGMA application_id = 1179012163;  -- 0x46464C43, "FFLC": marks a FakeFlac cache
+-- PRAGMA user_version   = 1;           -- schema version
+CREATE TABLE engine (
+  id                 INTEGER PRIMARY KEY,
+  params_json        TEXT    NOT NULL,          -- serde_json text of DetectionParams
+  extraction_version INTEGER NOT NULL,          -- fakeflac_audio::EXTRACTION_VERSION
+  app_version        TEXT    NOT NULL,          -- CARGO_PKG_VERSION of src-tauri
+  algorithm_version  INTEGER NOT NULL,          -- copy of the value inside params_json, for inspection only
+  UNIQUE (params_json, extraction_version, app_version)
 );
-CREATE INDEX idx_folder ON track_analysis(path);
-CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);  -- schema_version
+CREATE TABLE track_result (
+  path          TEXT    NOT NULL,               -- canonical path, UTF-8, compared BINARY (RNF-09)
+  engine_id     INTEGER NOT NULL REFERENCES engine(id) ON DELETE CASCADE,
+  size_bytes    INTEGER NOT NULL,
+  modified_unix INTEGER NOT NULL,               -- whole Unix seconds, from the scan
+  analysis_json TEXT    NOT NULL,               -- the core TrackAnalysis as serde_json (camelCase)
+  stored_unix   INTEGER NOT NULL,               -- inspection only
+  PRIMARY KEY (path, engine_id)
+) WITHOUT ROWID;
 ```
 
-- **Invalidation:** a new `algorithm_version` stops matching old rows; they are purged at start-up.
-- **Migrations:** `meta.schema_version` plus sequential scripts.
-- **Settings:** `Settings { language: "es" | "en", windowsCount, sampleWindows, params: DetectionParams }` as JSON.
+- **Hit:** same canonical path and engine, and the row's size and mtime equal the scan's. The core checks the returned analysis again (`algorithm_version`, size, mtime, format).
+- **What is stored:** every result except `unreadable` and `corruptStream` errors and results with a non-finite cutoff value (`is_cacheable`, result-cache.md 2.2). Entries with no mtime, or with a path that is not valid Unicode, are never looked up or stored.
+- **Invalidation:** a changed file replaces its row. The first result stored under a new engine deletes every other engine and, by cascade, its rows, so the cache holds one engine at a time. There is no pruning of rows of deleted files and no `VACUUM`.
+- **Opening:** the header (`application_id`, `user_version`) is read before anything writes. An empty file gets schema version 1. A file that is not a FakeFlac cache, or that SQLite reports as corrupt, is reset. A newer schema is left untouched and the run reports `unavailable`.
+- **Migrations:** `user_version` plus sequential scripts, run in one write transaction at open.
+- **Failures** never fail a run: the summary reports `cache: 'unavailable'` or `'degraded'` (contract version 7).
+- **Clearing:** `clear_cache` deletes `-wal`, `-shm` and the database file, in that order, without opening it.
+- **Settings:** `Settings { language: "es" | "en", windowsCount, sampleWindows, params: DetectionParams }` as JSON. Settings are RF-13, which is not specified yet; their location is decided there.

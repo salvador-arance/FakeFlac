@@ -1,13 +1,13 @@
 ---
 id: SPEC-CONTRACT-H1
-requirements: [RF-01, RF-02, RF-05, RF-06, RF-07, RF-09, RF-10, RF-14, RF-15, RF-16]
+requirements: [RF-01, RF-02, RF-05, RF-06, RF-07, RF-09, RF-10, RF-11, RF-14, RF-15, RF-16]
 status: proposed
-version: 6
+version: 7
 ---
 
 # Backend ↔ frontend contract (H1, with the H2 lossy formats, CSV export and album summaries)
 
-> The commands, events and types the frontend can use. They are defined once in Rust and the TypeScript bindings are **generated** with `tauri-specta` (S3, ADR-0003); this document is the readable reference. Field names are camelCase on the TS side. Settings and cache commands arrive later in H2. Version 3 adds MP3 and M4A files (RF-14 H2) and the source-bitrate estimate (RF-15); changes are listed in "Lossy formats (version 3)". Version 4 adds `export_csv` (RF-09); changes are listed in "CSV export (version 4)". Version 5 adds the album summary to every `trackDone` event (RF-10); changes are listed in "Album summary (version 5)". Version 6 adds the reason `streamingSampleRate` (RF-16, detection v7, ADR-0043); changes are listed in "Streaming sample rate (version 6)".
+> The commands, events and types the frontend can use. They are defined once in Rust and the TypeScript bindings are **generated** with `tauri-specta` (S3, ADR-0003); this document is the readable reference. Field names are camelCase on the TS side. Settings commands arrive later in H2 (the cache command is version 7). Version 3 adds MP3 and M4A files (RF-14 H2) and the source-bitrate estimate (RF-15); changes are listed in "Lossy formats (version 3)". Version 4 adds `export_csv` (RF-09); changes are listed in "CSV export (version 4)". Version 5 adds the album summary to every `trackDone` event (RF-10); changes are listed in "Album summary (version 5)". Version 6 adds the reason `streamingSampleRate` (RF-16, detection v7, ADR-0043); changes are listed in "Streaming sample rate (version 6)". Version 7 adds the result cache (RF-11, ADR-0044): the command `clear_cache`, the error `CACHE_FAILED` and the summary fields `fromCache` and `cache`; changes are listed in "Result cache (version 7)".
 
 ## Commands
 
@@ -18,6 +18,7 @@ version: 6
 | `cancel_analysis` | — | `void` (no-op if nothing is running) | — | RF-05 |
 | `get_spectrogram` | `path: string` | `Spectrogram` | `NOT_ANALYZED` is not used in H1; `INTERNAL` if the file cannot be decoded | RF-07 |
 | `export_csv` (version 4) | — (the destination comes from the native save dialog, never from the frontend) | `ExportResult \| null` (`null` if the dialog is cancelled) | `NOT_ANALYZED`, `ANALYSIS_RUNNING`, `EXPORT_FAILED`, `INTERNAL` | RF-09 |
+| `clear_cache` (version 7) | — | `void` | `ANALYSIS_RUNNING`, `CACHE_FAILED`, `INTERNAL` | RF-11 |
 
 Drag and drop uses Tauri's native drag-drop event. The frontend cannot tell a folder from a file (it has no file-system access), so it calls `start_analysis` with each dropped path in order until one does not fail with `NOT_A_FOLDER`. Dropped files are ignored in H1: if every dropped path is a file, nothing starts and no error is shown. Any other error is shown as usual.
 
@@ -92,7 +93,11 @@ type AnalysisSummary = {
   root: string; total: number; done: number
   real: number; suspicious: number; fake: number; errors: number
   cancelled: boolean; elapsedMs: number
+  fromCache: number                                  // version 7 (RF-11): tracks whose trackDone carried a cached result; ≤ done
+  cache: CacheStatus                                 // version 7 (RF-11)
 }
+
+type CacheStatus = 'off' | 'ok' | 'degraded' | 'unavailable'  // version 7 (RF-11); 'off' is never sent by the app
 
 type Spectrogram = {
   width: number            // time bins, ≤ spectrogram.max_width
@@ -123,7 +128,9 @@ type ExportResult = {     // version 4 (RF-09)
 }
 
 type AppError = {
-  code: 'NO_AUDIO_FOUND' | 'NOT_A_FOLDER' | 'FOLDER_UNREADABLE' | 'ANALYSIS_RUNNING' | 'NOT_ANALYZED' | 'EXPORT_FAILED' | 'INTERNAL'
+  code: 'NO_AUDIO_FOUND' | 'NOT_A_FOLDER' | 'FOLDER_UNREADABLE' | 'ANALYSIS_RUNNING' | 'NOT_ANALYZED' | 'EXPORT_FAILED'
+      | 'CACHE_FAILED'                               // version 7 (RF-11): only from clear_cache
+      | 'INTERNAL'
   message: string
 }
 ```
@@ -246,6 +253,41 @@ Version 6 (RF-16; ADR-0043; rule L6a of `specs/detection/lossy-source.md` sectio
 - **Layers.** The core's `SuspicionReason` gains the variant `StreamingSampleRate`; `src-tauri/src/dto.rs` maps it like the others (serialised `streamingSampleRate`); the CSV serialiser (`fakeflac-export`) and the calibration tool write the same identifier. No new type, port or dependency.
 
 `just gen` produces new bindings (one more `SuspicionReason` member); `just gen-check` must pass. The API client does not change. The frontend needs the text `reason.streamingSampleRate` (`ui/lossy-formats.md`).
+
+## Result cache (version 7)
+
+Version 7 (RF-11; ADR-0007, ADR-0008 as extended by ADR-0044; full spec: `specs/contracts/result-cache.md`; UI: `specs/ui/result-cache.md`; scenarios: `specs/features/result-cache.feature`):
+
+- **`start_analysis`** reuses the stored result of a file when it is unchanged (same canonical path, size and `modifiedUnix`) and was analysed by the same engine (every `DetectionParams` value including `algorithm_version`, the decoder's extraction version and the app version; result-cache.md sections 3 and 4). Otherwise it analyses the file and stores the result. Its inputs, outputs, errors and events do not change:
+  - **The events are the same.** A reused track still gets `trackStarted` and then `trackDone`, and it counts in its album as any other track.
+  - **The analysis is the same.** Its `TrackAnalysis` equals what a fresh analysis would give. `info.path` and `info.folder` are those of the current run.
+  - **What is not stored.** `unreadable` and `corruptStream` results are analysed again on every run (result-cache.md 2.2, Q2).
+- **The cache never fails a run.** If it is missing it is created. If it is corrupt or not a FakeFlac cache, it is replaced (result-cache.md Q10). If it is locked, unwritable or written by a newer FakeFlac, it is not used, and every file is analysed. None of these is an `AppError`. They show only in `AnalysisSummary.cache`.
+- **New `AnalysisSummary` fields:**
+  - `fromCache`: tracks whose `trackDone` carried a cached result (`≤ done`).
+  - `cache`:
+    - `'ok'`: the cache was used with no failure;
+    - `'degraded'`: a lookup or a write failed during the run, and the run stopped using the cache from then on (results are still correct; some may not be saved);
+    - `'unavailable'`: the cache could not be opened, so nothing was reused or saved;
+    - `'off'`: the run was made without a cache. The app never sends it; tests and tools use it.
+
+  They are set in the summary of `finished`, of `cancelled` and in the value `start_analysis` resolves with.
+- **New command `clear_cache`**, no input, resolves with nothing. It deletes the cache files (`results-cache.sqlite3` and its `-wal` and `-shm` files in the app's local cache folder, `%LOCALAPPDATA%\io.github.fakeflac.app`). Clearing an absent cache succeeds. It works even when the cache is corrupt or from a newer version. It changes nothing else: not the results kept for the export, and not any analysed file. The next run analyses every file again.
+  - It fails with `ANALYSIS_RUNNING` when a run holds the analysis. While it works it holds the analysis itself, so a `start_analysis` made meanwhile fails with `ANALYSIS_RUNNING`; the UI prevents that (`ui/result-cache.md`).
+  - It fails with `CACHE_FAILED` when a file cannot be deleted (for example another FakeFlac window has it open) or the cache folder cannot be resolved. `message` holds the OS error.
+  - It fails with `INTERNAL` on an unexpected failure.
+- **New `AppError` code `CACHE_FAILED`**, used only by `clear_cache`.
+- **Read-only (RNF-05).** The cache is never in an analysed folder; its location never depends on `root`. Looking files up opens no audio file for writing.
+- **Unchanged:** `pick_folder`, `cancel_analysis`, `get_spectrogram` (the spectrogram is never cached on disk), `export_csv` and the CSV (`csv_format_version` 1; a reused track is exported like any other), `ProgressEvent`, `TrackAnalysis`, `TrackInfo`, `AlbumUpdate`, `AlbumSummary`, `Spectrogram`, `ExportResult`.
+- **Layers.**
+  - **`fakeflac-core`:** the `ResultStore` port (`get`, `put`), `ResultCache`, `CacheStatus`, `analyze_folder_cached`, the summary fields and `AppErrorCode::CacheFailed`. `analyze_folder` keeps its signature, with no cache.
+  - **`fakeflac-store`:** `SqliteResultStore`, `clear_cache_files`.
+  - **`src-tauri`:** `run::run_analysis_cached`, `run::clear_cache`, the command and the DTOs.
+
+  Details: result-cache.md section 10.
+- **Consequence on existing tests (declared):** tests that build an `AnalysisSummary` field by field gain the two fields in `test(RF-11)` (result-cache.md section 12).
+
+`just gen` produces new bindings (the command `clearCache`, the type `CacheStatus`, the two summary fields and the error code); `just gen-check` must pass. The API client adds `clearCache(): Promise<void>`, which rejects with `ApiError` on a contract error, like `exportCsv`. The frontend needs the texts of `ui/result-cache.md`.
 
 ## Supported files (RF-14)
 
