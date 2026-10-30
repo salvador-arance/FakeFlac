@@ -9,6 +9,7 @@ use fakeflac_core::{
 use fakeflac_fs::WalkDirScanner;
 use fakeflac_store::{EngineTag, OpenError, SqliteResultStore};
 use std::collections::BTreeMap;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -262,7 +263,11 @@ pub fn run_analysis_cached_with<S: ResultStore>(
     open: impl FnOnce(&Path) -> Result<S, OpenError>,
 ) -> Result<dto::AnalysisSummary, dto::AppError> {
     let run = slot.begin()?;
-    let store = cache_file.and_then(|file| open(file).ok());
+    // A panic while opening counts as a failed open (`unavailable`), like the store's own
+    // calls (result-cache.md 7, ADR-0044 decision 2): the cache never fails a run.
+    let store = cache_file
+        .and_then(|file| catch_unwind(AssertUnwindSafe(|| open(file))).ok())
+        .and_then(Result::ok);
     let cache = match &store {
         Some(store) => ResultCache::Store(store),
         None => ResultCache::Unavailable,
