@@ -21,7 +21,7 @@
 - G2: review and merge #85.
 - Manual checks:
   - M1: the warm run takes at most 10 % of the cold run's time on 200 or more tracks;
-  - M2: the cache file is in `%LOCALAPPDATA%\io.github.fakeflac.appesults-cache.sqlite3`;
+  - M2: the cache file is in `%LOCALAPPDATA%\io.github.fakeflac.app\results-cache.sqlite3`;
   - M3: two windows with the same engine;
   - UI M1 and M3: the toolbar at 900 px, and the icon.
   - The Tauri wiring (`.setup`, the commands) was only reviewed by reading.
