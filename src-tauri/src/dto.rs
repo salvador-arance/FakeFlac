@@ -410,7 +410,9 @@ impl From<core::CacheStatus> for CacheStatus {
     fn from(c: core::CacheStatus) -> Self {
         match c {
             core::CacheStatus::Off => CacheStatus::Off,
-            _ => todo!("RF-11: map the other cache statuses (contract version 7)"),
+            core::CacheStatus::Ok => CacheStatus::Ok,
+            core::CacheStatus::Degraded => CacheStatus::Degraded,
+            core::CacheStatus::Unavailable => CacheStatus::Unavailable,
         }
     }
 }
@@ -424,9 +426,7 @@ impl From<core::AppErrorCode> for AppErrorCode {
             core::AppErrorCode::AnalysisRunning => AppErrorCode::AnalysisRunning,
             core::AppErrorCode::NotAnalyzed => AppErrorCode::NotAnalyzed,
             core::AppErrorCode::ExportFailed => AppErrorCode::ExportFailed,
-            core::AppErrorCode::CacheFailed => {
-                todo!("RF-11: map CACHE_FAILED (contract version 7)")
-            }
+            core::AppErrorCode::CacheFailed => AppErrorCode::CacheFailed,
             core::AppErrorCode::Internal => AppErrorCode::Internal,
         }
     }

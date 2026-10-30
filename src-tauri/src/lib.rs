@@ -41,6 +41,18 @@ pub fn run() {
         .manage(Arc::new(AnalysisSlot::new()))
         .manage(Arc::new(run::ExportState::new()))
         .invoke_handler(builder.invoke_handler())
+        // RF-11: the result cache file in the app's local cache folder
+        // (`%LOCALAPPDATA%\io.github.fakeflac.app`), or `None` if the folder cannot be
+        // resolved. Nothing is created here: a run creates the folder when it opens the store.
+        .setup(|app| {
+            let file = app
+                .path()
+                .app_cache_dir()
+                .ok()
+                .map(|dir| dir.join(fakeflac_store::FILE_NAME));
+            app.manage(Arc::new(run::CacheConfig { file }));
+            Ok(())
+        })
         // A reload (F5, dev server) leaves no listener for the running analysis: cancel it so the
         // new page is not told `ANALYSIS_RUNNING` until the old run ends.
         .on_page_load(|webview, payload| {
