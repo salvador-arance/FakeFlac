@@ -16,8 +16,9 @@ pub mod spectrum;
 pub mod summary;
 
 pub use analyze_folder::{
-    album_display_name, analyze_folder, ActiveRun, AlbumUpdate, AnalysisSlot, AnalysisSummary,
-    CancelToken, ProgressEvent,
+    album_display_name, analyze_folder, analyze_folder_cached, is_cacheable, ActiveRun,
+    AlbumUpdate, AnalysisSlot, AnalysisSummary, CacheStatus, CancelToken, ProgressEvent,
+    ResultCache,
 };
 pub use domain::{
     AlbumSummary, AudioCodec, AudioFormat, BitrateMode, CutoffEstimate, SuspicionReason,
@@ -26,6 +27,7 @@ pub use domain::{
 pub use error::{AppError, AppErrorCode};
 pub use export_csv::export_csv;
 pub use params::{DetectionParams, WindowKind};
+pub use ports::{CacheError, ResultStore};
 pub use spectrogram::Spectrogram;
 pub use spectrum::BandSpectra;
 pub use summary::summarize_album;

@@ -1,7 +1,7 @@
 <script lang="ts">
   import ProgressBar from '../atoms/ProgressBar.svelte'
   import { t } from '../../i18n'
-  import type { AnalysisPhase, StatusSummary } from '../../model'
+  import type { AnalysisPhase, CacheFigures, StatusSummary } from '../../model'
 
   type Props = {
     phase: AnalysisPhase
@@ -10,9 +10,11 @@
     notice?: string
     /** RF-08 (sort-filter.md section 9): the number of shown rows. */
     shown?: number
+    /** RF-11 (result-cache.md section 3): the cache figures of the latest ended run. */
+    cache?: CacheFigures
   }
 
-  let { phase, summary, message, notice, shown }: Props = $props()
+  let { phase, summary, message, notice, shown, cache }: Props = $props()
 
   let statusText = $derived.by(() => {
     switch (phase) {
@@ -33,6 +35,15 @@
     }
   })
 
+  // RF-11 (result-cache.md section 3): only once a run has ended finished or cancelled
+  let cacheText = $derived.by(() => {
+    if (!cache || (phase !== 'finished' && phase !== 'cancelled')) return ''
+    let text = cache.fromCache > 0 ? ` · ${t('status.fromCache', { n: cache.fromCache })}` : ''
+    if (cache.status === 'degraded') text += ` · ${t('status.cacheDegraded')}`
+    else if (cache.status === 'unavailable') text += ` · ${t('status.cacheUnavailable')}`
+    return text
+  })
+
   // RF-08 (sort-filter.md section 9): only while the table has run rows to count
   let shownCount = $derived(
     shown !== undefined && (phase === 'analysing' || phase === 'finished' || phase === 'cancelled')
@@ -42,8 +53,8 @@
 
   let shownText = $derived(
     notice && phase !== 'scanning' && phase !== 'analysing'
-      ? `${statusText}${shownCount} · ${notice}`
-      : `${statusText}${shownCount}`,
+      ? `${statusText}${cacheText}${shownCount} · ${notice}`
+      : `${statusText}${cacheText}${shownCount}`,
   )
 
   let progressValue = $derived.by(() => {

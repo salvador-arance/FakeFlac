@@ -13,6 +13,8 @@ pub enum AppErrorCode {
     AnalysisRunning,
     NotAnalyzed,
     ExportFailed,
+    /// `clear_cache` could not delete the cache files (RF-11, commands.md version 7).
+    CacheFailed,
     Internal,
 }
 
@@ -26,6 +28,7 @@ impl AppErrorCode {
             AppErrorCode::AnalysisRunning => "ANALYSIS_RUNNING",
             AppErrorCode::NotAnalyzed => "NOT_ANALYZED",
             AppErrorCode::ExportFailed => "EXPORT_FAILED",
+            AppErrorCode::CacheFailed => "CACHE_FAILED",
             AppErrorCode::Internal => "INTERNAL",
         }
     }

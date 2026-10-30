@@ -5,7 +5,7 @@ use crate::analysis::analyze_track;
 use crate::domain::{AlbumSummary, TrackAnalysis, TrackError, Verdict};
 use crate::error::{AppError, AppErrorCode};
 use crate::params::DetectionParams;
-use crate::ports::{AudioProbe, FileEntry, FileScanner, SpectrumAnalyzer};
+use crate::ports::{AudioProbe, FileEntry, FileScanner, ResultStore, SpectrumAnalyzer};
 use crate::summary::AlbumTally;
 use serde::{Deserialize, Serialize};
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -47,6 +47,233 @@ pub struct AnalysisSummary {
     pub errors: u32,
     pub cancelled: bool,
     pub elapsed_ms: u64,
+    /// Tracks whose `TrackDone` carried a cached result (RF-11, `from_cache <= done`).
+    pub from_cache: u32,
+    /// How the run used the result cache (RF-11).
+    pub cache: CacheStatus,
+}
+
+/// How a run used the result cache (`specs/contracts/result-cache.md` section 8.3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CacheStatus {
+    /// The run used `ResultCache::Off`.
+    Off,
+    /// `ResultCache::Store` and no `CacheError`.
+    Ok,
+    /// `ResultCache::Store` and at least one `CacheError`.
+    Degraded,
+    /// `ResultCache::Unavailable`.
+    Unavailable,
+}
+
+/// How a run uses the result cache (`specs/contracts/result-cache.md` section 8.1).
+#[derive(Clone, Copy)]
+pub enum ResultCache<'a> {
+    /// No cache (status `off`): `analyze_folder`, tests, a future CLI.
+    Off,
+    /// The composition root could not open the cache (status `unavailable`).
+    Unavailable,
+    /// Look up and store results (status `ok`, or `degraded` after a `CacheError`).
+    Store(&'a dyn ResultStore),
+}
+
+/// Whether `analysis` may be stored in the result cache (`specs/contracts/result-cache.md`
+/// section 2.2): the verdict is not `error`, or the error is `tooShort` or `unsupportedFormat`
+/// (an `unreadable` or `corruptStream` error may be temporary); and a cutoff, if any, has three
+/// finite values (a non-finite value does not survive JSON).
+pub fn is_cacheable(analysis: &TrackAnalysis) -> bool {
+    let kind = match analysis.verdict {
+        Verdict::Error => matches!(
+            analysis.error,
+            Some(TrackError::TooShort | TrackError::UnsupportedFormat(_))
+        ),
+        Verdict::Real | Verdict::Suspicious | Verdict::Fake => true,
+    };
+    let cutoff = analysis.cutoff.as_ref().is_none_or(|c| {
+        [c.frequency_hz, c.steepness_db_per_khz, c.noise_floor_db]
+            .iter()
+            .all(|v| v.is_finite())
+    });
+    kind && cutoff
+}
+
+/// `analyze_folder` with a result cache (RF-11, `specs/contracts/result-cache.md` section 8).
+///
+/// With `ResultCache::Store`, each track is looked up before it is analysed and, after a miss,
+/// stored if it is cacheable. A hit is reported like an analysed track, with the `info.path` and
+/// `info.folder` of the current scan entry. The first store failure (an `Err` or a panic) makes
+/// the run stop using the store and report `cache: degraded`; it never changes a verdict or
+/// stops the run (RNF-04). No lock of the use case is held during a store call.
+#[allow(clippy::too_many_arguments)]
+pub fn analyze_folder_cached(
+    scanner: &dyn FileScanner,
+    analyzer: &dyn SpectrumAnalyzer,
+    cache: ResultCache<'_>,
+    params: &DetectionParams,
+    root: &Path,
+    workers: usize,
+    cancel: &CancelToken,
+    on_progress: &(dyn Fn(ProgressEvent) + Sync),
+) -> Result<AnalysisSummary, AppError> {
+    let started = Instant::now();
+    let mut entries = scanner.scan(root)?;
+    if entries.is_empty() {
+        return Err(AppError::new(
+            AppErrorCode::NoAudioFound,
+            format!("no supported audio files in {}", root.display()),
+        ));
+    }
+    // Component by component, so a folder's files stay together ("Album\x" before "Album (Deluxe)\y").
+    entries.sort_by_cached_key(|e| (path_key(&e.path), e.path.clone()));
+    let (albums, tracks) = group_albums(root, &entries);
+    let total = tracks.len();
+    on_progress(ProgressEvent::Scanned {
+        total: total as u32,
+    });
+
+    let counts = Counts::default();
+    let next = Mutex::new(0usize);
+    // The album lock (commands.md, "Album lock"): a mutex of its own, not the `next` one.
+    let albums = Mutex::new(albums);
+    let analyzer = PanicSafe(analyzer);
+    let cache = CacheRun::new(cache);
+    let worker = || {
+        run_worker(
+            &tracks,
+            &next,
+            &albums,
+            &counts,
+            &analyzer,
+            &cache,
+            params,
+            cancel,
+            on_progress,
+        )
+    };
+    std::thread::scope(|scope| {
+        let spawned = (0..workers.max(1).min(total))
+            .filter(|_| {
+                std::thread::Builder::new()
+                    .spawn_scoped(scope, worker)
+                    .is_ok()
+            })
+            .count();
+        // The OS refused every thread: analyse on the calling thread instead.
+        if spawned == 0 {
+            worker();
+        }
+    });
+
+    let done = counts.done.load(Ordering::SeqCst);
+    let summary = AnalysisSummary {
+        root: root.to_path_buf(),
+        total: total as u32,
+        done,
+        real: counts.real.load(Ordering::SeqCst),
+        suspicious: counts.suspicious.load(Ordering::SeqCst),
+        fake: counts.fake.load(Ordering::SeqCst),
+        errors: counts.errors.load(Ordering::SeqCst),
+        cancelled: (done as usize) < total,
+        elapsed_ms: started.elapsed().as_millis() as u64,
+        from_cache: counts.from_cache.load(Ordering::SeqCst),
+        cache: cache.status(),
+    };
+    if summary.cancelled {
+        on_progress(ProgressEvent::Cancelled {
+            summary: summary.clone(),
+        });
+    } else {
+        on_progress(ProgressEvent::Finished {
+            summary: summary.clone(),
+        });
+    }
+    Ok(summary)
+}
+
+/// The run's use of the result cache: the store, if any, and the run's failure flag
+/// (`specs/contracts/result-cache.md` sections 7 and 8.2).
+struct CacheRun<'a> {
+    cache: ResultCache<'a>,
+    /// Set by the worker whose store call fails, before it does anything else.
+    failed: AtomicBool,
+}
+
+impl<'a> CacheRun<'a> {
+    fn new(cache: ResultCache<'a>) -> CacheRun<'a> {
+        CacheRun {
+            cache,
+            failed: AtomicBool::new(false),
+        }
+    }
+
+    /// The store, if the run has one, `entry` has an mtime (section 2.3) and no store call of
+    /// the run has failed. Read immediately before each call (bounds F1 to F3 of section 7).
+    fn usable(&self, entry: &FileEntry) -> Option<&'a dyn ResultStore> {
+        match self.cache {
+            ResultCache::Store(store)
+                if entry.modified_unix != 0 && !self.failed.load(Ordering::SeqCst) =>
+            {
+                Some(store)
+            }
+            ResultCache::Store(_) | ResultCache::Off | ResultCache::Unavailable => None,
+        }
+    }
+
+    fn fail(&self) {
+        self.failed.store(true, Ordering::SeqCst);
+    }
+
+    /// Section 8.2 step 1: a hit that passes the checks of section 3, with the paths of
+    /// `entry`; `None` on a miss or a failure. An `Err` or a panic sets the failure flag.
+    fn lookup(&self, entry: &FileEntry, params: &DetectionParams) -> Option<TrackAnalysis> {
+        let store = self.usable(entry)?;
+        match catch_unwind(AssertUnwindSafe(|| store.get(entry, params))) {
+            Ok(Ok(Some(mut hit))) if matches_entry(&hit, entry, params) => {
+                hit.info.path = entry.path.clone();
+                hit.info.folder = entry.folder.clone();
+                Some(hit)
+            }
+            Ok(Ok(_)) => None,
+            Ok(Err(_)) | Err(_) => {
+                self.fail();
+                None
+            }
+        }
+    }
+
+    /// Section 8.2 step 3, after a miss: stores `analysis` if it is cacheable (section 2.2).
+    /// An `Err` or a panic sets the failure flag.
+    fn save(&self, entry: &FileEntry, params: &DetectionParams, analysis: &TrackAnalysis) {
+        if !is_cacheable(analysis) {
+            return;
+        }
+        let Some(store) = self.usable(entry) else {
+            return;
+        };
+        match catch_unwind(AssertUnwindSafe(|| store.put(entry, params, analysis))) {
+            Ok(Ok(())) => {}
+            Ok(Err(_)) | Err(_) => self.fail(),
+        }
+    }
+
+    fn status(&self) -> CacheStatus {
+        match self.cache {
+            ResultCache::Off => CacheStatus::Off,
+            ResultCache::Unavailable => CacheStatus::Unavailable,
+            ResultCache::Store(_) if self.failed.load(Ordering::SeqCst) => CacheStatus::Degraded,
+            ResultCache::Store(_) => CacheStatus::Ok,
+        }
+    }
+}
+
+/// The core's own check of a returned analysis (`specs/contracts/result-cache.md` section 3).
+/// Anything else is a miss, not a failure.
+fn matches_entry(hit: &TrackAnalysis, entry: &FileEntry, params: &DetectionParams) -> bool {
+    hit.algorithm_version == params.algorithm_version
+        && hit.info.size_bytes == entry.size_bytes
+        && hit.info.modified_unix == entry.modified_unix
+        && hit.info.format == entry.format
 }
 
 /// The album of a `TrackDone` after counting that track (RF-10, commands.md version 5).
@@ -124,75 +351,16 @@ pub fn analyze_folder(
     cancel: &CancelToken,
     on_progress: &(dyn Fn(ProgressEvent) + Sync),
 ) -> Result<AnalysisSummary, AppError> {
-    let started = Instant::now();
-    let mut entries = scanner.scan(root)?;
-    if entries.is_empty() {
-        return Err(AppError::new(
-            AppErrorCode::NoAudioFound,
-            format!("no supported audio files in {}", root.display()),
-        ));
-    }
-    // Component by component, so a folder's files stay together ("Album\x" before "Album (Deluxe)\y").
-    entries.sort_by_cached_key(|e| (path_key(&e.path), e.path.clone()));
-    let (albums, tracks) = group_albums(root, &entries);
-    let total = tracks.len();
-    on_progress(ProgressEvent::Scanned {
-        total: total as u32,
-    });
-
-    let counts = Counts::default();
-    let next = Mutex::new(0usize);
-    // The album lock (commands.md, "Album lock"): a mutex of its own, not the `next` one.
-    let albums = Mutex::new(albums);
-    let analyzer = PanicSafe(analyzer);
-    let worker = || {
-        run_worker(
-            &tracks,
-            &next,
-            &albums,
-            &counts,
-            &analyzer,
-            params,
-            cancel,
-            on_progress,
-        )
-    };
-    std::thread::scope(|scope| {
-        let spawned = (0..workers.max(1).min(total))
-            .filter(|_| {
-                std::thread::Builder::new()
-                    .spawn_scoped(scope, worker)
-                    .is_ok()
-            })
-            .count();
-        // The OS refused every thread: analyse on the calling thread instead.
-        if spawned == 0 {
-            worker();
-        }
-    });
-
-    let done = counts.done.load(Ordering::SeqCst);
-    let summary = AnalysisSummary {
-        root: root.to_path_buf(),
-        total: total as u32,
-        done,
-        real: counts.real.load(Ordering::SeqCst),
-        suspicious: counts.suspicious.load(Ordering::SeqCst),
-        fake: counts.fake.load(Ordering::SeqCst),
-        errors: counts.errors.load(Ordering::SeqCst),
-        cancelled: (done as usize) < total,
-        elapsed_ms: started.elapsed().as_millis() as u64,
-    };
-    if summary.cancelled {
-        on_progress(ProgressEvent::Cancelled {
-            summary: summary.clone(),
-        });
-    } else {
-        on_progress(ProgressEvent::Finished {
-            summary: summary.clone(),
-        });
-    }
-    Ok(summary)
+    analyze_folder_cached(
+        scanner,
+        analyzer,
+        ResultCache::Off,
+        params,
+        root,
+        workers,
+        cancel,
+        on_progress,
+    )
 }
 
 /// Sort key of a path: its components, lower-cased (the scan order and the album order).
@@ -260,10 +428,12 @@ struct Counts {
     suspicious: AtomicU32,
     fake: AtomicU32,
     errors: AtomicU32,
+    from_cache: AtomicU32,
 }
 
 impl Counts {
-    fn record(&self, verdict: Verdict) {
+    /// Counts one track; `cached` when its analysis came from the result cache.
+    fn record(&self, verdict: Verdict, cached: bool) {
         let counter = match verdict {
             Verdict::Real => &self.real,
             Verdict::Suspicious => &self.suspicious,
@@ -271,6 +441,9 @@ impl Counts {
             Verdict::Error => &self.errors,
         };
         counter.fetch_add(1, Ordering::SeqCst);
+        if cached {
+            self.from_cache.fetch_add(1, Ordering::SeqCst);
+        }
         self.done.fetch_add(1, Ordering::SeqCst);
     }
 }
@@ -296,6 +469,7 @@ fn run_worker(
     albums: &Mutex<Vec<Album>>,
     counts: &Counts,
     analyzer: &dyn SpectrumAnalyzer,
+    cache: &CacheRun<'_>,
     params: &DetectionParams,
     cancel: &CancelToken,
     on_progress: &(dyn Fn(ProgressEvent) + Sync),
@@ -319,9 +493,17 @@ fn run_worker(
             });
             (index, track)
         };
-        // No lock is held while the track is analysed.
-        let analysis = analyze_track(analyzer, track.entry, params);
-        counts.record(analysis.verdict);
+        // No lock is held while the track is looked up, analysed and stored (result-cache.md
+        // 8.2), so a store call cannot deadlock with the `next` lock or the album lock.
+        let (analysis, cached) = match cache.lookup(track.entry, params) {
+            Some(hit) => (hit, true),
+            None => {
+                let analysis = analyze_track(analyzer, track.entry, params);
+                cache.save(track.entry, params, &analysis);
+                (analysis, false)
+            }
+        };
+        counts.record(analysis.verdict, cached);
         // The album lock covers exactly counting the track in its album and sending its
         // `TrackDone`, so the n-th `TrackDone` of an album carries `summary.total == n` in
         // channel order (commands.md, "Order").

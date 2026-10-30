@@ -30,20 +30,27 @@ pub async fn pick_folder(window: WebviewWindow) -> Option<String> {
 }
 
 /// RF-01..06: analyses `root`, streaming `ProgressEvent`s through `on_progress`.
+// RF-11: with the result cache of the managed `CacheConfig` (result-cache.md 10.3).
 #[tauri::command]
 #[specta::specta]
 pub async fn start_analysis(
     slot: State<'_, std::sync::Arc<AnalysisSlot>>,
     export: State<'_, std::sync::Arc<run::ExportState>>,
+    cache: State<'_, std::sync::Arc<run::CacheConfig>>,
     root: String,
     on_progress: Channel<dto::ProgressEvent>,
 ) -> Result<dto::AnalysisSummary, dto::AppError> {
     let slot = std::sync::Arc::clone(&slot);
     let export = std::sync::Arc::clone(&export);
+    let cache = std::sync::Arc::clone(&cache);
     tauri::async_runtime::spawn_blocking(move || {
-        run::run_analysis_kept(&slot, &export, Path::new(&root), &|e| {
-            on_progress.send(e).is_ok()
-        })
+        run::run_analysis_cached(
+            &slot,
+            &export,
+            cache.file.as_deref(),
+            Path::new(&root),
+            &|e| on_progress.send(e).is_ok(),
+        )
     })
     .await
     .map_err(|e| dto::AppError {
@@ -107,4 +114,21 @@ pub async fn export_csv(
     });
     drop(guard);
     result?
+}
+
+/// RF-11: deletes the result cache files (`specs/contracts/result-cache.md` section 9).
+#[tauri::command]
+#[specta::specta]
+pub async fn clear_cache(
+    slot: State<'_, std::sync::Arc<AnalysisSlot>>,
+    cache: State<'_, std::sync::Arc<run::CacheConfig>>,
+) -> Result<(), dto::AppError> {
+    let slot = std::sync::Arc::clone(&slot);
+    let cache = std::sync::Arc::clone(&cache);
+    tauri::async_runtime::spawn_blocking(move || run::clear_cache(&slot, cache.file.as_deref()))
+        .await
+        .map_err(|e| dto::AppError {
+            code: dto::AppErrorCode::Internal,
+            message: format!("clear cache task failed: {e}"),
+        })?
 }

@@ -22,6 +22,8 @@ export const commands = {
 	/**  Tracks written (header not counted). */
 	rows: number,
 } | null, AppError>(__TAURI_INVOKE("export_csv")),
+	/**  RF-11: deletes the result cache files (`specs/contracts/result-cache.md` section 9). */
+	clearCache: () => typedError<null, AppError>(__TAURI_INVOKE("clear_cache")),
 };
 
 /* Types */
@@ -52,6 +54,10 @@ export type AnalysisSummary = {
 	errors: number,
 	cancelled: boolean,
 	elapsedMs: number,
+	/**  Contract version 7 (RF-11): tracks whose `trackDone` carried a cached result. */
+	fromCache: number,
+	/**  Contract version 7 (RF-11): how the run used the result cache. */
+	cache: CacheStatus,
 };
 
 export type AppError = {
@@ -59,13 +65,16 @@ export type AppError = {
 	message: string,
 };
 
-export type AppErrorCode = "NO_AUDIO_FOUND" | "NOT_A_FOLDER" | "FOLDER_UNREADABLE" | "ANALYSIS_RUNNING" | "NOT_ANALYZED" | "EXPORT_FAILED" | "INTERNAL";
+export type AppErrorCode = "NO_AUDIO_FOUND" | "NOT_A_FOLDER" | "FOLDER_UNREADABLE" | "ANALYSIS_RUNNING" | "NOT_ANALYZED" | "EXPORT_FAILED" | "CACHE_FAILED" | "INTERNAL";
 
 export type AudioCodec = "pcm" | "flac" | "alac" | "mp3" | "aac" | "opus";
 
 export type AudioFormat = "wav" | "flac" | "mp3" | "m4a" | "opus";
 
 export type BitrateMode = "cbr" | "vbr" | "abr";
+
+/**  Contract version 7 (RF-11, `specs/contracts/result-cache.md` section 8.3). */
+export type CacheStatus = "off" | "ok" | "degraded" | "unavailable";
 
 /**
  *  Exported as plain `number` (specta would add `| null` for floats, because JSON has no NaN):

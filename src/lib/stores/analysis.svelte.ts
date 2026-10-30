@@ -2,6 +2,7 @@
 import type { ProgressEvent } from '../api'
 import type {
   AlbumUpdate,
+  CacheFigures,
   ResultRow,
   RowFilter,
   SortColumn,
@@ -28,6 +29,8 @@ export interface AnalysisStore {
   readonly filter: RowFilter
   /** RF-08: the flushed rows that pass `filter`, in store order (unsorted). */
   readonly visibleRows: ResultRow[]
+  /** RF-11 (result-cache.md section 4): the cache figures of the latest finished or cancelled run. */
+  readonly cache: CacheFigures | null
   /** Marks the run as requested (scanning). */
   begin(): void
   /** Puts back the screen state saved by the last `begin()` (a start that did not begin a run). */
@@ -81,6 +84,8 @@ export function createAnalysisStore(): AnalysisStore {
   }
 
   let message = $state<string | undefined>(undefined)
+  // RF-11 (result-cache.md section 4): the figures of the latest run that ended finished or cancelled
+  let cache = $state.raw<CacheFigures | null>(null)
   let selectedIndex = $state<number | null>(null)
   let sort = $state<SortState>({ column: 'file', direction: 'asc' })
   // RF-08 (sort-filter.md section 10): replaced as a whole on every change, kept across runs
@@ -113,6 +118,7 @@ export function createAnalysisStore(): AnalysisStore {
     summary: StatusSummary
     message: string | undefined
     selectedIndex: number | null
+    cache: CacheFigures | null
   } | null = null
 
   function begin() {
@@ -123,6 +129,7 @@ export function createAnalysisStore(): AnalysisStore {
       summary: { ...pendingSummary },
       message,
       selectedIndex,
+      cache,
     }
     if (batchTimer !== null) {
       clearTimeout(batchTimer)
@@ -137,6 +144,7 @@ export function createAnalysisStore(): AnalysisStore {
     pendingSummary = { total: 0, done: 0, real: 0, suspicious: 0, fake: 0, errors: 0 }
     message = undefined
     selectedIndex = null
+    cache = null
   }
 
   function restore() {
@@ -154,6 +162,7 @@ export function createAnalysisStore(): AnalysisStore {
     pendingSummary = { ...snapshot.summary }
     message = snapshot.message
     selectedIndex = snapshot.selectedIndex
+    cache = snapshot.cache
     snapshot = null
   }
 
@@ -209,6 +218,7 @@ export function createAnalysisStore(): AnalysisStore {
         errors: event.summary.errors,
       }
       pendingSummary = { ...summary }
+      cache = { fromCache: event.summary.fromCache, status: event.summary.cache }
     } else if (event.kind === 'cancelled') {
       flushBatch()
       phase = 'cancelled'
@@ -221,6 +231,7 @@ export function createAnalysisStore(): AnalysisStore {
         errors: event.summary.errors,
       }
       pendingSummary = { ...summary }
+      cache = { fromCache: event.summary.fromCache, status: event.summary.cache }
     }
   }
 
@@ -303,6 +314,9 @@ export function createAnalysisStore(): AnalysisStore {
     },
     get visibleRows() {
       return visibleRows
+    },
+    get cache() {
+      return cache
     },
     begin,
     restore,

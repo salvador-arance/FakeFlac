@@ -178,6 +178,8 @@ fn summary(root: &str, total: u32, done: u32, cancelled: bool) -> core::Analysis
         errors: 0,
         cancelled,
         elapsed_ms: 10,
+        from_cache: 0,
+        cache: core::CacheStatus::Off,
     }
 }
 

@@ -9,6 +9,8 @@
     canOpen: boolean
     canCancel: boolean
     canExport?: boolean
+    /** RF-11 (result-cache.md section 2.1). */
+    canClearCache?: boolean
     canFilter: boolean
     verdictFilter: Verdict[]
     query: string
@@ -16,6 +18,7 @@
     onopen?: () => void
     oncancel?: () => void
     onexport?: () => void
+    onclearcache?: () => void
     ontoggleverdict?: (verdict: Verdict) => void
     onquery?: (text: string) => void
   }
@@ -24,6 +27,7 @@
     canOpen,
     canCancel,
     canExport = false,
+    canClearCache = false,
     canFilter,
     verdictFilter,
     query,
@@ -31,6 +35,7 @@
     onopen,
     oncancel,
     onexport,
+    onclearcache,
     ontoggleverdict,
     onquery,
   }: Props = $props()
@@ -58,6 +63,13 @@
     disabled={!canExport}
     size="toolbar"
     onclick={onexport}
+  />
+  <IconButton
+    icon="clear-cache"
+    label={t('toolbar.clearCache')}
+    disabled={!canClearCache}
+    size="toolbar"
+    onclick={onclearcache}
   />
   <div class="separator" role="separator" aria-orientation="vertical"></div>
   <VerdictFilter selected={verdictFilter} disabled={!canFilter} ontoggle={ontoggleverdict} />

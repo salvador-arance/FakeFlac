@@ -4,6 +4,7 @@
   import {
     ApiError,
     cancelAnalysis,
+    clearCache,
     closeWindow,
     exportCsv,
     getSpectrogram,
@@ -113,6 +114,8 @@
   // RF-09: the notice of the last export, shown in the status bar until a start attempt.
   let notice = $state<string | undefined>(undefined)
   let exporting = $state(false)
+  // RF-11 (result-cache.md section 4): true while the clearCache() call is pending
+  let clearing = $state(false)
 
   type Saved = { notice: string | undefined; spectrogram: typeof spectrogram }
 
@@ -148,7 +151,7 @@
   }
 
   async function handleOpenFolder() {
-    if (store.phase === 'scanning' || store.phase === 'analysing') return
+    if (store.phase === 'scanning' || store.phase === 'analysing' || clearing) return
     const path = await pickFolder()
     if (!path) return
 
@@ -165,7 +168,7 @@
   }
 
   async function handleDrop(paths: string[]) {
-    if (store.phase === 'scanning' || store.phase === 'analysing') return
+    if (store.phase === 'scanning' || store.phase === 'analysing' || clearing) return
     if (!paths || paths.length === 0) return
 
     const saved = beginRun()
@@ -204,6 +207,21 @@
     }
   }
 
+  // RF-11 (result-cache.md section 2.2): no confirmation; only the notice changes
+  async function handleClearCache() {
+    if (!canClearCache) return
+    clearing = true
+    try {
+      await clearCache()
+      notice = t('status.cacheCleared')
+    } catch (err) {
+      const code = err instanceof ApiError ? err.code : 'INTERNAL'
+      notice = code === 'ANALYSIS_RUNNING' ? t('error.ANALYSIS_RUNNING') : t('error.CACHE_FAILED')
+    } finally {
+      clearing = false
+    }
+  }
+
   async function handleCancel() {
     await cancelAnalysis()
   }
@@ -217,7 +235,10 @@
     searchFocusRequest += 1
   }
 
-  let canOpen = $derived(store.phase !== 'scanning' && store.phase !== 'analysing')
+  let running = $derived(store.phase === 'scanning' || store.phase === 'analysing')
+  let canOpen = $derived(!running && !clearing)
+  // RF-11 (result-cache.md section 2.1): the export does not use the cache, so exporting does not disable it
+  let canClearCache = $derived(!running && !clearing)
   let canExport = $derived(
     store.rows.length > 0 &&
       store.phase !== 'scanning' &&
@@ -262,6 +283,7 @@
       {canOpen}
       {canCancel}
       {canExport}
+      {canClearCache}
       canFilter={!isEmpty}
       verdictFilter={store.filter.verdicts}
       query={store.filter.query}
@@ -269,6 +291,7 @@
       onopen={handleOpenFolder}
       oncancel={handleCancel}
       onexport={handleExport}
+      onclearcache={handleClearCache}
       ontoggleverdict={(verdict) => store.toggleVerdictFilter(verdict)}
       onquery={(text) => store.setQuery(text)}
     />
@@ -300,6 +323,7 @@
       shown={isFilterActive(store.filter) && store.rows.length > 0
         ? store.visibleRows.length
         : undefined}
+      cache={store.cache ?? undefined}
       {notice}
     />
   {/snippet}

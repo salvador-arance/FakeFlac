@@ -144,6 +144,20 @@ pub struct AnalysisSummary {
     pub errors: u32,
     pub cancelled: bool,
     pub elapsed_ms: u64,
+    /// Contract version 7 (RF-11): tracks whose `trackDone` carried a cached result.
+    pub from_cache: u32,
+    /// Contract version 7 (RF-11): how the run used the result cache.
+    pub cache: CacheStatus,
+}
+
+/// Contract version 7 (RF-11, `specs/contracts/result-cache.md` section 8.3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub enum CacheStatus {
+    Off,
+    Ok,
+    Degraded,
+    Unavailable,
 }
 
 #[allow(clippy::large_enum_variant)] // `TrackDone` carries the track and its album (RF-10)
@@ -183,6 +197,8 @@ pub enum AppErrorCode {
     AnalysisRunning,
     NotAnalyzed,
     ExportFailed,
+    // Contract version 7 (RF-11): `clear_cache` could not delete the cache files.
+    CacheFailed,
     Internal,
 }
 
@@ -332,6 +348,8 @@ impl From<&core::AnalysisSummary> for AnalysisSummary {
             errors: s.errors,
             cancelled: s.cancelled,
             elapsed_ms: s.elapsed_ms,
+            from_cache: s.from_cache,
+            cache: s.cache.into(),
         }
     }
 }
@@ -388,6 +406,17 @@ impl From<&core::ProgressEvent> for ProgressEvent {
     }
 }
 
+impl From<core::CacheStatus> for CacheStatus {
+    fn from(c: core::CacheStatus) -> Self {
+        match c {
+            core::CacheStatus::Off => CacheStatus::Off,
+            core::CacheStatus::Ok => CacheStatus::Ok,
+            core::CacheStatus::Degraded => CacheStatus::Degraded,
+            core::CacheStatus::Unavailable => CacheStatus::Unavailable,
+        }
+    }
+}
+
 impl From<core::AppErrorCode> for AppErrorCode {
     fn from(c: core::AppErrorCode) -> Self {
         match c {
@@ -397,6 +426,7 @@ impl From<core::AppErrorCode> for AppErrorCode {
             core::AppErrorCode::AnalysisRunning => AppErrorCode::AnalysisRunning,
             core::AppErrorCode::NotAnalyzed => AppErrorCode::NotAnalyzed,
             core::AppErrorCode::ExportFailed => AppErrorCode::ExportFailed,
+            core::AppErrorCode::CacheFailed => AppErrorCode::CacheFailed,
             core::AppErrorCode::Internal => AppErrorCode::Internal,
         }
     }

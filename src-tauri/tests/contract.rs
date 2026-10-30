@@ -78,13 +78,16 @@ fn summary() -> core::AnalysisSummary {
         errors: 1,
         cancelled: false,
         elapsed_ms: 250,
+        from_cache: 0,
+        cache: core::CacheStatus::Off,
     }
 }
 
 fn summary_json() -> Value {
     json!({
         "root": "C:/Music", "total": 4, "done": 3, "real": 1, "suspicious": 1,
-        "fake": 0, "errors": 1, "cancelled": false, "elapsedMs": 250
+        "fake": 0, "errors": 1, "cancelled": false, "elapsedMs": 250,
+        "fromCache": 0, "cache": "off"
     })
 }
 

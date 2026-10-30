@@ -3,8 +3,9 @@
 
 use crate::dto;
 use fakeflac_audio::SymphoniaAnalyzer;
-use fakeflac_core::{analyze_folder, AnalysisSlot, DetectionParams};
+use fakeflac_core::{analyze_folder_cached, ActiveRun, AnalysisSlot, DetectionParams, ResultCache};
 use fakeflac_fs::WalkDirScanner;
+use fakeflac_store::{EngineTag, SqliteResultStore};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -24,7 +25,7 @@ pub fn run_analysis(
     run_with(slot, None, root, send)
 }
 
-/// Shared body of `run_analysis` and `run_analysis_kept`.
+/// Shared body of `run_analysis` and `run_analysis_kept`: no result cache (`ResultCache::Off`).
 fn run_with(
     slot: &AnalysisSlot,
     state: Option<&ExportState>,
@@ -33,9 +34,21 @@ fn run_with(
 ) -> Result<dto::AnalysisSummary, dto::AppError> {
     // Held until the end of the function: dropping it frees the slot.
     let run = slot.begin()?;
-    let summary = analyze_folder(
+    analyze(&run, ResultCache::Off, state, root, send)
+}
+
+/// One run of the use case on the real adapters, for the slot that `run` holds.
+fn analyze(
+    run: &ActiveRun,
+    cache: ResultCache<'_>,
+    state: Option<&ExportState>,
+    root: &Path,
+    send: &(dyn Fn(dto::ProgressEvent) -> bool + Sync),
+) -> Result<dto::AnalysisSummary, dto::AppError> {
+    let summary = analyze_folder_cached(
         &WalkDirScanner,
         &SymphoniaAnalyzer,
+        cache,
         &DetectionParams::default(),
         root,
         worker_count(),
@@ -206,4 +219,61 @@ pub fn export_csv(
         path: dest.to_string_lossy().into_owned(),
         rows,
     })
+}
+
+// --- RF-11: result cache (specs/contracts/result-cache.md sections 9 and 10.3) ---------------
+
+/// Where the result cache lives: `<app_cache_dir>/results-cache.sqlite3`, or `None` when the
+/// folder cannot be resolved (result-cache.md section 5).
+#[derive(Debug, Clone, Default)]
+pub struct CacheConfig {
+    pub file: Option<PathBuf>,
+}
+
+/// Like `run_analysis_kept`, with the result cache at `cache_file` (result-cache.md 10.3).
+///
+/// Takes the slot, then opens the store (once per run). The run uses `ResultCache::Store` if
+/// the open succeeded and `ResultCache::Unavailable` if it failed or `cache_file` is `None`; a
+/// cache problem is never an `AppError`. The store is dropped before the slot, so between runs
+/// the app holds no handle on the cache files.
+pub fn run_analysis_cached(
+    slot: &AnalysisSlot,
+    export: &ExportState,
+    cache_file: Option<&Path>,
+    root: &Path,
+    send: &(dyn Fn(dto::ProgressEvent) -> bool + Sync),
+) -> Result<dto::AnalysisSummary, dto::AppError> {
+    let run = slot.begin()?;
+    let store = cache_file.and_then(|file| SqliteResultStore::open(file, engine_tag()).ok());
+    let cache = match &store {
+        Some(store) => ResultCache::Store(store),
+        None => ResultCache::Unavailable,
+    };
+    let result = analyze(&run, cache, Some(export), root, send);
+    drop(store);
+    drop(run);
+    result
+}
+
+/// The engine parts known to the composition root (result-cache.md section 4).
+fn engine_tag() -> EngineTag {
+    EngineTag {
+        app_version: env!("CARGO_PKG_VERSION").to_string(),
+        extraction_version: fakeflac_audio::EXTRACTION_VERSION,
+    }
+}
+
+fn cache_failed(message: impl Into<String>) -> dto::AppError {
+    fakeflac_core::AppError::new(fakeflac_core::AppErrorCode::CacheFailed, message).into()
+}
+
+/// Deletes the cache files while holding the analysis slot (result-cache.md section 9):
+/// `ANALYSIS_RUNNING` if a run holds the slot; `CACHE_FAILED` with no cache file (the folder
+/// could not be resolved) or when a file cannot be deleted, with the OS message.
+pub fn clear_cache(slot: &AnalysisSlot, cache_file: Option<&Path>) -> Result<(), dto::AppError> {
+    // Held until the end of the function, so no run can open the store meanwhile.
+    let _run = slot.begin()?;
+    let file =
+        cache_file.ok_or_else(|| cache_failed("the app cache folder could not be resolved"))?;
+    fakeflac_store::clear_cache_files(file).map_err(|e| cache_failed(e.to_string()))
 }
