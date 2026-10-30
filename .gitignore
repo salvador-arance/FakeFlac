@@ -18,6 +18,10 @@ storybook-static/
 .claude/stage
 .claude/worktrees/
 
+# Planning notes stay local. The tracked historical plan (fakeflac-phases-1-3.es.md) is
+# still versioned: .gitignore never untracks a file that is already in the repository.
+docs/planning/
+
 # Privacy check exceptions (calibration.md section 6): local words that cause false alarms
 privacy-exceptions.txt
 .privacy-exceptions
