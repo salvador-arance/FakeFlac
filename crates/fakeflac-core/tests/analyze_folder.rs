@@ -418,6 +418,8 @@ fn contract_serialization() {
         errors: 0,
         cancelled: false,
         elapsed_ms: 5,
+        from_cache: 0,
+        cache: fakeflac_core::CacheStatus::Off,
     };
     let v = serde_json::to_value(&summary).expect("json");
     assert_eq!(v["elapsedMs"], 5);

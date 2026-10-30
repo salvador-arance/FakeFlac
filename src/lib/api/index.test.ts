@@ -29,6 +29,8 @@ const summary: AnalysisSummary = {
   errors: 0,
   cancelled: false,
   elapsedMs: 10,
+  fromCache: 0,
+  cache: 'off',
 }
 
 beforeEach(() => {

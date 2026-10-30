@@ -116,6 +116,8 @@ export function makeSummary(o: Partial<AnalysisSummary> = {}): AnalysisSummary {
     errors: 0,
     cancelled: false,
     elapsedMs: 1000,
+    fromCache: 0,
+    cache: 'off',
     ...o,
   }
 }
