@@ -324,8 +324,8 @@ Feature: Release packaging: versions, installers, size gate, checksums and the d
       """
     And stdout is exactly:
       """
-      release: FakeFlac_0.1.0_x64-setup.exe 3 bytes (0.00 MiB), limit 1000 bytes
-      release: FakeFlac_0.1.0_x64_en-US.msi 4 bytes (0.00 MiB), limit 1000 bytes
+      release: FakeFlac_0.1.0_x64-setup.exe 3 bytes (0.00 MB), limit 1000 bytes
+      release: FakeFlac_0.1.0_x64_en-US.msi 4 bytes (0.00 MB), limit 1000 bytes
       release: wrote <tmp>/out (2 installers, SHA256SUMS.txt) and <tmp>/notes.md
       """
     And stderr is empty
@@ -410,8 +410,8 @@ Feature: Release packaging: versions, installers, size gate, checksums and the d
       release: ignored <bundle>/msi/0-old.msi (not an installer of 0.1.0)
       release: ignored <bundle>/nsis/FakeFlac_0.0.1_x64-setup.exe (not an installer of 0.1.0)
       release: ignored <bundle>/msi/FakeFlac_0.0.1_x64_en-US.msi (not an installer of 0.1.0)
-      release: FakeFlac_0.1.0_x64-setup.exe 3 bytes (0.00 MiB), limit 1000 bytes
-      release: FakeFlac_0.1.0_x64_en-US.msi 4 bytes (0.00 MiB), limit 1000 bytes
+      release: FakeFlac_0.1.0_x64-setup.exe 3 bytes (0.00 MB), limit 1000 bytes
+      release: FakeFlac_0.1.0_x64_en-US.msi 4 bytes (0.00 MB), limit 1000 bytes
       release: wrote <tmp>/out (2 installers, SHA256SUMS.txt) and <tmp>/notes.md
       """
 
@@ -441,7 +441,7 @@ Feature: Release packaging: versions, installers, size gate, checksums and the d
     And <tmp>/out holds a file "notes.txt"
     When I run assets with --max-bytes 1000
     Then the exit code is 1
-    And stdout has the line "release: FakeFlac_0.1.0_x64-setup.exe 1001 bytes (0.00 MiB), limit 1000 bytes"
+    And stdout has the line "release: FakeFlac_0.1.0_x64-setup.exe 1001 bytes (0.00 MB), limit 1000 bytes"
     And stderr is exactly:
       """
       release: missing installer <bundle>/msi/FakeFlac_0.1.0_x64_en-US.msi
@@ -565,7 +565,7 @@ Feature: Release packaging: versions, installers, size gate, checksums and the d
       | value            |
       | 1                |
       | 1000             |
-      | 20971520         |
+      | 20000000         |
       | 9007199254740991 |
 
   Scenario Outline: An unknown option takes no value
@@ -614,8 +614,8 @@ Feature: Release packaging: versions, installers, size gate, checksums and the d
     And the bundle holds "nsis/<nsis>" of <nsis bytes> bytes and "msi/<msi>" of <msi bytes> bytes
     When I run assets with --max-bytes 1000
     Then the exit code is <code>
-    And stdout has the line "release: FakeFlac_0.1.0_x64-setup.exe <nsis bytes> bytes (0.00 MiB), limit 1000 bytes"
-    And stdout has the line "release: FakeFlac_0.1.0_x64_en-US.msi <msi bytes> bytes (0.00 MiB), limit 1000 bytes"
+    And stdout has the line "release: FakeFlac_0.1.0_x64-setup.exe <nsis bytes> bytes (0.00 MB), limit 1000 bytes"
+    And stdout has the line "release: FakeFlac_0.1.0_x64_en-US.msi <msi bytes> bytes (0.00 MB), limit 1000 bytes"
     And stderr is exactly <failure>
 
     Examples:
@@ -633,7 +633,7 @@ Feature: Release packaging: versions, installers, size gate, checksums and the d
     Then the exit code is 1
     And stdout is exactly:
       """
-      release: FakeFlac_0.1.0_x64_en-US.msi <bytes> bytes (0.00 MiB), limit 1000 bytes
+      release: FakeFlac_0.1.0_x64_en-US.msi <bytes> bytes (0.00 MB), limit 1000 bytes
       """
     And stderr is "release: missing installer <bundle>/nsis/FakeFlac_0.1.0_x64-setup.exe"
 
@@ -652,18 +652,18 @@ Feature: Release packaging: versions, installers, size gate, checksums and the d
     And <tmp>/out and <tmp>/notes.md are byte-identical to before
 
   @RNF-06
-  Scenario Outline: The 20 MiB limit of the recipe
+  Scenario Outline: The 20 MB limit of the recipe
     The figure is the one the release-assets recipe passes (see "Wiring").
     Given the test root with manifests at "0.1.0"
     And the bundle holds an NSIS installer of <bytes> bytes and an MSI of 1000 bytes
-    When I run assets with --max-bytes 20971520
+    When I run assets with --max-bytes 20000000
     Then the exit code is <code>
-    And stdout has the line "release: FakeFlac_0.1.0_x64-setup.exe <bytes> bytes (<mib> MiB), limit 20971520 bytes"
+    And stdout has the line "release: FakeFlac_0.1.0_x64-setup.exe <bytes> bytes (<mb> MB), limit 20000000 bytes"
 
     Examples:
-      | bytes    | code | mib   |
-      | 20971519 | 0    | 20.00 |
-      | 20971520 | 1    | 20.00 |
+      | bytes    | code | mb    |
+      | 19999999 | 0    | 20.00 |
+      | 20000000 | 1    | 20.00 |
 
   # --- Draft release (release.md 3.6) ---------------------------------------
 
@@ -805,10 +805,10 @@ Feature: Release packaging: versions, installers, size gate, checksums and the d
   # --- Wiring (static checks of repository files, release.md 5.3) ------------
 
   @RNF-06
-  Scenario: The size gate runs on every PR and every release with 20 MiB
+  Scenario: The size gate runs on every PR and every release with 20 MB
     When the justfile is read
-    Then the recipe "release-assets" runs exactly "node scripts/release.mjs assets --bundle target/release/bundle --out target/release-staging/assets --notes target/release-staging/release-notes.md --max-bytes 20971520"
-    And "20971520" appears exactly once in the justfile
+    Then the recipe "release-assets" runs exactly "node scripts/release.mjs assets --bundle target/release/bundle --out target/release-staging/assets --notes target/release-staging/release-notes.md --max-bytes 20000000"
+    And "20000000" appears exactly once in the justfile
     And the "build-windows" job of .github/workflows/ci.yml runs "just build" and "just release-assets" and uploads "target/release-staging/"
     And the "package" job of .github/workflows/release.yml runs "just build" and "just release-assets"
     And neither workflow contains "Get-FileHash", "20MB" or "npm run tauri build"
