@@ -1,6 +1,6 @@
 # ADR-0044: Result cache: the key names the whole engine, the cache is optional, it lives in the local app cache folder, and `fakeflac-store` uses `rusqlite` (bundled)
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-30
 
 ## Context and rationale
@@ -45,7 +45,7 @@ RF-11 asks the app to reuse a track's result when the file has not changed. ADR-
 
    `fakeflac-core` gets the `ResultStore` port, already listed in `backend.md`, with `get` and `put` only. Clearing is an adapter function, because it must work when the database cannot be opened. The core adds no dependency.
 
-   The owner approved both dependency changes; the ADR as a whole is accepted at G1.
+   The owner approved both dependency changes and accepted the ADR at G1 (#83).
 
 ## Alternatives considered
 

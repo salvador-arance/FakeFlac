@@ -11,7 +11,7 @@ Format: MADR-style. New ADRs are created with `/new-adr` and approved at gate G1
 | [0005](0005-progress-through-tauri-ipc-channel-not-global-events.md) | Progress through tauri::ipc::Channel, not global events | accepted |
 | [0006](0006-parallelism-with-rayon-and-cooperative-cancellation-atomic-f.md) | Parallelism with rayon and cooperative cancellation (atomic flag/token) | accepted |
 | [0007](0007-result-cache-in-sqlite-rusqlite-wal-mode.md) | Result cache in SQLite (rusqlite, WAL mode) | accepted |
-| [0008](0008-cache-key-canonical-path-size-mtime-algorithm-version.md) | Cache key = (canonical path, size, mtime, algorithm_version) | accepted |
+| [0008](0008-cache-key-canonical-path-size-mtime-algorithm-version.md) | Cache key = (canonical path, size, mtime, algorithm_version) | accepted; amended by 0044 |
 | [0009](0009-spectrogram-computed-in-rust-sent-as-a-u8-db-matrix-colour-a.md) | Spectrogram computed in Rust, sent as a u8 dB matrix; colour applied in the frontend canvas | accepted |
 | [0010](0010-analysis-by-sampling-representative-windows-with-seek-full-d.md) | Analysis by sampling representative windows (with seek); full decode only for the spectrogram | accepted |
 | [0011](0011-thresholds-and-rules-are-versioned-data-detectionparams.md) | Thresholds and rules are versioned data (DetectionParams) | accepted |
@@ -36,7 +36,7 @@ Format: MADR-style. New ADRs are created with `/new-adr` and approved at gate G1
 | [0030](0030-formats-in-stages-and-rust-decoders-wav-and-flac-h1-mp3-m4a.md) | Formats in stages and Rust decoders: WAV and FLAC (H1); MP3, M4A (AAC) and Opus (H2). symphonia for WAV/FLAC/MP3/M4A; Opus with a separate decoder chosen in a spike (opus crate/libopus bundled vs a pure-Rust alternative) | accepted |
 | [0031](0031-common-verdict-model-for-all-formats-real-suspicious-fake-re.md) | Common verdict model for all formats: Real / Suspicious / Fake relative to the declared quality, plus estimated_source_bitrate_kbps for lossy formats | accepted |
 | [0032](0032-the-installer-is-not-code-signed-in-v1.md) | The installer is not code-signed in v1 | accepted |
-| [0033](0033-h1-dependency-set.md) | H1 dependency set | accepted; amended by 0040 |
+| [0033](0033-h1-dependency-set.md) | H1 dependency set | accepted; amended by 0040 and 0044 |
 | [0034](0034-analysis-runs-on-std-scoped-threads-in-the-core.md) | The analysis runs on std scoped threads in the core (partially supersedes 0006) | accepted |
 | [0035](0035-detection-v2-relative-cutoff-step-and-16-khz-gap-step-on-the-m.md) | Detection v2: relative cutoff step on the mean spectrum and 16 kHz gap step on the per-frame median spectrum | accepted |
 | [0036](0036-calibration-tool-dev-only-workspace-crate-reusing-core-and-adapters.md) | Calibration tool: a dev-only workspace crate (`tools/fakeflac-calibrate`) that reuses the core and the adapters, with a JSON Lines spectra cache and ffmpeg as an external process | accepted |
@@ -47,4 +47,4 @@ Format: MADR-style. New ADRs are created with `/new-adr` and approved at gate G1
 | [0041](0041-detection-v5-lossy-source-rules-in-detectionparams.md) | Detection v5: source-bitrate rules for lossy files (RF-15) as an optional `[lossy]` section of `DetectionParams`; v5 becomes the default; contract version 3 | accepted |
 | [0042](0042-detection-v6-edge-step-on-the-step-rule.md) | Detection v6: the step rule V4 does not apply to a content edge (median step, post-step residual and a cap on the step); rules in `specs/detection/rules.md` | accepted (amended by the v6 spec PR: cap on `D`, 24-bit floor, values) |
 | [0043](0043-detection-v7-streaming-sample-rate-as-evidence.md) | Detection v7: a 48 kHz MP3/AAC whose edge is Opus's 20 kHz band edge (window [19800, 20200)) is `Suspicious` (`streamingSampleRate`, RF-16) via an optional `[lossy.streaming]` section; v7 becomes the default; contract version 6 | accepted |
-| [0044](0044-result-cache-engine-identity-failure-policy-location-and-rusqlite.md) | Result cache (RF-11): the key names the whole engine (all `DetectionParams`, `EXTRACTION_VERSION`, app version; amends 0008); the cache is optional and never fails a run; one row per file and engine; `%LOCALAPPDATA%\io.github.fakeflac.app`; `rusqlite` (bundled) in `fakeflac-store` (amends 0033); contract version 7 | proposed |
+| [0044](0044-result-cache-engine-identity-failure-policy-location-and-rusqlite.md) | Result cache (RF-11): the key names the whole engine (all `DetectionParams`, `EXTRACTION_VERSION`, app version; amends 0008); the cache is optional and never fails a run; one row per file and engine; `%LOCALAPPDATA%\io.github.fakeflac.app`; `rusqlite` (bundled) in `fakeflac-store` (amends 0033); contract version 7 | accepted |
