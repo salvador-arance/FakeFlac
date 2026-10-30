@@ -1,6 +1,6 @@
 # ADR-0008: Cache key = (canonical path, size, mtime, algorithm_version)
 
-- Status: accepted
+- Status: accepted; amended by ADR-0044
 - Date: 2026-10-15
 
 ## Context and rationale

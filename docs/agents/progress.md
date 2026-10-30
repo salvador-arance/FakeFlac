@@ -2,6 +2,42 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-30 - RNF-11 merged, M1 passed; documentation refresh
+
+**Done**
+- #88 (the RNF-11 + RNF-06 feature) merged, and `just prune-branches` deleted `feat/RNF-11`.
+- CI on #88 was green. The first real `build-windows` run measured NSIS at 2 741 953 bytes and MSI at 3 821 568 bytes.
+- **M1 passed (owner, 2026-10-30).** The `workflow_dispatch` dry run on `main` succeeded (run 41122988103). `publish` was skipped, the `release` artifact had the expected layout, and no release was created.
+- This PR, `docs/refresh-2026-10-30`, which the owner asked for:
+  - Spec, RNF-11: the two "Usage errors" Examples rows that shared line 543 are split. The `release.test.mjs` budget goes from 5 s to 10 s, because the time is the git spawns the contract requires.
+  - Documentation refresh, done by a subagent and checked by the orchestrator:
+    - root `CLAUDE.md`: the command list gains `check-app`, `build` and the five release recipes;
+    - `README.md`: formats (Opus still pending), status, and download, checksum and SmartScreen steps;
+    - `overview.md` and `workflow.md`: the CI and release jobs;
+    - `backend.md`: `NOT_A_FOLDER` and `CACHE_FAILED`;
+    - `frontend.md`: real component examples, and the i18n state;
+    - `glossary.md`: what `just fixtures` really does;
+    - ADR-0008 and ADR-0033: status lines now match the index ("amended by").
+
+**Pending**
+- Owner's manual checks M3–M7, at the first real release. Prepare it with `just set-version X.Y.Z`, then a PR and a merge; the human tags (`specs/contracts/release.md` section 6).
+- Small code follow-ups that are not features. Each needs the test → implement cycle:
+  - RNF-11 review I1: no test pins that `run()` passes its env to `git` and `gh`. It needs a scenario with a fake `git` or `gh` on PATH and a sentinel variable.
+  - RNF-11 review I4, theoretical: `set-version` reads the manifests as UTF-8.
+  - RF-11: `SqliteResultStore::open` is not panic-guarded in `run_analysis_cached`; no test pins that the store is dropped before the slot is released; the step-6 race has no test.
+- ADR-0033's table still says `just fixtures` for `hound` and `flacenc`. It is an accepted ADR, so it was left as is.
+- Carried over:
+  - RF-13 and the other high-priority RNFs are still `draft`;
+  - RF-08 manual checks M1–M3 and P1–P2;
+  - the RF-16 K5 wording;
+  - the 48 kHz MP3 hand check;
+  - Dependabot alert #2 (`deepmerge`, low, no patched version yet).
+
+**Blockers / questions for the human**
+- None.
+
+**Next step:** the owner picks the next requirement (Opus, RNF-01 performance, RF-13 i18n), or a fix PR for the code follow-ups above.
+
 ## 2026-10-30 - RNF-11 + RNF-06 implemented (release pipeline), feature PR ready for G2
 
 **Done**

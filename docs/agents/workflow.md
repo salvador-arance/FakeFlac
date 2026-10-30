@@ -39,6 +39,10 @@ requirement RF-xx
 | Audio corpus is read-only (ADR-0022) | `guard-bash` + external `FAKEFLAC_CORPUS` |
 | Only the human releases (ADR-0045) | `guard-bash` blocks tag pushes and `gh release create\|edit\|upload`; `release-draft` runs only in GitHub Actions |
 
+## CI
+
+`.github/workflows/ci.yml` runs jobs `lint`, `specs`, `test-rust`, `test-web`, `supply-chain` and `build-windows`; the aggregator `ci-ok` is the one required check. `.github/workflows/release.yml` has `verify` (`just release-check` on a tag, `just version-check` on a dry run, then `just ci`), `package` (`just build`, `just release-assets`) and `publish` (`just release-draft`, tag pushes only). A manual run is a dry run that never creates a release.
+
 ## Local, personal settings
 
 `.claude/settings.local.json` (not versioned) holds `FAKEFLAC_CORPUS`, the deny rule for the user's music library and personal preferences. No personal path or secret goes in versioned files.

@@ -1,6 +1,6 @@
 # Backend design (Rust)
 
-> Pipeline: file → technical metadata → N sampled windows → decode → windowed real FFT → band spectra (power mean and per-frame median) → cutoff step and gap step (+ full-band guard from v3, ADR-0038, with the v4 lossy-step condition, ADR-0039) → rules (`DetectionParams`) → `TrackAnalysis`. Formats: WAV, FLAC (H1); MP3, M4A, Opus (H2). All thresholds, the FFT window and the cutoff→bitrate tables are versioned data.
+> Pipeline: file → technical metadata → N sampled windows → decode → windowed real FFT → band spectra (power mean and per-frame median) → cutoff step and gap step (+ full-band guard from v3, ADR-0038, with the v4 lossy-step condition, ADR-0039) → rules (`DetectionParams`) → `TrackAnalysis`. Formats: WAV, FLAC (H1); MP3, M4A (H2, done); Opus (H2, pending its decoder). All thresholds, the FFT window and the cutoff→bitrate tables are versioned data.
 
 ## 1. Analysis pipeline
 
@@ -47,7 +47,7 @@ See `crates/fakeflac-core/src/domain.rs`: `Verdict { Real, Suspicious, Fake, Err
 
 ## 6. Errors
 
-`TrackError { Unreadable, CorruptStream, UnsupportedFormat, TooShort }` are serialisable data that reach the table with their reason; never `panic!` on the user-data path (ADR-0013). Contract-level errors (`AppError`) are separate: `NO_AUDIO_FOUND`, `FOLDER_UNREADABLE`, `ANALYSIS_RUNNING`, `NOT_ANALYZED`, `EXPORT_FAILED`, `INTERNAL`.
+`TrackError { Unreadable, CorruptStream, UnsupportedFormat, TooShort }` are serialisable data that reach the table with their reason; never `panic!` on the user-data path (ADR-0013). Contract-level errors (`AppError`) are separate: `NO_AUDIO_FOUND`, `NOT_A_FOLDER`, `FOLDER_UNREADABLE`, `ANALYSIS_RUNNING`, `NOT_ANALYZED`, `EXPORT_FAILED`, `CACHE_FAILED`, `INTERNAL`.
 
 ## 7. FFT window (ADR-0025, ADR-0026)
 
