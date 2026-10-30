@@ -19,12 +19,12 @@
 
 **Pending**
 - G2: review and merge #85.
-- Manual checks:
-  - M1: the warm run takes at most 10 % of the cold run's time on 200 or more tracks;
-  - M2: the cache file is in `%LOCALAPPDATA%\io.github.fakeflac.app\results-cache.sqlite3`;
-  - M3: two windows with the same engine;
-  - UI M1 and M3: the toolbar at 900 px, and the icon.
-  - The Tauri wiring (`.setup`, the commands) was only reviewed by reading.
+- Manual checks, run by the owner on 2026-10-30 in the app (they also exercise the Tauri wiring):
+  - M1 pass: 2,245 tracks took 66 s on the cold run and under 1 s on the warm run, all from the cache.
+  - M2 pass: the cache file is in `%LOCALAPPDATA%\io.github.fakeflac.app`.
+  - M3 pass: the same folder analysed from a second window behaved normally.
+  - UI M1 pass: the toolbar looks right.
+  - UI M3 (the icon) was not mentioned.
 - Improvements from the review that were not done, possible small follow-ups:
   - `SqliteResultStore::open` is not panic-guarded in `run_analysis_cached` (a panic there gives `INTERNAL`, not `unavailable`);
   - no test pins that the store is dropped before the slot is released;
