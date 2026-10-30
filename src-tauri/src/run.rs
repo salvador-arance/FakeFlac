@@ -207,3 +207,30 @@ pub fn export_csv(
         rows,
     })
 }
+
+// --- RF-11: result cache (specs/contracts/result-cache.md sections 9 and 10.3) ---------------
+
+/// Where the result cache lives: `<app_cache_dir>/results-cache.sqlite3`, or `None` when the
+/// folder cannot be resolved (result-cache.md section 5).
+#[derive(Debug, Clone, Default)]
+pub struct CacheConfig {
+    pub file: Option<PathBuf>,
+}
+
+/// Like `run_analysis_kept`, with the result cache at `cache_file` (result-cache.md 10.3).
+pub fn run_analysis_cached(
+    slot: &AnalysisSlot,
+    export: &ExportState,
+    cache_file: Option<&Path>,
+    root: &Path,
+    send: &(dyn Fn(dto::ProgressEvent) -> bool + Sync),
+) -> Result<dto::AnalysisSummary, dto::AppError> {
+    let _ = (slot, export, cache_file, root, send);
+    todo!("RF-11: run_analysis_cached (result-cache.md 10.3)")
+}
+
+/// Deletes the cache files while holding the analysis slot (result-cache.md section 9).
+pub fn clear_cache(slot: &AnalysisSlot, cache_file: Option<&Path>) -> Result<(), dto::AppError> {
+    let _ = (slot, cache_file);
+    todo!("RF-11: clear_cache (result-cache.md 9)")
+}

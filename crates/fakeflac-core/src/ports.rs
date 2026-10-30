@@ -1,7 +1,7 @@
 //! Ports (traits) implemented by the adapter crates (`docs/architecture/backend.md`).
 //! Only the ports listed in the architecture document exist; adding one requires an ADR (D3).
 
-use crate::domain::{AudioCodec, AudioFormat, BitrateMode, TrackError};
+use crate::domain::{AudioCodec, AudioFormat, BitrateMode, TrackAnalysis, TrackError};
 use crate::error::AppError;
 use crate::params::DetectionParams;
 use crate::spectrum::BandSpectra;
@@ -64,4 +64,28 @@ pub trait CsvExporter: Send + Sync {
         tracks: &[crate::domain::TrackAnalysis],
         dest: &std::path::Path,
     ) -> Result<(), AppError>;
+}
+
+/// A failure of the result store (not a miss). The run stops using the store
+/// (`specs/contracts/result-cache.md` section 7).
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("result cache failed: {0}")]
+pub struct CacheError(pub String);
+
+/// Result cache (RF-11, `specs/contracts/result-cache.md` section 8.1). Read-only towards audio
+/// (RNF-05).
+pub trait ResultStore: Send + Sync {
+    /// The stored analysis of `entry` under `params`; `Ok(None)` on a miss.
+    fn get(
+        &self,
+        entry: &FileEntry,
+        params: &DetectionParams,
+    ) -> Result<Option<TrackAnalysis>, CacheError>;
+    /// Stores `analysis` as the result of `entry` under `params`.
+    fn put(
+        &self,
+        entry: &FileEntry,
+        params: &DetectionParams,
+        analysis: &TrackAnalysis,
+    ) -> Result<(), CacheError>;
 }

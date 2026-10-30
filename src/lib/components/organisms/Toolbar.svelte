@@ -9,6 +9,8 @@
     canOpen: boolean
     canCancel: boolean
     canExport?: boolean
+    /** RF-11 (result-cache.md section 2.1). */
+    canClearCache?: boolean
     canFilter: boolean
     verdictFilter: Verdict[]
     query: string
@@ -16,6 +18,7 @@
     onopen?: () => void
     oncancel?: () => void
     onexport?: () => void
+    onclearcache?: () => void
     ontoggleverdict?: (verdict: Verdict) => void
     onquery?: (text: string) => void
   }

@@ -16,6 +16,7 @@ export type {
   AppError,
   AppErrorCode,
   AudioFormat,
+  CacheStatus,
   CutoffEstimate,
   ExportResult,
   ProgressEvent,
@@ -146,4 +147,12 @@ export async function exportCsv(): Promise<ExportResult | null> {
   const result = await commands.exportCsv()
   if (result.status === 'error') throw new ApiError(toAppError(result.error))
   return result.data
+}
+
+/**
+ * RF-11: deletes the result cache files (`specs/contracts/result-cache.md` section 9). Rejects
+ * with `ApiError` on a contract error (`ANALYSIS_RUNNING`, `CACHE_FAILED`, `INTERNAL`).
+ */
+export async function clearCache(): Promise<void> {
+  throw new Error('RF-11: clearCache is not implemented yet')
 }

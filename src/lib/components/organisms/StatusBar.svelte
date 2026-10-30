@@ -1,7 +1,7 @@
 <script lang="ts">
   import ProgressBar from '../atoms/ProgressBar.svelte'
   import { t } from '../../i18n'
-  import type { AnalysisPhase, StatusSummary } from '../../model'
+  import type { AnalysisPhase, CacheFigures, StatusSummary } from '../../model'
 
   type Props = {
     phase: AnalysisPhase
@@ -10,6 +10,8 @@
     notice?: string
     /** RF-08 (sort-filter.md section 9): the number of shown rows. */
     shown?: number
+    /** RF-11 (result-cache.md section 3): the cache figures of the latest ended run. */
+    cache?: CacheFigures
   }
 
   let { phase, summary, message, notice, shown }: Props = $props()

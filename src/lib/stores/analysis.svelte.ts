@@ -2,6 +2,7 @@
 import type { ProgressEvent } from '../api'
 import type {
   AlbumUpdate,
+  CacheFigures,
   ResultRow,
   RowFilter,
   SortColumn,
@@ -28,6 +29,8 @@ export interface AnalysisStore {
   readonly filter: RowFilter
   /** RF-08: the flushed rows that pass `filter`, in store order (unsorted). */
   readonly visibleRows: ResultRow[]
+  /** RF-11 (result-cache.md section 4): the cache figures of the latest finished or cancelled run. */
+  readonly cache: CacheFigures | null
   /** Marks the run as requested (scanning). */
   begin(): void
   /** Puts back the screen state saved by the last `begin()` (a start that did not begin a run). */
@@ -303,6 +306,10 @@ export function createAnalysisStore(): AnalysisStore {
     },
     get visibleRows() {
       return visibleRows
+    },
+    get cache(): CacheFigures | null {
+      // RF-11: compile-only stub, replaced in stage implement.
+      return null
     },
     begin,
     restore,

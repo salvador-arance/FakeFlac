@@ -1,6 +1,6 @@
 // UI model types shared by the presentational components, the store and the page.
 // Components may not import `src/lib/api`, so the domain types they need are re-exported here.
-import type { AnalysisSummary, TrackAnalysis, Verdict } from './api/bindings'
+import type { AnalysisSummary, CacheStatus, TrackAnalysis, Verdict } from './api/bindings'
 
 export type {
   AlbumSummary,
@@ -9,6 +9,7 @@ export type {
   AudioCodec,
   AudioFormat,
   BitrateMode,
+  CacheStatus,
   CutoffEstimate,
   Spectrogram,
   SuspicionReason,
@@ -54,3 +55,6 @@ export type StatusSummary = Pick<
   AnalysisSummary,
   'total' | 'done' | 'real' | 'suspicious' | 'fake' | 'errors'
 >
+
+/** RF-11 (specs/ui/result-cache.md section 4): the cache figures of the latest ended run. */
+export type CacheFigures = { fromCache: number; status: CacheStatus }

@@ -108,3 +108,20 @@ pub async fn export_csv(
     drop(guard);
     result?
 }
+
+/// RF-11: deletes the result cache files (`specs/contracts/result-cache.md` section 9).
+#[tauri::command]
+#[specta::specta]
+pub async fn clear_cache(
+    slot: State<'_, std::sync::Arc<AnalysisSlot>>,
+    cache: State<'_, std::sync::Arc<run::CacheConfig>>,
+) -> Result<(), dto::AppError> {
+    let slot = std::sync::Arc::clone(&slot);
+    let cache = std::sync::Arc::clone(&cache);
+    tauri::async_runtime::spawn_blocking(move || run::clear_cache(&slot, cache.file.as_deref()))
+        .await
+        .map_err(|e| dto::AppError {
+            code: dto::AppErrorCode::Internal,
+            message: format!("clear cache task failed: {e}"),
+        })?
+}

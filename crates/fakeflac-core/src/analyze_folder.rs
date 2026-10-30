@@ -5,7 +5,7 @@ use crate::analysis::analyze_track;
 use crate::domain::{AlbumSummary, TrackAnalysis, TrackError, Verdict};
 use crate::error::{AppError, AppErrorCode};
 use crate::params::DetectionParams;
-use crate::ports::{AudioProbe, FileEntry, FileScanner, SpectrumAnalyzer};
+use crate::ports::{AudioProbe, FileEntry, FileScanner, ResultStore, SpectrumAnalyzer};
 use crate::summary::AlbumTally;
 use serde::{Deserialize, Serialize};
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -47,6 +47,67 @@ pub struct AnalysisSummary {
     pub errors: u32,
     pub cancelled: bool,
     pub elapsed_ms: u64,
+    /// Tracks whose `TrackDone` carried a cached result (RF-11, `from_cache <= done`).
+    pub from_cache: u32,
+    /// How the run used the result cache (RF-11).
+    pub cache: CacheStatus,
+}
+
+/// How a run used the result cache (`specs/contracts/result-cache.md` section 8.3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CacheStatus {
+    /// The run used `ResultCache::Off`.
+    Off,
+    /// `ResultCache::Store` and no `CacheError`.
+    Ok,
+    /// `ResultCache::Store` and at least one `CacheError`.
+    Degraded,
+    /// `ResultCache::Unavailable`.
+    Unavailable,
+}
+
+/// How a run uses the result cache (`specs/contracts/result-cache.md` section 8.1).
+#[derive(Clone, Copy)]
+pub enum ResultCache<'a> {
+    /// No cache (status `off`): `analyze_folder`, tests, a future CLI.
+    Off,
+    /// The composition root could not open the cache (status `unavailable`).
+    Unavailable,
+    /// Look up and store results (status `ok`, or `degraded` after a `CacheError`).
+    Store(&'a dyn ResultStore),
+}
+
+/// Whether `analysis` may be stored in the result cache (`specs/contracts/result-cache.md`
+/// section 2.2).
+pub fn is_cacheable(analysis: &TrackAnalysis) -> bool {
+    let _ = analysis;
+    todo!("RF-11: is_cacheable (result-cache.md 2.2)")
+}
+
+/// `analyze_folder` with a result cache (RF-11, `specs/contracts/result-cache.md` section 8).
+#[allow(clippy::too_many_arguments)]
+pub fn analyze_folder_cached(
+    scanner: &dyn FileScanner,
+    analyzer: &dyn SpectrumAnalyzer,
+    cache: ResultCache<'_>,
+    params: &DetectionParams,
+    root: &Path,
+    workers: usize,
+    cancel: &CancelToken,
+    on_progress: &(dyn Fn(ProgressEvent) + Sync),
+) -> Result<AnalysisSummary, AppError> {
+    let _ = (
+        scanner,
+        analyzer,
+        params,
+        root,
+        workers,
+        cancel,
+        on_progress,
+    );
+    let _ = matches!(cache, ResultCache::Off);
+    todo!("RF-11: analyze_folder_cached (result-cache.md 8)")
 }
 
 /// The album of a `TrackDone` after counting that track (RF-10, commands.md version 5).
@@ -182,6 +243,8 @@ pub fn analyze_folder(
         errors: counts.errors.load(Ordering::SeqCst),
         cancelled: (done as usize) < total,
         elapsed_ms: started.elapsed().as_millis() as u64,
+        from_cache: 0,
+        cache: CacheStatus::Off,
     };
     if summary.cancelled {
         on_progress(ProgressEvent::Cancelled {
