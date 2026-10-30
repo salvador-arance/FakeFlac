@@ -28,9 +28,11 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 /// When the other window commits, counted from the moment `open` is about to be called.
-const COMMIT_AFTER: Duration = Duration::from_millis(300);
+/// 500 ms leaves room for a loaded CI runner on both sides: 250 ms over `MIN_WAIT`, and
+/// 500 ms under the 1000 ms `busy_timeout`.
+const COMMIT_AFTER: Duration = Duration::from_millis(500);
 /// The least time `open` must have waited for the other window's lock.
-const MIN_WAIT: Duration = Duration::from_millis(200);
+const MIN_WAIT: Duration = Duration::from_millis(250);
 
 /// Starts a second connection on `file` that runs `change` inside `BEGIN IMMEDIATE` and keeps
 /// the transaction open; returns it.
