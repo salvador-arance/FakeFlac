@@ -2,6 +2,59 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-30 - RNF-11 + RNF-06 spec approved (release pipeline), ADR-0045 accepted
+
+**Done**
+- RF-11 feature PR #85 merged. `just prune-branches` deleted `spec/RNF-11`.
+- The owner chose RNF-11 (distribution) together with RNF-06 (installer size) as the next H2 requirement.
+- `/new-spec RNF-11`, merged at G1 as #86:
+  - files: `specs/contracts/release.md`, `specs/features/release.feature`, and RNF-11 and RNF-06 set to `specified`;
+  - `scripts/release.mjs` (Node built-ins only) behind five `just` recipes;
+  - `release.yml` split into `verify`, `package` and `publish`, plus a `workflow_dispatch` dry run;
+  - a guard-bash extension so that agents never push tags or create releases;
+  - ADR-0045, now `accepted`.
+- G1: the owner delegated the answers to the orchestrator. Every default was approved except Q7: the limit is decimal 20 MB, 20 000 000 bytes, strictly under, checked file by file. The owner confirmed Q7. D1–D9 are decided defaults.
+- Three readiness reviews. Round 1 found 4 blocking issues:
+  - CI env leaking into the tests;
+  - how versions are located;
+  - error messages;
+  - option parsing.
+  Round 2 found 1: the decoys did not catch a naive implementation. All were fixed.
+- The H0 release workflows were written but have never run: no tag, no release, version 0.0.1. The spec fixes these bugs in them:
+  - stale installers were hashed;
+  - `SHA256SUMS.txt` had CRLF line endings;
+  - the tag went into `run:` lines through `${{ }}` (expression injection);
+  - the job that builds also had write permission;
+  - the release job had no size check.
+
+**Pending**
+- `/feature RNF-11` on `feat/RNF-11`. The new tests are `scripts/release.test.mjs` and cases appended to `.claude/hooks/hooks.test.mjs`. No existing test changes (contract section 8).
+- The feature PR also updates the `docs/architecture/overview.md` rows for RNF-06 and RNF-11 (contract section 9).
+- Owner's manual checks after the feature merges:
+  - M1: the dry run from `main`;
+  - M2: the installer size in the CI log (unmeasured since H0, when NSIS was 1.44 MB and MSI 2.12 MB);
+  - M3–M6: install, SmartScreen, attestation and checksums, uninstall;
+  - M7: the first real publish.
+- Unverified until the first real release:
+  - the permissions `attest-build-provenance@v4` needs (M4);
+  - whether `gh` puts the `--notes-file` text before the `--generate-notes` list (M7).
+- Carried over:
+  - the three RF-11 follow-ups of the block below;
+  - RF-13 and the other high-priority RNFs are still `draft`;
+  - RF-08 manual checks M1–M3 and P1–P2;
+  - the RF-16 K5 wording;
+  - the 48 kHz MP3 hand check.
+- Dependabot alert #2: `deepmerge` (npm, low), no patched version yet.
+
+**Blockers / questions for the human**
+- None.
+
+**Notes for the next session**
+- `workflow_dispatch` only shows in the GitHub UI once `release.yml` is on `main`, so M1 can only be run after the feature PR merges.
+- The tests must never inherit `GITHUB_*`, `GH_*` or `GIT_*` from CI (release.md 8.1). The `draft` guard test also empties PATH, so a faulty script cannot start a real `gh`.
+
+**Next step:** `/feature RNF-11`.
+
 ## 2026-10-30 - RF-11 implemented (result cache), PR #85 open for G2
 
 **Done**
