@@ -3,9 +3,11 @@
 
 use crate::dto;
 use fakeflac_audio::SymphoniaAnalyzer;
-use fakeflac_core::{analyze_folder_cached, ActiveRun, AnalysisSlot, DetectionParams, ResultCache};
+use fakeflac_core::{
+    analyze_folder_cached, ActiveRun, AnalysisSlot, DetectionParams, ResultCache, ResultStore,
+};
 use fakeflac_fs::WalkDirScanner;
-use fakeflac_store::{EngineTag, SqliteResultStore};
+use fakeflac_store::{EngineTag, OpenError, SqliteResultStore};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -243,8 +245,24 @@ pub fn run_analysis_cached(
     root: &Path,
     send: &(dyn Fn(dto::ProgressEvent) -> bool + Sync),
 ) -> Result<dto::AnalysisSummary, dto::AppError> {
+    run_analysis_cached_with(slot, export, cache_file, root, send, |file| {
+        SqliteResultStore::open(file, engine_tag())
+    })
+}
+
+/// `run_analysis_cached` with the open step passed in, so tests can replace the store
+/// (`run_analysis_cached` passes `SqliteResultStore::open`). `open` is called at most once,
+/// after the slot is taken, and only when `cache_file` is `Some`.
+pub fn run_analysis_cached_with<S: ResultStore>(
+    slot: &AnalysisSlot,
+    export: &ExportState,
+    cache_file: Option<&Path>,
+    root: &Path,
+    send: &(dyn Fn(dto::ProgressEvent) -> bool + Sync),
+    open: impl FnOnce(&Path) -> Result<S, OpenError>,
+) -> Result<dto::AnalysisSummary, dto::AppError> {
     let run = slot.begin()?;
-    let store = cache_file.and_then(|file| SqliteResultStore::open(file, engine_tag()).ok());
+    let store = cache_file.and_then(|file| open(file).ok());
     let cache = match &store {
         Some(store) => ResultCache::Store(store),
         None => ResultCache::Unavailable,
