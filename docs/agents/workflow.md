@@ -37,6 +37,7 @@ requirement RF-xx
 | Requirement ↔ scenario traceability (S1, S2) | `just trace` |
 | Contract generated, never hand-written (S3) | `just gen-check` (regenerates and diffs the bindings; part of `check-app`, so it runs in CI) |
 | Audio corpus is read-only (ADR-0022) | `guard-bash` + external `FAKEFLAC_CORPUS` |
+| Only the human releases (ADR-0045) | `guard-bash` blocks tag pushes and `gh release create\|edit\|upload`; `release-draft` runs only in GitHub Actions |
 
 ## Local, personal settings
 
@@ -44,4 +45,4 @@ requirement RF-xx
 
 ## Hooks
 
-`SessionStart` context · `PreToolUse` guards (`guard-protected`, `guard-bash`, `guard-agents`) · `PostToolUse` format · `Stop`/`SubagentStop` `just check-fast` (skipped in stages `spec` and `test`). Hooks have their own tests: `node --test ".claude/hooks/*.test.mjs"`.
+`SessionStart` context · `PreToolUse` guards (`guard-protected`, `guard-bash`, `guard-agents`) · `PostToolUse` format · `Stop`/`SubagentStop` `just check-fast` (skipped in stages `spec` and `test`). Hooks have their own tests: `node --test ".claude/hooks/*.test.mjs"`. `guard-bash` matches the command text, so a commit message or `echo` that quotes a blocked command (for example `gh release create`) is blocked too: reword it or use `git commit -F <file>`.

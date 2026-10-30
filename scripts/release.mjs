@@ -374,8 +374,9 @@ function readFile(root, rel) {
   let st
   try {
     st = fs.statSync(file)
-  } catch {
-    return { error: msg(`missing ${rel}`) }
+  } catch (e) {
+    if (e.code === 'ENOENT' || e.code === 'ENOTDIR') return { error: msg(`missing ${rel}`) }
+    return { error: msg(`cannot read ${rel} (${e.code ?? 'EIO'})`) }
   }
   if (!st.isFile()) return { error: msg(`missing ${rel}`) }
   try {
@@ -751,6 +752,7 @@ function cmdAssets(ctx, opts) {
     }
     for (const batch of [...createdDirs].reverse()) {
       for (const d of batch) {
+        if (!lexists(d)) continue // mkdirSync failed before creating it
         try {
           fs.rmdirSync(d)
         } catch (e) {
@@ -767,12 +769,13 @@ function cmdAssets(ctx, opts) {
       missing.push(d)
       if (path.dirname(d) === d) break
     }
+    // Recorded before the call: a recursive mkdir can fail after creating some parents.
+    createdDirs.push(missing)
     try {
       fs.mkdirSync(dir, { recursive: true })
     } catch (e) {
       return msg(`cannot write ${disp(dir)} (${e.code ?? 'EIO'})`)
     }
-    createdDirs.push(missing)
     return null
   }
 
