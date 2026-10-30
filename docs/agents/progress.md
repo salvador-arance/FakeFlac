@@ -24,7 +24,7 @@
   - M2 pass: the cache file is in `%LOCALAPPDATA%\io.github.fakeflac.app`.
   - M3 pass: the same folder analysed from a second window behaved normally.
   - UI M1 pass: the toolbar looks right.
-  - UI M3 (the icon) was not mentioned.
+  - UI M3 pass: the icon is in the right place.
 - Improvements from the review that were not done, possible small follow-ups:
   - `SqliteResultStore::open` is not panic-guarded in `run_analysis_cached` (a panic there gives `INTERNAL`, not `unavailable`);
   - no test pins that the store is dropped before the slot is released;
