@@ -76,6 +76,13 @@ const EN: Record<string, string> = {
   'table.noMatches': 'No tracks match the filters',
   'table.clearFilters': 'Clear filters',
   'status.shown': '{n} shown',
+  // specs/ui/result-cache.md section 5 (RF-11)
+  'toolbar.clearCache': 'Clear results cache',
+  'status.fromCache': '{n} from cache',
+  'status.cacheDegraded': 'Results cache error: some results were not saved',
+  'status.cacheUnavailable': 'Results cache unavailable',
+  'status.cacheCleared': 'Results cache cleared',
+  'error.CACHE_FAILED': 'Cannot clear the results cache',
 }
 
 const ES: Record<string, string> = {

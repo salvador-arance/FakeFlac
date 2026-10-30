@@ -154,5 +154,6 @@ export async function exportCsv(): Promise<ExportResult | null> {
  * with `ApiError` on a contract error (`ANALYSIS_RUNNING`, `CACHE_FAILED`, `INTERNAL`).
  */
 export async function clearCache(): Promise<void> {
-  throw new Error('RF-11: clearCache is not implemented yet')
+  const result = await commands.clearCache()
+  if (result.status === 'error') throw new ApiError(toAppError(result.error))
 }
