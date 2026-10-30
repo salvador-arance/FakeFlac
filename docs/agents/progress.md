@@ -2,6 +2,40 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-30 - RF-11 spec approved (result cache), ADR-0044 accepted
+
+**Done**
+- RF-16 feature PR #80 merged. No merged branches were left to prune.
+- The owner chose RF-11 as the next H2 requirement.
+- `/new-spec RF-11`, merged at G1 as #83:
+  - files: `specs/contracts/result-cache.md`, `specs/features/result-cache.feature`, `specs/ui/result-cache.md`;
+  - contract version 7: `clear_cache`, `CACHE_FAILED`, and `AnalysisSummary.fromCache` and `cache`;
+  - ADR-0044, now `accepted`. It amends ADR-0008 (the engine is part of the key) and ADR-0033 (`rusqlite` bundled, and `serde_json` `float_roundtrip` in `fakeflac-store`).
+- The spec PR also updated `docs/architecture/{data-model,backend}.md` and the cross-references in `ui/{main-screen,components,sort-filter,export-csv}.md`.
+- The owner approved every G1 default, Q1–Q11, on 2026-10-30, including both dependency changes (Q9 a and b) and the reset of a foreign database (Q10). D1–D3 are decided defaults.
+- Two readiness reviews: round 1 found 5 blocking issues, all fixed; round 2 found 1, also fixed.
+
+**Pending**
+- `/feature RF-11`. Declared protected-test edits are in `result-cache.md` section 12.1: five tests that build an `AnalysisSummary` by hand gain the two new fields.
+- Constraint for the implementer: `AnalysisPage` reads `clearCache` from `../api` only inside the click handler, so the existing page tests that mock `../api` stay green (section 12.2).
+- RF-11 manual checks after the feature PR:
+  - M1: the warm run takes at most 10 % of the cold run's time on 200 or more tracks;
+  - M2: the cache location;
+  - M3: two windows with the same engine.
+- Carried over:
+  - RF-13 and the high-priority RNFs are still `draft`;
+  - RF-08 manual checks M1–M3 and P1–P2;
+  - the RF-16 K5 wording observation (previous block);
+  - the optional hand check of the unlabelled 48 kHz MP3s that v7 flags.
+
+**Blockers / questions for the human**
+- None.
+
+**Notes for the next session**
+- While the app version stays 0.0.1, a detection fix that bumps neither `algorithm_version` nor `EXTRACTION_VERSION` keeps serving stale cached rows. Clear the cache when testing such a fix by hand (`result-cache.md` section 4). `just accept` and `just calibrate` never use the app cache.
+
+**Next step:** `/feature RF-11`.
+
 ## 2026-10-26 - RF-16 implemented (detection v7), PR open for G2
 
 **Done**
