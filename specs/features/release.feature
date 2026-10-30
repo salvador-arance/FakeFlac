@@ -540,7 +540,8 @@ Feature: Release packaging: versions, installers, size gate, checksums and the d
       | version --root                                                 | release: option --root needs a value                                                                             |
       | version --root ''                                              | release: option --root has an empty value                                                                        |
       | assets --bundle b --out '' --notes n.md --max-bytes 1000       | release: option --out has an empty value                                                                         |
-      | assets --bundle b --out o --notes n.md --max-bytes ''          | release: option --max-bytes has an empty value                                                                   |      | assets --bundle --out o --notes n.md --max-bytes 1000          | release: option --bundle needs a value                                                                           |
+      | assets --bundle b --out o --notes n.md --max-bytes ''          | release: option --max-bytes has an empty value                                                                   |
+      | assets --bundle --out o --notes n.md --max-bytes 1000          | release: option --bundle needs a value                                                                           |
       | assets --bundle b --out o --notes n.md                         | release: assets needs --max-bytes                                                                                |
       | assets --bundle b --out o --notes o/n.md --max-bytes 1000      | release: --notes must not be inside --out                                                                        |
       | assets --bundle b --out o --notes o --max-bytes 1000           | release: --notes must not be inside --out                                                                        |
