@@ -18,14 +18,19 @@
   - `0f8a917`: the `errors` column, and T13 (b) and (c). These were red at the table header, then green.
   - `7ae6cb6`: `assert_rows_add_up` (rows add up to the header) and the comment on `HIRES_LEVEL_DBFS`.
   - Two review rounds, nothing blocking. `just ci` green, `privacy-check` 0 matches.
-- #97 (spec, `spec/RNF-01-followups`, worktree `.claude/worktrees/spec-rnf01`): T8's checks are now written as the harness runs them. `just perf ""` or `" "` becomes a usage error (exit 2). The owner chose this (section 13).
+- #97 (spec, `spec/RNF-01-followups`, worktree `.claude/worktrees/spec-rnf01`), section 13:
+  - T8's checks are now written as the harness runs them.
+  - `just perf ""` or `" "` becomes a usage error (exit 2). The owner chose this.
+  - The `hires` level floor goes from −45 to −50 dBFS, still 10 dB above `silence_dbfs`. With `flacenc` 0.5.1, −45 dBFS was the only level that fit, so an upgrade that made the file bigger would have left no allowed level. The wrong indicative −39 dBFS is replaced by the measured figures.
+  - The RNF-01 row of `traceability.md` now points to #98. Only #97 edits that row, so #97 and #98 cannot conflict.
 
 **Pending**
 - G2 for #98, G1 for #97.
-- After #97: a feature PR whose implement stage changes only the `perf` recipe (an empty or whitespace argument → usage, exit 2, before the machine line). Check M3 by hand.
-- `traceability.md`, RNF-01 row: after both merge, drop "Pending: the per-format `errors` column …". It was left out of #98 so that #97 and #98 do not both edit the same row.
+- After #97 merges, `/feature RNF-01` for section 13:
+  - test stage: the `HIRES_LEVEL_DBFS` comment in `perf.rs` gets the new −50 dBFS floor (no check changes);
+  - implement stage: the `perf` recipe (an empty or whitespace argument → usage, exit 2, before the machine line);
+  - M3 by hand: `just perf ""`, `" "` and `a b`.
 - The owner's manual checks continue with section B (RNF-11, first release: M2–M7) in `docs/planning/comprobaciones-manuales.md`.
-- Limit noted in review: `hires` at −45 dBFS is 41.29 MB, near the top of the window. If a `flacenc` upgrade makes the file bigger, no allowed level fits and the spec has to change at G1.
 - Carried over:
   - the spectrogram of very long files (3.2 s against RF-07's 2 s);
   - cancel latency on long files;
