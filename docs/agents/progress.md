@@ -2,6 +2,35 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-31 - First release v0.1.0 published; RNF-11 M1–M7 all passed
+
+**Done**
+- #99 merged; its branch was already pruned.
+- #100 `chore(release): 0.1.0`: `just set-version 0.1.0` and `just ci` green. No new rehearsal: M1 had passed on 2026-10-30, and #94, #95 and #99 do not touch the release wiring.
+- The owner tagged `v0.1.0`. Release run 41196296529 went green and left a draft. The owner then ran M2–M7 and published it. It is marked as a GitHub **pre-release** on purpose (the owner's choice for 0.x), so it is not "Latest".
+  - M2: NSIS 2 738 475 bytes, MSI 3 821 568 bytes.
+  - M3–M6 passed in Windows Sandbox. The NSIS installer needed no administrator rights; the MSI asked for them.
+  - M7: the fixed text comes before the PR list, and there are exactly three assets.
+- The owner's manual checks for RNF-01 (M1: cold album 381 ms; M2: 210 real tracks, every median under 300 ms per track) and for RF-08 (M2 Ctrl+F, M3 look) passed. RF-08 P1, P2 and M1 were not done; they need the 10 000-fixture folder.
+- On `docs/release-0.1.0-results`: the RNF-11 row of `traceability.md` records M1–M7. The RNF-01 row now points to #99 instead of the branch. The results are also posted as a comment on #100.
+
+**Pending**
+- G2 for the docs PR.
+- RF-08 P1, P2 and M1 (optional; they need the 10 000 synthetic fixtures).
+- Carried over:
+  - the spectrogram of very long files (3.2 s against RF-07's 2 s);
+  - cancel latency on long files;
+  - RF-13 and the draft RNFs;
+  - the RF-16 K5 wording;
+  - the 48 kHz MP3 check;
+  - Dependabot alert #2;
+  - `target/perf-harness/`, which the owner may delete.
+
+**Blockers / questions for the human**
+- None.
+
+**Next step:** after G2, `just prune-branches`; then the owner picks the next requirement (Opus after the ADR-0030 spike, RF-13 i18n, or another draft RNF).
+
 ## 2026-10-31 - RNF-01 section 13 implemented (`just perf` refuses an empty argument), feature PR ready for G2
 
 **Done**
