@@ -96,23 +96,23 @@ set-version version:
 
 # Prepare the corpus and evaluate DetectionParams files: accept [--params FILE]... [--config FILE] [--no-generate]
 [positional-arguments]
+[script("node")]
 accept *args:
-    #!/usr/bin/env node
     const r = require('node:child_process').spawnSync('cargo', ['run', '--release', '-q', '-p', 'fakeflac-calibrate', '--', 'accept', ...process.argv.slice(2)], { stdio: 'inherit' })
     process.exit(r.status ?? 1)
 
 # Accept plus a grid search on the tune split; writes a proposal that is never committed: calibrate [--grid FILE] [--config FILE]
 [positional-arguments]
+[script("node")]
 calibrate *args:
-    #!/usr/bin/env node
     const r = require('node:child_process').spawnSync('cargo', ['run', '--release', '-q', '-p', 'fakeflac-calibrate', '--', 'calibrate', ...process.argv.slice(2)], { stdio: 'inherit' })
     process.exit(r.status ?? 1)
 
 # RNF-01 performance harness (specs/contracts/performance.md). Release build, opt-in: not part of
 # check, ci or any workflow. With FOLDER, also times that folder and reports aggregates only.
 [positional-arguments]
+[script("node")]
 perf *args:
-    #!/usr/bin/env node
     const os = require('node:os')
     const args = process.argv.slice(2)
     if (args.length > 1) {
@@ -131,7 +131,7 @@ perf *args:
 
 # Search the branch diff for the corpus paths and names (ADR-022): privacy-check [--base REF]
 [positional-arguments]
+[script("node")]
 privacy-check *args:
-    #!/usr/bin/env node
     const r = require('node:child_process').spawnSync('cargo', ['run', '--release', '-q', '-p', 'fakeflac-calibrate', '--', 'privacy-check', ...process.argv.slice(2)], { stdio: 'inherit' })
     process.exit(r.status ?? 1)
