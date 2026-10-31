@@ -38,3 +38,8 @@
 
 - **What happened:** `/new-spec` ended at "open a PR and stop". After the owner merged #78, ADR-0043 was still `proposed`, `progress.md` had no entry and `backend.md` named a stale default. The owner had to point it out.
 - **Harness fix:** `/new-spec` step 5 runs `/handoff` on a `docs/...` branch after the merge.
+
+## A fixed delay in a spec that the measured run made impossible (2026-10-31, RNF-01)
+
+- **What happened:** the RNF-01 spec draft cancelled the timed album 1000 ms after the start to measure cancel latency (T9), and required `cancelled: true`. The baseline run before G1 showed that the album finishes in about 0.9 s, so the cancel would never land and T9 would fail on any fast host. This is the second time (after the RF-16 thresholds) that an unmeasured figure in a spec was wrong, and only a measurement before G1 caught it.
+- **Harness fix:** `/new-spec` step 3 now asks for every locally measurable figure (timings, delays and anything a test waits on, not only detection thresholds) to be measured before G1. T9 now cancels on the first `trackDone`.
