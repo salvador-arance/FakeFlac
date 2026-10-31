@@ -2,6 +2,50 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-31 - RNF-01 M1 and M2 done; per-format errors in the folder report (#98) and the last #94 follow-ups (#97) at the gates
+
+**Done**
+- #94 and #95 merged.
+- The owner's manual checks M1 and M2 pass (aggregates in `performance.md` 10.1):
+  - M1, cold read: a 15-track FLAC album of 198.4 MB, `first` 381 ms.
+  - M2: 210 tracks of FLAC, WAV, MP3 and M4A. The medians per track are 171, 36, 288 and 181 ms. These are also lossy-source.md's B11 figures.
+  - The one M2 error is a damaged FLAC: `ffmpeg` fails on it too. The app reports it as `corruptStream` (RNF-04).
+- #96 (spec, merged as `d35a890`):
+  - the `just perf` figures of #94 become the reference (10.1), and the pre-G1 baseline moves to 10.2;
+  - the machine-line order is aligned;
+  - the folder report gets an `errors` column per format (section 12).
+- #98 (`feat/RNF-01-errors`, test code only, `src-tauri/tests/perf.rs`):
+  - `0f8a917`: the `errors` column, and T13 (b) and (c). These were red at the table header, then green.
+  - `7ae6cb6`: `assert_rows_add_up` (rows add up to the header) and the comment on `HIRES_LEVEL_DBFS`.
+  - Two review rounds, nothing blocking. `just ci` green, `privacy-check` 0 matches.
+- #97 (spec, `spec/RNF-01-followups`, worktree `.claude/worktrees/spec-rnf01`), section 13:
+  - T8's checks are now written as the harness runs them.
+  - `just perf ""` or `" "` becomes a usage error (exit 2). The owner chose this.
+  - The `hires` level floor goes from −45 to −50 dBFS, still 10 dB above `silence_dbfs`. With `flacenc` 0.5.1, −45 dBFS was the only level that fit, so an upgrade that made the file bigger would have left no allowed level. The wrong indicative −39 dBFS is replaced by the measured figures.
+  - The RNF-01 row of `traceability.md` now points to #98. Only #97 edits that row, so #97 and #98 cannot conflict.
+
+**Pending**
+- G2 for #98, G1 for #97.
+- After #97 merges, `/feature RNF-01` for section 13:
+  - test stage: the `HIRES_LEVEL_DBFS` comment in `perf.rs` gets the new −50 dBFS floor (no check changes);
+  - implement stage: the `perf` recipe (an empty or whitespace argument → usage, exit 2, before the machine line);
+  - M3 by hand: `just perf ""`, `" "` and `a b`.
+- The owner's manual checks continue with section B (RNF-11, first release: M2–M7) in `docs/planning/comprobaciones-manuales.md`.
+- Carried over:
+  - the spectrogram of very long files (3.2 s against RF-07's 2 s);
+  - cancel latency on long files;
+  - RF-13 and the draft RNFs;
+  - the RF-08 manual checks;
+  - the RF-16 K5 wording;
+  - the 48 kHz MP3 check;
+  - Dependabot alert #2;
+  - `target/perf-harness/`, which the owner may delete.
+
+**Blockers / questions for the human**
+- None.
+
+**Next step:** merge #97 (G1) and #98 (G2), then `just prune-branches` (it also removes the `spec-rnf01` worktree). Then `/feature RNF-01` for the `perf` recipe (section 13), or the owner's release checks (section B).
+
 ## 2026-10-31 - RNF-01 implemented (opt-in performance harness), feature PR #94 ready for G2
 
 **Done**
