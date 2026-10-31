@@ -51,8 +51,11 @@ const TYPICAL_LEVEL_DBFS: f64 = -42.5;
 const HIRES_FRAMES: u64 = 8_638_464;
 /// RMS level of `hires`' Gaussian noise (dBFS, full scale = 8388607). Picked once by the test
 /// stage: `flacenc` 0.5.1 codes 24-bit noise less tightly than the spec's indicative −39 dBFS
-/// assumed (−39 dBFS gives about 51 MB), so −45 dBFS, the lowest level the spec allows, is the
-/// one that puts the size in the window (about 41.3 MB).
+/// assumed (−39 dBFS gives about 51 MB), so only about −45 to −44.6 dBFS keeps the size in the
+/// 38–42 MB window; −45 dBFS, the floor of section 2.3 ("at or above −45 dBFS"), gives 41.29 MB.
+/// After a `flacenc` upgrade T5 stops before any timing if the size leaves the window; then
+/// re-pick the level at or above −45 dBFS so the size is back inside, or, if no such level
+/// exists, change the spec at G1.
 const HIRES_LEVEL_DBFS: f64 = -45.0;
 /// `wav` (2.3): 226.757 s at 44.1 kHz, 40 000 000 bytes of samples.
 const WAV_FRAMES: u64 = 10_000_000;
@@ -1815,6 +1818,29 @@ fn format_rows(lines: &[String]) -> Vec<Vec<&str>> {
     rows
 }
 
+/// Section 6.2's one rule: every `trackDone` counts, so the format rows' `tracks` cells add up to
+/// the header's `tracks <n>` and their `errors` cells to the header's `errors <n>`.
+fn assert_rows_add_up(header: &str, rows: &[Vec<&str>], output: &str) {
+    let count = |label: &str| -> u64 {
+        header
+            .split(" | ")
+            .find_map(|part| part.strip_prefix(label)?.strip_prefix(' '))
+            .and_then(|n| n.parse().ok())
+            .unwrap_or_else(|| panic!("no `{label} <n>` in the header {header:?}"))
+    };
+    let sum = |column: usize| -> u64 {
+        rows.iter()
+            .map(|row| {
+                row[column]
+                    .parse::<u64>()
+                    .unwrap_or_else(|_| panic!("not a count: {:?}\n{output}", row[column]))
+            })
+            .sum()
+    };
+    assert_eq!(sum(1), count("tracks"), "rows' tracks vs header\n{output}");
+    assert_eq!(sum(2), count("errors"), "rows' errors vs header\n{output}");
+}
+
 /// T13 (b), scenarios "A folder whose path has spaces, an ampersand and Unicode characters is
 /// timed" (@RNF-09) and "The folder mode never modifies the timed files" (@RNF-05).
 #[test]
@@ -1851,6 +1877,7 @@ fn folder_mode_reports_aggregates_only_and_writes_nothing() {
     let rows = format_rows(&lines);
     assert_eq!(rows.len(), 1, "{output}");
     assert_eq!(&rows[0][..3], ["flac", "2", "0"], "{output}");
+    assert_rows_add_up(header, &rows, &output);
 
     // D8: no path and no name anywhere.
     assert!(!output.contains(folder_name), "{output}");
@@ -1901,6 +1928,7 @@ fn folder_report_says_which_format_an_error_came_from() {
     let rows = format_rows(&lines);
     assert_eq!(rows.len(), 1, "{output}");
     assert_eq!(&rows[0][..3], ["flac", "2", "1"], "{output}");
+    assert_rows_add_up(header, &rows, &output);
     // RNF-05: the files are unchanged and nothing was created.
     assert_eq!(snapshot(&dir), before);
 }
