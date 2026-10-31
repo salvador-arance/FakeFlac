@@ -39,6 +39,7 @@ just release-draft   # create the draft release (GitHub Actions only; the human 
 just set-version X.Y.Z  # bump the version in every manifest (never commits, tags or pushes)
 just accept       # acceptance on the local corpus (RP-11); just calibrate adds the grid search
 just privacy-check --base main  # no corpus paths or names in the branch diff (ADR-022)
+just perf [FOLDER]  # RNF-01 timing harness, release build, opt-in (not in check or ci; ADR-0046)
 just prune-branches  # delete merged branches and clean agent worktrees (after G2); --dry-run lists
 ```
 
