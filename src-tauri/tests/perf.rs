@@ -1397,18 +1397,22 @@ fn folder_report(root: &Path) -> (Vec<String>, Result<(), String>) {
         median_of(next),
         next.iter().copied().max().unwrap_or(0)
     ));
-    lines.push("| format | tracks | MB | median ms per track | max ms per track |".to_string());
-    lines.push("|---|---|---|---|---|".to_string());
+    lines.push(
+        "| format | tracks | errors | MB | median ms per track | max ms per track |".to_string(),
+    );
+    lines.push("|---|---|---|---|---|---|".to_string());
     for (format, name) in FORMATS {
         let of_format: Vec<&(&DoneRec, Duration)> =
             tracks.iter().filter(|(d, _)| d.format == format).collect();
         if of_format.is_empty() {
             continue;
         }
+        // Error tracks count in every cell; `errors` says which format they came from (6.2).
+        let format_errors = of_format.iter().filter(|(d, _)| d.error.is_some()).count();
         let bytes: u64 = of_format.iter().map(|(d, _)| d.size_bytes).sum();
         let per: Vec<u64> = of_format.iter().map(|(_, t)| ms(*t)).collect();
         lines.push(format!(
-            "| {name} | {} | {} | {} | {} |",
+            "| {name} | {} | {format_errors} | {} | {} | {} |",
             of_format.len(),
             mb(bytes),
             median_of(&per),
@@ -1779,6 +1783,38 @@ fn folder_mode_on_a_folder_without_audio_gives_no_figures() {
     assert_eq!(snapshot(&dir), before);
 }
 
+const FORMAT_TABLE_HEADER: &str =
+    "| format | tracks | errors | MB | median ms per track | max ms per track |";
+
+/// The format table of the folder report (section 6.2): checks its header and separator (6
+/// cells) and returns the cells of each format row, each row having the header's 6 cells.
+fn format_rows(lines: &[String]) -> Vec<Vec<&str>> {
+    let output = lines.join("\n");
+    let at = lines
+        .iter()
+        .position(|l| l.starts_with("| format |"))
+        .unwrap_or_else(|| panic!("no format table:\n{output}"));
+    assert_eq!(lines[at], FORMAT_TABLE_HEADER, "{output}");
+    assert_eq!(
+        lines.get(at + 1).map(String::as_str),
+        Some("|---|---|---|---|---|---|"),
+        "{output}"
+    );
+    let rows: Vec<Vec<&str>> = lines
+        .iter()
+        .filter(|l| {
+            FORMATS
+                .iter()
+                .any(|(_, n)| l.starts_with(&format!("| {n} |")))
+        })
+        .map(|l| cells(l))
+        .collect();
+    for row in &rows {
+        assert_eq!(row.len(), 6, "{output}");
+    }
+    rows
+}
+
 /// T13 (b), scenarios "A folder whose path has spaces, an ampersand and Unicode characters is
 /// timed" (@RNF-09) and "The folder mode never modifies the timed files" (@RNF-05).
 #[test]
@@ -1811,16 +1847,10 @@ fn folder_mode_reports_aggregates_only_and_writes_nothing() {
         lines.iter().any(|l| l.starts_with("| folder | ")),
         "{output}"
     );
-    let format_rows: Vec<&String> = lines
-        .iter()
-        .filter(|l| {
-            FORMATS
-                .iter()
-                .any(|(_, n)| l.starts_with(&format!("| {n} |")))
-        })
-        .collect();
-    assert_eq!(format_rows.len(), 1, "{output}");
-    assert!(format_rows[0].starts_with("| flac | 2 | "), "{output}");
+    // One format row, for flac, with tracks 2 and errors 0 (section 6.2).
+    let rows = format_rows(&lines);
+    assert_eq!(rows.len(), 1, "{output}");
+    assert_eq!(&rows[0][..3], ["flac", "2", "0"], "{output}");
 
     // D8: no path and no name anywhere.
     assert!(!output.contains(folder_name), "{output}");
@@ -1837,6 +1867,40 @@ fn folder_mode_reports_aggregates_only_and_writes_nothing() {
             "the output names the path component {component:?}:\n{output}"
         );
     }
+    // RNF-05: the files are unchanged and nothing was created.
+    assert_eq!(snapshot(&dir), before);
+}
+
+/// T13 (c), scenario "The folder report says which format an error came from" (@RNF-04), and
+/// "The folder mode never modifies the timed files" (@RNF-05).
+#[test]
+fn folder_report_says_which_format_an_error_came_from() {
+    let tmp = TempRoot::new("t13c");
+    let source = tmp.path().join("source");
+    std::fs::create_dir_all(&source).unwrap();
+    let tiny = source.join(track_name(1, "flac"));
+    write_tiny(&tiny);
+    let dir = tmp.album_dir("one_truncated");
+    let names = [track_name(1, "flac"), track_name(2, "flac")];
+    std::fs::copy(&tiny, dir.join(&names[0])).unwrap();
+    write_first_half(&tiny, &dir.join(&names[1]));
+    let before = snapshot(&dir);
+
+    let (lines, result) = folder_report(&dir);
+    for line in &lines {
+        println!("{line}");
+    }
+    result.unwrap_or_else(|e| panic!("{e}"));
+    let output = lines.join("\n");
+    let header = &lines[2];
+    assert!(header.starts_with("tracks 2 | errors 1 | "), "{header}");
+    assert!(
+        header.ends_with(" MB | flac 2, wav 0, mp3 0, m4a 0, opus 0"),
+        "{header}"
+    );
+    let rows = format_rows(&lines);
+    assert_eq!(rows.len(), 1, "{output}");
+    assert_eq!(&rows[0][..3], ["flac", "2", "1"], "{output}");
     // RNF-05: the files are unchanged and nothing was created.
     assert_eq!(snapshot(&dir), before);
 }
