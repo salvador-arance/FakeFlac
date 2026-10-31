@@ -37,7 +37,7 @@ Why hexagonal: the detection core is the most valuable and most delicate asset (
 | Requirement | Design decision |
 |---|---|
 | RF-03/RF-04 detection | Band spectra (power mean and per-frame median), relative cutoff step and 16 kHz gap step (ADR-0035); thresholds as versioned data (ADR-0011) |
-| RNF-01 performance | parallel tracks on std scoped threads (ADR-0006, ADR-0034), window sampling (ADR-0010), cache (ADR-0007/0008), real FFT (ADR-0026) |
+| RNF-01 performance | parallel tracks on std scoped threads (ADR-0006, ADR-0034), window sampling (ADR-0010), cache (ADR-0007/0008), real FFT (ADR-0026); budget, fixtures and the opt-in harness `just perf`: `specs/contracts/performance.md`, ADR-0046 |
 | RNF-02 memory | Reused window buffers, streaming decode |
 | RNF-03 privacy | No network dependencies; Tauri CSP without external `connect-src`; minimal capabilities |
 | RNF-04 reliability | Typed per-track errors (ADR-0013) |

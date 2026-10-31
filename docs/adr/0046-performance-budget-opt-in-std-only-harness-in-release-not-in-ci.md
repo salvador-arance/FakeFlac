@@ -1,6 +1,6 @@
 # ADR-0046: Performance budget: an opt-in, std-only harness in a release build, not timed in CI
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-31
 
 ## Context and rationale

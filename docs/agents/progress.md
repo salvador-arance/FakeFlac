@@ -2,6 +2,48 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-31 - RNF-01 spec approved (performance budget), ADR-0046 accepted
+
+**Done**
+- #90 (the RF-11 and RNF-11 follow-ups) merged; its branch is already pruned.
+- The owner chose RNF-01 (performance) as the next requirement.
+- `/new-spec RNF-01`, merged at G1 as #92:
+  - `specs/contracts/performance.md`, `specs/features/performance.feature`, RNF-01 set to `specified`, the traceability row;
+  - ADR-0046: an opt-in `just perf` harness (ignored tests in `src-tauri/tests/perf.rs`, release build, `std::time::Instant`, median of 5), CI only a smoke test with no time assertion, reference machine 4 cores / 8 threads with the album capped at 7 workers, `flacenc` as a dev-dependency of `src-tauri`.
+- Baseline measured before G1 (section 10; Ryzen 7 5800X, release profile, throwaway harness under `target/perf-harness/`):
+  - T1 typical 40 MB FLAC: 270 ms; T2 15-track album with 7 workers: 861 ms. Both budgets are met by more than 10×, so the feature adds only the harness and the recipe, with no production code.
+  - Corpus, aggregates only: FLAC of 30–50 MB, median 262 ms per track; MP3 median 286 ms; real albums 0.75–1.8 s.
+- The measurement caught a spec defect: the T9 cancel at a fixed 1000 ms landed after the album had finished. It now cancels on the first `trackDone`. Lesson recorded, and `/new-spec` step 3 now asks for any measurable figure to be measured before G1.
+- Two readiness rounds: round 1 found 3 blocking issues, all fixed; round 2 found none.
+- G1: the owner delegated the answers to an agent and confirmed them. All defaults were approved except Q4, where T7 becomes a single-run report row. The owner confirmed Q9 (`flacenc`) explicitly.
+- This handoff PR: ADR-0046 `accepted`. `backend.md`: the adapter decodes the whole stream (not "with seek"), the port is `analyze(path, params)`, and the cancellation note now gives the measured times. `overview.md`: the RNF-01 row.
+
+**Pending**
+- `/feature RNF-01` on `feat/RNF-01`:
+  - the test stage writes the harness and the smoke test in protected `src-tauri/tests/perf.rs`;
+  - the implement stage adds the `flacenc` dev-dependency and the `perf` recipe (contract section 8).
+- In the feature PR, outside `specs/`:
+  - the Q13 rule in `.claude/agents/code-reviewer.md`;
+  - `just perf` in the command lists of `CLAUDE.md` and `docs/architecture/glossary.md`;
+  - the `just perf` report, and the smoke test's measured time against its 60 s budget.
+- Not gated, for later:
+  - the spectrogram of a 40-minute file takes 3.2 s, against RF-07's 2 s;
+  - a cancel waits for the running track, up to about 1.8 s on very long files. Both would be RF-05/RF-07 spec changes.
+- `target/perf-harness/` holds the throwaway harness and about 750 MB of fixtures (ignored by git). The owner may delete it.
+- Carried over from the block below:
+  - RNF-11 I4;
+  - the RNF-11 manual checks M3–M7;
+  - RF-13 and the draft RNFs;
+  - the RF-08 manual checks;
+  - the RF-16 K5 wording;
+  - the 48 kHz MP3 check;
+  - Dependabot alert #2.
+
+**Blockers / questions for the human**
+- None.
+
+**Next step:** after G2 of this handoff PR, `/feature RNF-01`.
+
 ## 2026-10-31 - Fix PR for the RF-11 and RNF-11 follow-ups, ready for G2
 
 **Done**

@@ -5,7 +5,7 @@
 ## 1. Analysis pipeline
 
 ```
-path → metadata (fs) → select N windows → decode with seek (f32 mono)
+path → metadata (fs) → select N windows → decode the whole stream (f32 mono), keep the sampled blocks
      → window + real FFT (N=4096 @ 44.1/48 kHz, v2) → 100 Hz bands per frame
      → mean spectrum (dB of mean power) + median spectrum (median of per-frame dB)
      → cutoff step + gap step (ADR-0035) + full-band guard (U, B above 20.7 kHz; ADR-0038, v3; lossy-step condition, ADR-0039, v4)
@@ -27,7 +27,7 @@ See `crates/fakeflac-core/src/domain.rs`: `Verdict { Real, Suspicious, Fake, Err
 | Port | Responsibility | Adapter |
 |---|---|---|
 | `FileScanner` | Recursively list supported files and read `TrackInfo` | `fakeflac-fs` |
-| `SpectrumAnalyzer` | `analyze(path, params, cancel)` | `fakeflac-audio` |
+| `SpectrumAnalyzer` | `analyze(path, params)` | `fakeflac-audio` |
 | `ResultStore` | `get(entry, params)`, `put(entry, params, analysis)`; no `clear()`: clearing is the adapter function `fakeflac_store::clear_cache_files`, which works even when the database cannot be opened (`specs/contracts/result-cache.md`) | `fakeflac-store` |
 | `CsvExporter` | `export(&[TrackAnalysis], dest)` | `fakeflac-export` |
 | `Clock` / `Cancel` | Injectable time and cancellation token | `core` / `src-tauri` |
@@ -41,7 +41,7 @@ See `crates/fakeflac-core/src/domain.rs`: `Verdict { Real, Suspicious, Fake, Err
 ## 5. Concurrency and resources
 
 - `cores − 1` worker threads (chosen by the composition root, ADR-0034), each taking the next track from a shared counter. One track per thread, reused window buffers → bounded memory (RNF-02).
-- Cancellation: the token is checked before each track; tracks already running finish, so the batch stops in < 500 ms as long as one track takes less than that. Checking it between windows inside the analyzer (the `cancel` argument of `SpectrumAnalyzer::analyze`) is pending until per-track times are measured (RNF-01).
+- Cancellation: the token is checked before each track; tracks already running finish, so the batch stops in < 500 ms as long as one track takes less than that. `SpectrumAnalyzer::analyze` takes no cancel token, so a running track is never interrupted. RNF-01 measured the per-track times (`specs/contracts/performance.md` section 10): about 0.27 s for a typical 40 MB FLAC, and up to about 1.8 s for a 40-minute file, which the cancel then has to wait for. `just perf` reports the latency (T9). Checking the token between windows would change the port, so it needs an RF-05 spec change at G1 (performance.md Q10).
 - A panic while analysing one track is caught and becomes an error track (ADR-0013).
 - Read-only: files are opened read-only; no port can write audio (RNF-05).
 
