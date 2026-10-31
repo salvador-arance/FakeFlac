@@ -820,7 +820,7 @@ checksum = "af9673d8203fcb076b19dfd17e38b3d4ae9f44959416ea532ce72415a6020365"
 
 [[package]]
 name = "fakeflac"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "fakeflac-audio",
  "fakeflac-core",
@@ -843,7 +843,7 @@ dependencies = [
 
 [[package]]
 name = "fakeflac-audio"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "fakeflac-core",
  "flacenc",
@@ -859,7 +859,7 @@ dependencies = [
 
 [[package]]
 name = "fakeflac-calibrate"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "fakeflac-audio",
  "fakeflac-core",
@@ -875,7 +875,7 @@ dependencies = [
 
 [[package]]
 name = "fakeflac-core"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -884,7 +884,7 @@ dependencies = [
 
 [[package]]
 name = "fakeflac-export"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "fakeflac-core",
  "serde",
@@ -893,7 +893,7 @@ dependencies = [
 
 [[package]]
 name = "fakeflac-fs"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "fakeflac-core",
  "serde",
@@ -903,7 +903,7 @@ dependencies = [
 
 [[package]]
 name = "fakeflac-store"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "fakeflac-core",
  "rusqlite",
