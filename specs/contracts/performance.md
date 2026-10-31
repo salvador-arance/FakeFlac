@@ -6,7 +6,7 @@ status: proposed
 
 # Performance budget: what is timed, on what, and where the gate runs (RNF-01)
 
-> RNF-01 asks FakeFlac to "analyse a typical track (40 MB) in under 3 s and a 15-track album in under 20 s on an average machine". This spec turns each word of that sentence into something a test can measure: the fixtures (section 2), what is timed (section 3), the reference machine (section 4), the harness and where its gate runs (section 5), its report (section 6), what the implement stage may change if the budget is missed (section 7) and the acceptance criteria (section 9). It is not a backend ↔ frontend contract: no command, event or type changes (`commands.md` stays at version 7), and no UI changes. Scenarios: `specs/features/performance.feature` (tag `@RNF-01`, with `@RNF-04`, `@RNF-05` and `@RNF-09` where they apply). Decisions cited: ADR-0006 and ADR-0034 (parallel tracks, cooperative cancel), ADR-0010 (window sampling), ADR-0007, ADR-0008 and ADR-0044 (result cache), ADR-0026 (real FFT), ADR-0019 (justfile), ADR-0022 (corpus outside the repository), ADR-0033 (test dependencies). ADR-0046 (`docs/adr/0046-performance-budget-opt-in-std-only-harness-in-release-not-in-ci.md`, proposed) records Q7, Q8 and Q9 (Q14). Planning source: `docs/planning/fakeflac-phases-1-3.es.md` sections 2.4 (RNF-01), 3.9 ("Rendimiento") and 3.11 (`ci-nightly.yml`).
+> RNF-01 asks FakeFlac to "analyse a typical track (40 MB) in under 3 s and a 15-track album in under 20 s on an average machine". This spec turns each word of that sentence into something a test can measure: the fixtures (section 2), what is timed (section 3), the reference machine (section 4), the harness and where its gate runs (section 5), its report (section 6), what the implement stage may change if the budget is missed (section 7) and the acceptance criteria (section 9). It is not a backend ↔ frontend contract: no command, event or type changes (`commands.md` stays at version 7), and no UI changes. Scenarios: `specs/features/performance.feature` (tag `@RNF-01`, with `@RNF-04`, `@RNF-05` and `@RNF-09` where they apply). Decisions cited: ADR-0006 and ADR-0034 (parallel tracks, cooperative cancel), ADR-0010 (window sampling), ADR-0007, ADR-0008 and ADR-0044 (result cache), ADR-0026 (real FFT), ADR-0019 (justfile), ADR-0022 (corpus outside the repository), ADR-0033 (test dependencies). ADR-0046 (`docs/adr/0046-performance-budget-opt-in-std-only-harness-in-release-not-in-ci.md`, accepted) records Q7, Q8 and Q9 (Q14). Planning source: `docs/planning/fakeflac-phases-1-3.es.md` sections 2.4 (RNF-01), 3.9 ("Rendimiento") and 3.11 (`ci-nightly.yml`).
 
 ## 0. Open questions for G1
 
@@ -26,7 +26,7 @@ Each question has a default, and the rest of this spec is written with it. On 20
 | Q10 | **Cancellation latency** (`backend.md` section 5: checking the token between windows "is pending until per-track times are measured (RNF-01)"; the RF-05 scenario "Cancel a running analysis" says "stops within 500 ms"). RNF-01 **measures and reports** it (T9, indicative 500 ms) and does **not** implement cancellation inside the analyzer: that changes the `SpectrumAnalyzer` port (`analyze(path, params)` has no cancel argument today) and every fake of it in the protected tests, so it needs its own spec change (RF-05) at G1, with T9's figures as input | Report only; a miss goes to G1 as an RF-05 change | 3.5; T9; scenario "Cancellation latency is reported" |
 | Q11 | **Spectrogram time** (RF-07: "within 2 seconds", manual today). Report `run::get_spectrogram` on the typical track with RF-07's 2 s as an indicative target (T10)? It decodes the whole file, so it grows with the track, and the harness already has the fixture. IPC (the `u8` matrix sent as a JSON array) and drawing are not timed, so RF-07's own manual check stays | Yes, reported | 3.6; T10; scenario "Spectrogram time is reported" |
 | Q12 | **Levers if the budget is missed** (section 7). The implement stage may only make changes that leave every result identical: the same `AudioProbe` bit for bit, so no new `EXTRACTION_VERSION`, no `DetectionParams` change (window count, segments and FFT size are data) and no new `algorithm_version`. Anything else (seeking instead of decoding the whole stream, more workers, parallel windows inside a track, fewer segments) goes back to G1 with the figures | Yes | 7 |
-| Q13 | **Keeping it a regression guard.** No tool can enforce timing without CI. Add to the code-reviewer's checklist (`.claude/agents/code-reviewer.md`, outside `specs/`, done by the orchestrator) a rule: a diff that touches `crates/fakeflac-audio/src/`, `crates/fakeflac-fs/src/`, `crates/fakeflac-store/src/`, `crates/fakeflac-core/src/analyze_folder.rs` or `src-tauri/src/run.rs` needs the `just perf` report in its PR, and a gated median more than 20 % above the baseline of section 10 (an indicative bound) is flagged for G2? | Yes | 5.4 |
+| Q13 | **Keeping it a regression guard.** No tool can enforce timing without CI. Add to the code-reviewer's checklist (`.claude/agents/code-reviewer.md`, outside `specs/`, done by the orchestrator) a rule: a diff that touches `crates/fakeflac-audio/src/`, `crates/fakeflac-fs/src/`, `crates/fakeflac-store/src/`, `crates/fakeflac-core/src/analyze_folder.rs` or `src-tauri/src/run.rs` needs the `just perf` report in its PR, and a gated median more than 20 % above the reference figures of section 10 (10.1 since #94; an indicative bound) is flagged for G2? | Yes | 5.4 |
 | Q14 | **ADR.** Q7, Q8 and Q9 are recorded in ADR-0046, `docs/adr/0046-performance-budget-opt-in-std-only-harness-in-release-not-in-ci.md` (proposed): "Performance budget: an opt-in, std-only harness in a release build, not timed in CI". It replaces the planning document's `criterion`-in-nightly-CI plan and extends ADR-0019 with the `perf` recipe. Accept it at G1? | Yes | 5; ADR-0046 |
 
 **Decided defaults (not questions).** They follow from approved decisions or from the scope, and are listed so that G1 sees them:
@@ -186,7 +186,7 @@ A folder the run refuses ends the folder mode with `perf: <CODE>` (the `AppError
 
 ### 5.4 Regression guard (Q13)
 
-Once the baseline is recorded (section 10), the gates T1 and T2 are the guard. The code-reviewer asks for a fresh `just perf` report in every PR whose diff touches the paths listed in Q13, and flags a gated median more than 20 % above section 10's (indicative). The gate itself stays absolute: a median at or above the budget fails.
+Once the baseline is recorded (section 10), the gates T1 and T2 are the guard. The code-reviewer asks for a fresh `just perf` report in every PR whose diff touches the paths listed in Q13, and flags a gated median more than 20 % above the reference figures of section 10.1 (indicative). The gate itself stays absolute: a median at or above the budget fails.
 
 ## 6. The report
 
@@ -249,12 +249,12 @@ tracks <total> | errors <errors> | <total size in MB, one decimal> MB | flac <n>
 | run | workers | runs | first ms | median ms | max ms |
 |---|---|---|---|---|---|
 | folder | <worker_count()> | 3 | <first run> | <median of the next 3> | <max of the next 3> |
-| format | tracks | MB | median ms per track | max ms per track |
-|---|---|---|---|---|
-| flac | … | … | … | … |
+| format | tracks | errors | MB | median ms per track | max ms per track |
+|---|---|---|---|---|---|
+| flac | … | … | … | … | … |
 ```
 
-One rule for every count: **every `trackDone` of the sequential pass (5.3 step 2) counts, error tracks included**, grouped by its `info.format`. So `tracks` is the summary's `total`, `errors` is how many of those tracks have an error, the header's per-format counts add up to `tracks`, and each format row's `tracks`, `MB` and per-track times include its error tracks. Sizes are `info.sizeBytes`, which is the scanned file's size (set from the scan for every track, error tracks included), not a value decoded from the stream; the harness reads no file metadata of its own. The header always lists all five formats, with 0 where absent (today `opus` is always 0: the scanner skips `.opus`, ADR-0030). One format row per format with at least one track, in the order flac, wav, mp3, m4a, opus. No path or name appears anywhere (D8). When the run refuses the folder (5.3), the harness output is the two lines `RNF-01 folder report (aggregates only, ADR-0022)` and `build: …` followed by the single line `perf: <CODE>` and nothing else.
+One rule for every count: **every `trackDone` of the sequential pass (5.3 step 2) counts, error tracks included**, grouped by its `info.format`. So `tracks` is the summary's `total`, `errors` is how many of those tracks have an error, the header's per-format counts add up to `tracks`, and each format row's `tracks`, `MB` and per-track times include its error tracks. A format row's `errors` is how many of its tracks have an error, so the rows' `errors` add up to the header's `errors` (this tells which format an error came from without naming the file; the error codes are not printed). Sizes are `info.sizeBytes`, which is the scanned file's size (set from the scan for every track, error tracks included), not a value decoded from the stream; the harness reads no file metadata of its own. The header always lists all five formats, with 0 where absent (today `opus` is always 0: the scanner skips `.opus`, ADR-0030). One format row per format with at least one track, in the order flac, wav, mp3, m4a, opus. No path or name appears anywhere (D8). When the run refuses the folder (5.3), the harness output is the two lines `RNF-01 folder report (aggregates only, ADR-0022)` and `build: …` followed by the single line `perf: <CODE>` and nothing else.
 
 ### 6.3 The `build:` line and the result logic
 
@@ -300,15 +300,57 @@ Allowed levers (examples, all inside `fakeflac-audio` or the use case's plumbing
   - With given values (D2, T0): `check_release_build(true)` returns exactly `Err("perf: figures need a release build (run: just perf)")` and `check_release_build(false)` returns `Ok(())`.
   - With given values (section 2, T5): `check_fixture("typical", 43000000, 38000000, 42000000)` returns exactly `Err("perf: fixture typical is 43000000 bytes, outside [38000000, 42000000]")`; `check_fixture("typical", 38000000, 38000000, 42000000)` and `check_fixture("typical", 42000000, 38000000, 42000000)` return `Ok(())` (the window is inclusive).
   - Time budget (section 2.3): the whole smoke test under 60 s in `just check-app` on the development machine, measured and recorded in the feature PR; not asserted by the test.
-- **T13 (empty state and folder mode).** The smoke test runs the folder mode's code on (a) a temporary folder holding only `notes.txt`, whose harness output is exactly the 3 lines `RNF-01 folder report (aggregates only, ADR-0022)`, `build: debug` and `perf: NO_AUDIO_FOUND` (no `machine:` line, which only the recipe prints; no table), and a failure; and (b) a temporary folder named `Álbum ″Ñandú″ & co` holding the two tiny files, which gives the folder report of section 6.2 with `tracks 2`, `errors 0`, `flac 2, wav 0, mp3 0, m4a 0, opus 0`, one `flac` row, and none of these appears as a substring of the output: the folder name, either file name, and every component of 4 or more characters of the folder's absolute path (split on `\` and `/`, the drive excluded). Both leave the files' size, mtime and content hash unchanged and create nothing in the folder (RNF-05).
+- **T13 (empty state and folder mode).** The smoke test runs the folder mode's code on (a) a temporary folder holding only `notes.txt`, whose harness output is exactly the 3 lines `RNF-01 folder report (aggregates only, ADR-0022)`, `build: debug` and `perf: NO_AUDIO_FOUND` (no `machine:` line, which only the recipe prints; no table), and a failure; and (b) a temporary folder named `Álbum ″Ñandú″ & co` holding the two tiny files, which gives the folder report of section 6.2 with `tracks 2`, `errors 0`, `flac 2, wav 0, mp3 0, m4a 0, opus 0`, one `flac` row whose `tracks` cell is 2 and whose `errors` cell is 0, and none of these appears as a substring of the output: the folder name, either file name, and every component of 4 or more characters of the folder's absolute path (split on `\` and `/`, the drive excluded). And (c) a temporary folder holding the first tiny file and the second one truncated to half its bytes (as in T4), which gives `tracks 2`, `errors 1` and one `flac` row whose `tracks` cell is 2 and whose `errors` cell is 1. All three leave the files' size, mtime and content hash unchanged and create nothing in the folder (RNF-05).
 - **T14 (wiring).** The smoke test reads `justfile` as text and checks: a `perf` recipe exists; its body holds `--release`, `--ignored`, `--test-threads=1`, `--test perf`, `FAKEFLAC_PERF_FOLDER` and `usage: just perf [FOLDER]`; and the recipes `ci`, `check`, `check-fast`, `test` and `check-app` do not name `perf`, checked as a whole word (`\bperf\b`) on each of those recipes' dependency list and body, so that a word such as `performance` does not trip it. A recipe's dependency list is the rest of its header line after the `:`; its body is the indented lines that follow, up to the next non-empty line that is not indented. Comment lines (first non-blank character `#`) are not part of the body. It reads `.github/workflows/ci.yml` and `release.yml` and checks that neither contains `just perf`. Running the recipe with two arguments (exit 2) is checked by hand (M3).
 
 **Manual** (owner, release build; aggregates only in the PR, ADR-0022):
 - **M1 (cold read).** After a reboot, before anything else reads it, `just perf FOLDER` on a real 15-track lossless album (FLAC 16/44.1) from the corpus. Record the `first` figure and the album's size and track count. Indicative: `first` < 20000 ms.
 - **M2 (real formats, B11).** `just perf FOLDER` on a folder of at least 200 tracks that holds FLAC, WAV, MP3 and M4A files. Record the folder report. Indicative: the median per track of every format < 3000 ms. This is lossy-source.md B11's report for MP3 and M4A (D10).
-- **M3 (the gate on record).** The report of `just perf` on the owner's machine, with the machine line the recipe prints before it, is pasted into the feature PR, and section 10 is updated with it if the figures differ from the baseline by more than 20 %. `just perf a b` prints `usage: just perf [FOLDER]` and exits 2.
+- **M3 (the gate on record).** The report of `just perf` on the owner's machine, with the machine line the recipe prints before it, is pasted into the feature PR, and section 10.1 is updated with it if the figures differ from the reference figures by more than 20 %. `just perf a b` prints `usage: just perf [FOLDER]` and exits 2.
 
-## 10. Baseline (measured before G1)
+## 10. Baseline and reference figures
+
+### 10.1 Reference figures (`just perf`, #94)
+
+The figures the regression guard compares against (5.4, M3). They replace 10.2 as the reference because T1 came out about 40 % faster than 10.2's (162 against 270 ms), above M3's 20 %: the harness writes its fixtures with `flacenc` and Gaussian noise, while 10.2 used `ffmpeg` and uniform noise, so FLAC does less decoding work per byte. Measured on 2026-10-31 on `feat/RNF-01` (merged as `c3a8389`), with the machine of 10.2:
+
+```
+machine: AMD Ryzen 7 5800X 8-Core Processor | 16 logical CPUs | 31.9 GB RAM | Windows 10.0.26300 (Windows 11 Pro)
+workers: app 15, reference 7, gated album 7
+fixtures: typical 39999729 B 15872000 frames, hires 41289467 B 8638464 frames, wav 40000044 B 10000000 frames
+```
+
+| id | case | cache | workers | first ms | median ms | max ms | target ms | result |
+|---|---|---|---|---|---|---|---|---|
+| T1 | typical track | off | 15 | 165 | 162 | 165 | 3000 | pass |
+| T1 | typical track | cold | 15 | 186 | 186 | 193 | 3000 | pass |
+| T2 | album | off | 7 | 516 | 519 | 527 | 20000 | pass |
+| T2 | album | cold | 7 | 542 | 564 | 580 | 20000 | pass |
+| T4 | album, one corrupt track | off | 7 | 477 | 477 | 509 | 20000 | pass |
+| T6 | album | warm | 7 | 3 | 4 | 4 | 52 | met |
+| T7 | album | off | 15 | 321 | 321 | 321 | 20000 | met |
+| T8 | hires track | off | 15 | 135 | 134 | 135 | 3000 | met |
+| T8 | wav track | off | 15 | 49 | 48 | 50 | 3000 | met |
+| T9 | cancel latency, album | off | 7 | 23 | 27 | 45 | 500 | met |
+| T10 | spectrogram, typical track | - | - | 358 | 358 | 392 | 2000 | met |
+| T11 | album, sequential | off | 1 | 2546 | 2546 | 2546 | - | - |
+
+T11 per track: median 170 ms, max 175 ms. `result: pass`.
+
+**Manual checks (owner, 2026-10-31, `main` at `2a44206`, release build, aggregates only, ADR-0022):**
+- **M1 (cold read):** a real 15-track FLAC 16/44.1 album of 198.4 MB from the corpus, after a reboot: `first` 381 ms, median of the next 3 383 ms (indicative < 20000 ms: met). On this NVMe SSD the cold read does not show: `first` is within the spread of the warm runs.
+- **M2 (real formats, B11):** a folder of 210 tracks (3120.7 MB) outside the repository and the corpus; folder run with 15 workers: `first` 5421 ms, median 5362 ms. Per track, sequential (indicative < 3000 ms: met for every format):
+
+  | format | tracks | MB | median ms per track | max ms per track |
+  |---|---|---|---|---|
+  | flac | 80 | 1696.6 | 171 | 790 |
+  | wav | 20 | 620.8 | 36 | 62 |
+  | mp3 | 80 | 576.5 | 288 | 527 |
+  | m4a | 30 | 226.7 | 181 | 365 |
+
+  `errors 1`: a FLAC whose stream is damaged (`ffmpeg` also fails to decode it: `invalid residual`), reported as `corruptStream`, with the run continuing (RNF-04). The report did not say which format it came from, which is why section 6.2 now has an `errors` column per format.
+
+### 10.2 Baseline (measured before G1)
 
 Measured on 2026-10-31 on `main` at `831786d` (detection v7, `EXTRACTION_VERSION` 2), release profile of the workspace (`lto`, `codegen-units = 1`, `opt-level = "s"`), with a throwaway harness under `target/` that follows sections 2 and 3, with these differences:
 - the fixtures were written by `ffmpeg` (its FLAC encoder, uniform white noise from `anoisesrc`), not by `flacenc` with Gaussian noise; the sizes and lengths are inside section 2's windows;
@@ -318,7 +360,7 @@ Measured on 2026-10-31 on `main` at `831786d` (detection v7, `EXTRACTION_VERSION
 
 | Figure | Value |
 |---|---|
-| Machine line | AMD Ryzen 7 5800X 8-Core Processor \| 16 logical CPUs \| 31.9 GB RAM \| Windows 11 Pro (10.0.26300); NVMe SSD |
+| Machine line | AMD Ryzen 7 5800X 8-Core Processor \| 16 logical CPUs \| 31.9 GB RAM \| Windows 10.0.26300 (Windows 11 Pro); NVMe SSD |
 | `worker_count()` on that machine | 15 (gated album: 7) |
 | `typical` size, frames, verdict | 40 048 151 B (uniform amplitude 0.012, about −43 dBFS RMS), 15 872 000 frames, `real` |
 | `hires`, `wav` sizes | 41 764 776 B (8 638 464 frames, 24-bit/96 kHz); 40 000 078 B (10 000 000 frames) |
@@ -337,7 +379,7 @@ Measured on 2026-10-31 on `main` at `831786d` (detection v7, `EXTRACTION_VERSION
 
 Outcome: **meets T1 and T2 in both modes** (about 11× under 3 s, about 23× under 20 s), so the feature PR adds the harness and the recipe only (section 7, first paragraph). The time grows with the track's length, because the adapter decodes the whole stream (section 7). Not measured: a spinning disk, and a genuinely slower 4-core host.
 
-## 11. Edits to approved specs and docs (proposed in this PR)
+## 11. Edits to approved specs and docs (proposed in #92)
 
 - `requirements/RNF-01.md`: status `specified` and its measurable acceptance.
 - `traceability.md`: the RNF-01 row.
@@ -348,3 +390,9 @@ Outcome: **meets T1 and T2 in both modes** (about 11× under 3 s, about 23× und
   - `.claude/agents/code-reviewer.md`: the Q13 rule;
   - ADR-0046, `docs/adr/0046-performance-budget-opt-in-std-only-harness-in-release-not-in-ci.md` (Q14; already written, status proposed, with its row in `docs/adr/README.md`); its status becomes accepted if G1 accepts Q14.
 - ADR-0010 is not edited: its decision ("analysis by sampling representative windows") holds; the "with seek" detail is noted in section 7 and in `backend.md`.
+
+## 12. Revision after #94 (this PR)
+
+- **Section 10:** the `just perf` figures of #94 become the reference (10.1), with the results of M1 and M2; the pre-G1 baseline stays as 10.2. The machine line of 10.2 follows 6.1's order (`Windows <os.release()> (<os.version()>)`), as the recipe prints it. 5.4, M3 and Q13's bound point to 10.1.
+- **Section 6.2:** the format table of the folder report gets an `errors` column after `tracks`. T13 (b) checks it is 0 and a new T13 (c) checks it is 1 on a folder with one truncated track; scenarios "A folder whose path has spaces, an ampersand and Unicode characters is timed" (changed) and "The folder report says which format an error came from" (new).
+- **Layers (after G1):** a feature PR on `feat/RNF-01-errors`. The harness is test code (section 8), so the test stage makes the whole change in `src-tauri/tests/perf.rs`: first the checks of T13 (b) and (c), red against today's format rows, then the `errors` column, which turns them green. The implement stage has nothing to change and only confirms `just check-app` is green. No production code, bindings or `commands.md` change.

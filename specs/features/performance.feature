@@ -135,6 +135,13 @@ Feature: Performance budget for a typical track and a 15-track album (H2)
     And "08 – Canción ‘x’.flac" has verdict "error" with the error "corruptStream"
     And the 14 other tracks have verdict "real"
 
+  @RNF-04
+  Scenario: The folder report says which format an error came from
+    Given a temporary folder holding the first tiny file and the second one truncated to half its bytes
+    When the smoke test runs the folder mode on it
+    Then the folder report shows "tracks 2" and "errors 1"
+    And its "flac" format row has tracks 2 and errors 1
+
   # --- Unicode names (RNF-09) ---
 
   @RNF-09
@@ -149,7 +156,7 @@ Feature: Performance budget for a typical track and a 15-track album (H2)
     Given a temporary folder "Álbum ″Ñandú″ & co" holding the tiny set
     When the smoke test runs the folder mode on it
     Then the folder report shows "tracks 2", "errors 0" and "flac 2, wav 0, mp3 0, m4a 0, opus 0"
-    And it has one format row, for "flac"
+    And it has one format row, for "flac", with tracks 2 and errors 0
     And the output contains neither the folder name, nor either file name, nor any component of 4 or more characters of the folder's absolute path
 
   # --- Result cache (RF-11) ---
