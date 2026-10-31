@@ -2,6 +2,43 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-31 - RNF-01 implemented (opt-in performance harness), feature PR #94 ready for G2
+
+**Done**
+- #93 (spec handoff) merged.
+- `/feature RNF-01` on `feat/RNF-01`:
+  - `174c65e` build: the `flacenc` dev-dependency of `src-tauri`. It went before the tests, so T14 was the only red.
+  - `f65c67f` test: `src-tauri/tests/perf.rs`, with the timed suite (ignored), the folder mode and the smoke tests T12–T14.
+  - `22cdc8b` feat: the `just perf [FOLDER]` recipe.
+  - `2af44a3` docs: the `CLAUDE.md` command list and code-reviewer item 6 (the Q13 rule).
+- `just perf`: `result: pass`. T1 162 ms, T2 519 ms with 7 workers, T10 spectrogram 358 ms, T9 cancel 27 ms. The smoke test takes about 6 s in debug.
+- Review: nothing blocking. `just ci` green. `privacy-check`: 0 matches.
+
+**Pending**
+- G2: review and merge #94.
+- A small spec PR to refresh section 10 with the `just perf` figures. T1 is about 40 % faster than the ffmpeg-based baseline, which is above M3's 20 %. Align the machine-line order in the same PR.
+- The `hires` level is −45.0 dBFS, the spec's floor. A `flacenc` upgrade may push the file out of its window and need a spec change; T5 would fail loudly.
+- Review follow-ups:
+  - T8 checks more than "not `error`";
+  - `just perf ""` runs folder mode on an empty path;
+  - add a comment on re-picking `HIRES_LEVEL_DBFS`.
+- Owner's manual checks M1 (cold read after a reboot on a real album) and M2 (a mixed folder of 200+ tracks).
+- Carried over from the blocks below:
+  - the spectrogram of very long files (3.2 s against RF-07's 2 s);
+  - cancel latency on long files;
+  - RNF-11 I4 and M3–M7;
+  - RF-13 and the draft RNFs;
+  - the RF-08 manual checks;
+  - the RF-16 K5 wording;
+  - the 48 kHz MP3 check;
+  - Dependabot alert #2;
+  - `target/perf-harness/`, which the owner may delete.
+
+**Blockers / questions for the human**
+- None.
+
+**Next step:** after G2, `just prune-branches`; then the owner picks the next requirement (Opus after the ADR-0030 spike, RF-13 i18n, or another draft RNF).
+
 ## 2026-10-31 - RNF-01 spec approved (performance budget), ADR-0046 accepted
 
 **Done**

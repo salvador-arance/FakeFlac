@@ -827,6 +827,7 @@ dependencies = [
  "fakeflac-export",
  "fakeflac-fs",
  "fakeflac-store",
+ "flacenc",
  "hound",
  "rand",
  "rand_chacha",
