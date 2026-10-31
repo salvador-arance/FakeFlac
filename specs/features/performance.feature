@@ -261,6 +261,19 @@ Feature: Performance budget for a typical track and a 15-track album (H2)
     Then it prints "usage: just perf [FOLDER]"
     And it exits with status 2
 
+  Scenario Outline: just perf refuses an empty folder argument
+    Checked by hand (performance.md M3). An empty argument, for example from an
+    unset variable, must not run the folder mode on an empty path.
+    When I run "just perf" with the one argument <argument>
+    Then it prints "usage: just perf [FOLDER]"
+    And it prints no "machine:" line and starts no cargo build
+    And it exits with status 2
+
+    Examples:
+      | argument |
+      | ""       |
+      | " "      |
+
   Scenario: The gate is opt-in and never runs in CI
     When the smoke test reads the justfile and the workflows as text
     Then the justfile has a "perf" recipe whose body holds "--release", "--ignored", "--test-threads=1", "--test perf", "FAKEFLAC_PERF_FOLDER" and "usage: just perf [FOLDER]"
