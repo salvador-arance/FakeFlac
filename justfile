@@ -108,6 +108,27 @@ calibrate *args:
     const r = require('node:child_process').spawnSync('cargo', ['run', '--release', '-q', '-p', 'fakeflac-calibrate', '--', 'calibrate', ...process.argv.slice(2)], { stdio: 'inherit' })
     process.exit(r.status ?? 1)
 
+# RNF-01 performance harness (specs/contracts/performance.md). Release build, opt-in: not part of
+# check, ci or any workflow. With FOLDER, also times that folder and reports aggregates only.
+[positional-arguments]
+perf *args:
+    #!/usr/bin/env node
+    const os = require('node:os')
+    const args = process.argv.slice(2)
+    if (args.length > 1) {
+      console.error('usage: just perf [FOLDER]')
+      process.exit(2)
+    }
+    const cpus = os.cpus()
+    const model = cpus.length > 0 ? cpus[0].model.trim() : 'unknown'
+    const ramGb = (os.totalmem() / 1024 ** 3).toFixed(1)
+    console.log(`machine: ${model} | ${cpus.length} logical CPUs | ${ramGb} GB RAM | Windows ${os.release()} (${os.version()})`)
+    const env = { ...process.env }
+    if (args.length === 1) env.FAKEFLAC_PERF_FOLDER = args[0]
+    const cargoArgs = 'test --release -p fakeflac --test perf -- --ignored --nocapture --test-threads=1'.split(' ')
+    const r = require('node:child_process').spawnSync('cargo', cargoArgs, { stdio: 'inherit', env })
+    process.exit(r.status === 0 ? 0 : 1)
+
 # Search the branch diff for the corpus paths and names (ADR-022): privacy-check [--base REF]
 [positional-arguments]
 privacy-check *args:
