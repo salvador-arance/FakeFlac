@@ -36,7 +36,8 @@ Feature: Performance budget for a typical track and a 15-track album (H2)
   The "machine:" line is printed only by the "just perf" recipe, before the
   harness runs; it is not part of the harness output, so the smoke test and a
   direct "cargo test ... --ignored" run never show it.
-  "A figure" is the median of 5 measured runs after 1 warm-up run, in whole
+  "A figure" (except the single-run report rows T7 and T11) is the median of
+  5 measured runs after 1 warm-up run, in whole
   milliseconds; the first and the maximum run are reported with it.
   Cache modes (performance.md 3.2): "off" uses no result cache; "cold" uses a
   new empty cache file in the test's temporary folder for every run; "warm"
