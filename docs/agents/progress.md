@@ -2,6 +2,37 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-10-31 - RNF-01 section 13 implemented (`just perf` refuses an empty argument), feature PR ready for G2
+
+**Done**
+- #97 and #98 merged; `just prune-branches` removed their branches and the `spec-rnf01` worktree.
+- `/feature RNF-01` on `feat/RNF-01-perf-args`:
+  - `7504dd8` test: the `HIRES_LEVEL_DBFS` comment follows section 2.3's −50 dBFS floor. No check changes and no red, as section 13 says.
+  - `533658f` feat: the `perf` recipe treats one empty or whitespace-only argument as a usage error. It prints `usage: just perf [FOLDER]` and exits 2, before the machine line and without starting cargo. A non-blank folder argument is still passed unchanged.
+  - The implementer and the reviewer ran M3 from Git Bash: `just perf ""`, `" "`, a tab, and `a b` all exit 2 with the usage line and no `machine:` line.
+  - Review: nothing blocking. Its one note, the `hires` size in 10.2, is not stale: 10.2 is the pre-G1 baseline written by `ffmpeg`.
+  - `just ci` green. `traceability.md` RNF-01 row: section 13 done.
+- With this, every #94 review follow-up is closed.
+
+**Pending**
+- G2 for this PR.
+- The owner may repeat M3 from PowerShell.
+- The owner's manual checks continue with section B (RNF-11, first release: M2–M7) in `docs/planning/comprobaciones-manuales.md`.
+- Carried over:
+  - the spectrogram of very long files (3.2 s against RF-07's 2 s);
+  - cancel latency on long files;
+  - RF-13 and the draft RNFs;
+  - the RF-08 manual checks;
+  - the RF-16 K5 wording;
+  - the 48 kHz MP3 check;
+  - Dependabot alert #2;
+  - `target/perf-harness/`, which the owner may delete.
+
+**Blockers / questions for the human**
+- None.
+
+**Next step:** after G2, `just prune-branches`; then the owner's release checks (section B), or the owner picks the next requirement (Opus after the ADR-0030 spike, RF-13 i18n, or another draft RNF).
+
 ## 2026-10-31 - RNF-01 M1 and M2 done; per-format errors in the folder report (#98) and the last #94 follow-ups (#97) at the gates
 
 **Done**

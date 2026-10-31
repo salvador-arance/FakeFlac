@@ -50,12 +50,12 @@ const TYPICAL_LEVEL_DBFS: f64 = -42.5;
 /// `hires` (2.3): 2109 blocks, 89.984 s at 96 kHz.
 const HIRES_FRAMES: u64 = 8_638_464;
 /// RMS level of `hires`' Gaussian noise (dBFS, full scale = 8388607). Picked once by the test
-/// stage: `flacenc` 0.5.1 codes 24-bit noise less tightly than the spec's indicative −39 dBFS
-/// assumed (−39 dBFS gives about 51 MB), so only about −45 to −44.6 dBFS keeps the size in the
-/// 38–42 MB window; −45 dBFS, the floor of section 2.3 ("at or above −45 dBFS"), gives 41.29 MB.
-/// After a `flacenc` upgrade T5 stops before any timing if the size leaves the window; then
-/// re-pick the level at or above −45 dBFS so the size is back inside, or, if no such level
-/// exists, change the spec at G1.
+/// stage: with `flacenc` 0.5.1, −45 dBFS gives 41 289 467 bytes, and only about −45 to
+/// −44.6 dBFS keeps the size in the 38–42 MB window (−39 dBFS gives about 51 MB). Section 2.3
+/// allows any level at or above −50 dBFS (10 dB above `silence_dbfs`, −60), so −45 is inside
+/// the range. After a `flacenc` upgrade that moves the size out of the window, T5 stops before
+/// any timing; then re-pick the level at or above −50 dBFS (about 2 MB per 6 dB on this
+/// fixture) so the size is back inside, or, if no such level exists, change the spec at G1.
 const HIRES_LEVEL_DBFS: f64 = -45.0;
 /// `wav` (2.3): 226.757 s at 44.1 kHz, 40 000 000 bytes of samples.
 const WAV_FRAMES: u64 = 10_000_000;

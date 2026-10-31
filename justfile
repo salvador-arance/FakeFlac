@@ -115,7 +115,7 @@ calibrate *args:
 perf *args:
     const os = require('node:os')
     const args = process.argv.slice(2)
-    if (args.length > 1) {
+    if (args.length > 1 || (args.length === 1 && args[0].trim() === '')) {
       console.error('usage: just perf [FOLDER]')
       process.exit(2)
     }
