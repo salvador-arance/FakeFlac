@@ -28,6 +28,7 @@ specta-typescript = "0.0.12"
 tauri-plugin-dialog = "2.7.3"
 
 [dev-dependencies]
+flacenc = "0.5.1"
 hound = "3.5.1"
 rand = "0.10.3"
 rand_chacha = "0.10.0"
