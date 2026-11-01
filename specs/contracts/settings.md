@@ -11,17 +11,19 @@ chat on 2026-11-01. The Settings object is limited to language. Historical propo
 sampling controls, editable DetectionParams and cache controls require a separate spec.
 Architecture decision: ADR-0049. UI: `../ui/language-settings.md`.
 
-## 1. Decisions for G1
+## 1. Owner-approved Q1-Q4 decisions
 
-| ID | Decision | Proposed answer |
+| ID | Decision | Approved answer (2026-11-01) |
 |---|---|---|
-| Q1 | Initial language and operating-system detection | English when no valid saved setting exists; no OS/browser language detection and no Auto option. |
+| Q1 | Initial language and operating-system detection | Saved preference first. Only when the file is missing, choose the first supported language in the Windows user's ordered language preferences; fall back to English. No Auto option. |
 | Q2 | Apply a selection immediately or on Save | A modal draft with Save and Cancel. Apply the language only after persistence succeeds; no restart. Available during an analysis. |
-| Q3 | Storage and recovery | The versioned JSON and failure rules in sections 3–4; invalid files are preserved on read and may be replaced by explicit Save; newer files are read-only. |
+| Q3 | Storage and recovery | The versioned JSON and failure rules in sections 3–4; invalid files are preserved on read and may be replaced by explicit Save; observed newer versions are read-only. No synchronization between independent processes; the pre-save version check is not a cross-process guarantee. |
 | Q4 | Translation and numeric presentation | The full catalogue in `../ui/translations.md`, including singular forms; keep existing plain digits, decimal point, units and duration notation in both languages. Native Windows dialogs retain their OS language. |
 
-These four answers are proposals, not recorded owner approvals. Scope is decided; G1 must
-approve these answers or amend the corresponding contract, UI and scenarios together.
+The owner approved these four recommendations in chat ("de acuerdo") on 2026-11-01,
+including the Q1 change from unconditional English and the Q3 concurrency clarification.
+This records decision approval; PR #107 still requires human review and merge before
+`/feature RF-13`. No production behavior is implemented by this specification PR.
 
 ## 2. Commands and types
 
@@ -82,7 +84,7 @@ else that fails schema 1 is invalid (including zero/negative/noninteger versions
 
 | Condition at initial load | Settings | loadStatus | Filesystem change |
 |---|---|---|---|
-| No file or no config directory yet | English | `default` | none |
+| No file or no config directory yet | first supported Windows preference, otherwise English | `default` | none |
 | Valid schema 1 | saved language | `loaded` | none |
 | Invalid JSON/schema/language | English | `invalid` | none |
 | Directory resolution or file read fails, including file path being a directory | English | `unavailable` | none |
@@ -91,6 +93,21 @@ else that fails schema 1 is invalid (including zero/negative/noninteger versions
 Loading never creates, truncates, renames or deletes anything. There is no migration from a
 previous shipped schema: RF-13 is the first persisted settings version. Unicode app-data
 paths are supported. A missing setting does not create a file until an explicit Save.
+
+For a missing file, inspect the current Windows user's ordered preferred UI languages once
+during settings initialization. Match each language tag's primary subtag case-insensitively:
+`es`, `es-ES` and `es-MX` select Spanish; `en`, `en-US` and `en-GB` select English. Skip
+unsupported tags and select the first supported entry in preference order. An empty,
+unavailable or wholly unsupported list falls back silently to English. Tests inject this
+list rather than depend on the test host's language. The initial detected choice is not
+written until Save. Valid saved settings always take priority, even after Windows preferences
+change. Invalid, unreadable and newer settings retain their English warning fallback from
+the table; Windows detection does not apply to those recovery cases. There is no browser
+language source, Auto selection or live tracking of Windows language changes.
+The native language-list source belongs to a safe backend adapter, separate from JSON
+storage. This behavior approval does not approve a new dependency: any required library
+must receive explicit owner approval and an ADR amendment before implementation. Do not
+silently replace the Windows source with browser language or a runtime PowerShell helper.
 
 ## 4. Saving and recovery
 
@@ -119,12 +136,16 @@ recovering an invalid one. Backend calls persist it by the same procedure. No fi
 cross-process live synchronization is promised: each process loads its own snapshot; among
 successful writes of supported files the last replacement wins on the next launch. Atomic
 replacement protects complete-file publication, not an OS/power-loss durability guarantee.
+The newer-version guard applies to the file observed at load or the pre-save check. Another
+process can replace that file between the check and atomic replacement; without cross-process
+coordination this release does not guarantee preservation of that intervening replacement.
+Failure preservation likewise assumes another process has not modified the destination.
 
 ## 5. Contract changes and implementation boundaries
 
 Contract version 7 becomes 8 only for the new commands/types and the two AppError codes.
 Analysis, cache, CSV and spectrogram data remain locale-independent. Backend storage belongs
-to the Tauri adapter (no core I/O, no new workspace dependency). The core's shared error enum
+to the Tauri adapter (no core I/O; no new dependency approved by this spec). The core's shared error enum
 may gain the two codes solely to keep existing error conversion/generated bindings coherent.
 
 `../ui/language-settings.md` section 6 lists the approved changes to existing UI expectations

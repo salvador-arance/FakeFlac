@@ -4,15 +4,28 @@ Feature: Spanish and English interface with a persistent language preference
   Contract: specs/contracts/settings.md (proposed version 8).
   UI and text: specs/ui/language-settings.md and specs/ui/translations.md.
 
-  Scenario: First launch without settings uses English without creating a file
+  Scenario Outline: First launch detects Windows language without creating a file
     Given the app configuration directory has no settings file
+    And the Windows user language preferences are "<preferences>"
     When the app initializes its settings
-    Then get_settings returns language "en" and loadStatus "default"
-    And the main screen is in English with document language "en"
+    Then get_settings returns language "<language>" and loadStatus "default"
+    And the main screen and document language use "<language>"
     And initialization creates no settings file or directory
+    Examples:
+      | preferences       | language |
+      | es-ES,en-US       | es       |
+      | en-GB,es-MX       | en       |
+      | fr-FR,es-MX,en-US | es       |
+      | ES-mx            | es       |
+      | en               | en       |
+      | es               | es       |
+      | fr-FR,ja-JP       | en       |
+      | empty            | en       |
+      | unavailable      | en       |
 
   Scenario: Restore a saved language before enabling the main screen
     Given the settings file contains schemaVersion 1 and language "es"
+    And the Windows user language preferences are "en-US"
     When the app mounts and its settings read is pending
     Then analysis and Settings actions are disabled
     And the language-neutral busy placeholder is shown
@@ -76,6 +89,7 @@ Feature: Spanish and English interface with a persistent language preference
   @RNF-04
   Scenario Outline: Invalid persisted settings fall back without modifying the file
     Given the settings file contains "<content>"
+    And the Windows user language preferences are "es-ES"
     When settings initialize
     Then the language is "en" and loadStatus is "invalid"
     And the settings file is byte-identical
@@ -96,6 +110,7 @@ Feature: Spanish and English interface with a persistent language preference
   @RNF-04
   Scenario Outline: An unreadable configuration does not prevent analysis
     Given settings initialization encounters "<failure>"
+    And the Windows user language preferences are "es-ES"
     When the main screen initializes
     Then English is active with the unavailable settings warning
     And folder analysis and its normal errors remain usable
@@ -109,6 +124,7 @@ Feature: Spanish and English interface with a persistent language preference
 
   Scenario: A newer settings version is preserved
     Given the settings file is a valid JSON object with schemaVersion 2
+    And the Windows user language preferences are "es-ES"
     When settings initialize
     Then the language is "en" and loadStatus is "newerVersion"
     And Settings explains the newer version with its select and Save disabled
@@ -119,7 +135,9 @@ Feature: Spanish and English interface with a persistent language preference
   Scenario: A newer file appearing after startup is not overwritten
     Given settings initialized from a valid schema 1 file
     And another process has replaced it with a valid schema 2 file
+    And no other process modifies it during the save attempt
     When I Save a language change
+    And the pre-save version check observes that schema 2 file
     Then the command returns SETTINGS_READ_ONLY
     And the newer file and active language are unchanged
     And the panel shows the read-only error and permits Close

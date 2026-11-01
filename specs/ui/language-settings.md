@@ -7,8 +7,9 @@ status: proposed
 # Spanish, English and the language Settings panel
 
 Contract and G1 questions: `../contracts/settings.md`. Texts: `translations.md`. Scope was
-selected by the owner on 2026-11-01: bilingual UI with a persistent preference. All behavior
-below is proposed for G1; implementation follows approval and independent tests.
+selected by the owner on 2026-11-01: bilingual UI with a persistent preference. Q1-Q4 were
+approved in chat on that date, including Windows language detection only when no settings
+file exists. Implementation follows human merge and independent tests.
 
 ## 1. Startup and language state
 
@@ -29,6 +30,8 @@ strings as the only state for an error/export/cache notice. No restart, remount 
 new run or extra spectrogram request is needed to translate the current view.
 
 Missing/invalid/unavailable/newer settings are the contract's cases. Missing is silent. For
+missing settings, use the detected Windows preference or English fallback returned by the
+backend; do not independently detect browser language. For
 the other three, show their localized warning as a status-bar notice until another existing
 notice replaces it, and always show it inside Settings while its snapshot has that status.
 The warning never replaces an analysis error. A successful Save clears the settings warning.
@@ -115,6 +118,8 @@ tooltips and accessible names retain their complete translation.
   Unknown keys retain the existing last-resort key behavior. Audit app-owned literals outside
   the catalogue, including status sentences, column labels, window buttons and the toolbar name.
 - **L2 persistence:** backend tests cover every row of the loading table, supported languages,
+  ordered Windows language lists (regional tags, case, unsupported entries, empty/unavailable
+  source), saved-language precedence after an OS language change, recovery that stays English,
   invalid IPC input, Unicode settings roots, and failures at write/flush/replace with a fake
   filesystem or narrow injected seam. Failed saves preserve byte-identical existing files;
   a second initialized settings owner reads a successfully saved value. Audio fixture bytes,

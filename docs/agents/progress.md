@@ -2,6 +2,23 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-01 - RF-13 Q1-Q4 approved in chat
+
+**Done**
+- At the owner's request, a read-only subagent evaluated Q1-Q4. The owner approved its four recommendations ("de acuerdo").
+- Updated PR #107's specification: valid saved language first; missing file uses the first supported Windows user language preference, with English fallback. Regional tags and unsupported/empty/unavailable lists are defined and covered by deterministic scenario examples. Recovery from invalid, unavailable or newer settings still uses English with a warning.
+- Recorded approval of Save/Cancel, JSON persistence and recovery, complete translations and stable technical formats. Clarified that the newer-version check protects the observed file without synchronization between independent processes; ADR-0049 matches this limitation.
+- The native Windows language-list source is a separate safe backend adapter; any required dependency needs explicit owner approval and an ADR amendment before implementation. Q1 approval does not implicitly approve a library or runtime helper.
+
+**Pending**
+- Human review and merge of [PR #107](https://github.com/salvador-arance/FakeFlac/pull/107). ADR-0049 remains proposed until merge. No production code or executable tests changed.
+- After merge: handoff/ADR status reconciliation, then `/feature RF-13` with an independent test stage.
+
+**Blockers / questions for the human**
+- Q1-Q4 are answered and approved. Human merge remains outstanding.
+
+**Next step:** review and merge PR #107.
+
 ## 2026-11-01 - RF-13 bilingual interface and persistent preference specification
 
 **Done**
