@@ -2,6 +2,36 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-01 - Opus decoder spike; ADR-0047 proposed (#102)
+
+**Done**
+- #101 merged. No branch was left to prune.
+- The owner picked Opus. The ADR-0030 spike ran in a throwaway crate under `target/opus-spike/` (not committed). It compared five decoders against libopus's float decode on 10 synthetic Ogg Opus files, plus 72 020 corrupt packets per decoder and the binary size of each. Results are in ADR-0047.
+  - `rusty-opus` 1.0.2, `opus-rs` 0.1.40 and `opus-pure` 0.2.2 match libopus (about 126 dB SNR) and never panicked.
+  - `opus-decoder` was rejected: 16-bit output and 8.6 s per 30 s.
+  - libopus in C needs cmake.
+- The owner chose **`rusty-opus` `=1.0.2`**. #102 (`spec/RF-14-opus`) holds:
+  - ADR-0047 (proposed): decoder; the Ogg layer read by the adapter; Opus fixtures encoded in test support with the same crate; family 0 only; `EXTRACTION_VERSION` stays 2;
+  - the ADR index;
+  - the `overview.md` and `backend.md` rows.
+
+  `just check` is green.
+
+**Pending**
+- G1 for #102 (questions 1–3 in its description).
+- After G1, the Opus spec PR (`/new-spec`, RF-14/RF-15). It:
+  - moves `specs/pending/opus.feature` to `specs/features/`;
+  - adds the Opus `[lossy.cutoffs]` rows, which means a new params version, calibrated with the calibration tool's libopus cascades;
+  - fills in the `<to be specified>` values;
+  - specifies the Ogg reader's `corruptStream` cases and the fixture writer.
+- `target/opus-spike/` can be deleted after G1.
+- Carried over: the same list as the 2026-10-31 block.
+
+**Blockers / questions for the human**
+- G1 on ADR-0047, mainly the supply-chain profile of `rusty-opus`.
+
+**Next step:** after G1 on #102, `just prune-branches`, then `/new-spec RF-14` for Opus.
+
 ## 2026-10-31 - First release v0.1.0 published; RNF-11 M1–M7 all passed
 
 **Done**
