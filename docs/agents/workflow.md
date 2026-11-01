@@ -49,4 +49,4 @@ requirement RF-xx
 
 ## Hooks
 
-`SessionStart` context · `PreToolUse` guards (`guard-protected`, `guard-bash`, `guard-agents`) · `PostToolUse` format · `Stop`/`SubagentStop` `just check-fast` (skipped in stages `spec` and `test`). Hooks have their own tests: `node --test ".claude/hooks/*.test.mjs"`. `guard-bash` matches the command text, so a commit message or `echo` that quotes a blocked command (for example `gh release create`) is blocked too: reword it or use `git commit -F <file>`.
+`SessionStart` context · `PreToolUse` guards (`guard-protected`, `guard-bash`, `guard-agents`) · `PostToolUse` format · `Stop`/`SubagentStop` `just check-fast` (skipped in stages `spec` and `test`). Codex hook commands resolve their scripts from `git rev-parse --show-toplevel`, so they work across checkouts and when the session starts in a subdirectory (no machine-specific paths). Hooks have their own tests: `node --test ".claude/hooks/*.test.mjs"`. `guard-bash` matches the command text, so a commit message or `echo` that quotes a blocked command (for example `gh release create`) is blocked too: reword it or use `git commit -F <file>`.

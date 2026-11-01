@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node 'c:\\Workspaces\\FakeFlac\\.codex\\hooks\\guard-protected.mjs'"
+            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/guard-protected.mjs\""
           }
         ]
       },
@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node 'c:\\Workspaces\\FakeFlac\\.codex\\hooks\\guard-bash.mjs'"
+            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/guard-bash.mjs\""
           }
         ]
       },
@@ -24,7 +24,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node 'c:\\Workspaces\\FakeFlac\\.codex\\hooks\\guard-agents.mjs'"
+            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/guard-agents.mjs\""
           }
         ]
       }
@@ -35,7 +35,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node 'c:\\Workspaces\\FakeFlac\\.codex\\hooks\\format.mjs'"
+            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/format.mjs\""
           }
         ]
       }
@@ -45,7 +45,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node 'c:\\Workspaces\\FakeFlac\\.codex\\hooks\\session-context.mjs'"
+            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/session-context.mjs\""
           }
         ]
       }
@@ -55,7 +55,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node 'c:\\Workspaces\\FakeFlac\\.codex\\hooks\\stop-check.mjs'",
+            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/stop-check.mjs\"",
             "timeout": 300
           }
         ]
@@ -66,7 +66,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node 'c:\\Workspaces\\FakeFlac\\.codex\\hooks\\stop-check.mjs'",
+            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/stop-check.mjs\"",
             "timeout": 300
           }
         ]
