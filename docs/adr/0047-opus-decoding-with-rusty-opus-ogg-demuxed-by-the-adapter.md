@@ -57,7 +57,7 @@ Encoder check (for test files): the encoders of `rusty-opus`, `opus-rs` and `opu
 3. **Opus test files are encoded in test support with `rusty-opus`'s own encoder** (`crates/fakeflac-audio/tests/common/`), from the seeded synthetic signals, and written to Ogg by a small test-support writer. The writer is not the adapter's reader, so a reader bug is not hidden by a matching writer bug. This is a change to ADR-0040 point 5, for Opus only: no CELT bitstream writer is written. A real encoder is acceptable here because:
    - it adds no dependency (the crate is already a production dependency);
    - its bandwidth is set explicitly (`max_bandwidth`), so a fixture's edge is known;
-   - its output does not depend on the CPU's SIMD level. The spike found it byte-identical with and without SIMD, and the test stage confirms it with a test.
+   - its output does not depend on the CPU's SIMD level. The spike found it byte-identical with and without SIMD, and the test stage confirms it with a test. **Amended by the Opus spec PR (see "Amendment" below): this holds for the spike's stereo case only; what the tests rely on is that every fixture keeps its truth at every SIMD level.**
 4. **Scope:** channel mapping family 0 (mono and stereo) is decoded. Other families (multichannel) are `Error(unsupportedFormat)` until a requirement asks for them, and the spec states it. `.opus` is the only Opus extension scanned (`.ogg` and `.oga` may hold Vorbis or FLAC and stay out of scope, as `lossy-source.md` Q14 did for `.mp4`).
 5. **`EXTRACTION_VERSION` stays 2**, as in ADR-0040 point 6: adding a format does not change how WAV, FLAC, MP3 or M4A are decoded, and Opus results never existed before. The spec PR confirms or overrides this.
 
@@ -100,6 +100,19 @@ The owner accepted the defaults of the three questions in #102:
 1. `rusty-opus` is accepted with its supply-chain profile. The mitigation is the exact pin, a reviewed diff on every bump and `cargo deny`; `opus-rs` is the fallback.
 2. Only channel mapping family 0 (mono and stereo) is decoded. Other families are `Error(unsupportedFormat)`, and only `.opus` is scanned.
 3. `EXTRACTION_VERSION` stays 2.
+
+## Amendment: measurements before G1 of the Opus spec PR (2026-11-01, proposed, decided at that G1, question Q42)
+
+A throwaway probe (not committed) encoded the fixture recipes with `rusty-opus` 1.0.2 on the development machine (AVX2) and compared them with `RUSTY_OPUS_ISA=scalar`, `sse2` and `avx`. Full figures: `specs/detection/lossy-source.md` section 12.8.
+
+- **Not byte-identical across SIMD levels.** Encodes at one ISA level are byte-identical run to run. The default AVX2 path gives other bytes than the scalar, SSE2 and AVX paths for mono fixtures, both VBR and CBR (11 of 18 recipes). Stereo VBR 160, the spike's case, was identical. The two decodes differ at about 62 dB SNR, because the encoder made different coding decisions, not because of rounding. `fc`, `D` and `H` are the same.
+- **Point 3 is amended.** Its last reason now reads: every encoded fixture keeps its **truth** at every SIMD level, meaning:
+  - the same verdict, reasons and sample counts;
+  - the same cutoff within the fixture tolerance;
+  - the same declared bitrate within 1 kbps.
+
+  Its bytes may differ. A test checks this by encoding in a child process with `RUSTY_OPUS_ISA=scalar` (`lossy-fixtures.md` section 1.3). No test compares fixture bytes with a stored hash. The reasons for a real encoder still hold: the truth is what the scenarios assert, and a CI runner without AVX2 would take the scalar or SSE path.
+- **Pre-skip.** `rusty-opus` 1.0.2 has no public lookahead getter. Its encoder delay, measured by cross-correlating the decode with the input, is **120 samples** (2.5 ms) in mono and in stereo; libopus's is 312. The Ogg writer in test support therefore writes pre-skip 120 as a constant, and the test stage checks that each fixture decodes aligned with its input. The adapter is unaffected: it applies whatever pre-skip the file's `OpusHead` records.
 
 ## Notes from implementation
 

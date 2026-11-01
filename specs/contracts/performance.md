@@ -58,7 +58,7 @@ Each question has a default, and the rest of this spec is written with it. On 20
   - any change to `DetectionParams`, `algorithm_version`, `EXTRACTION_VERSION`, the worker count rule (ADR-0034) or the decoding strategy (Q12, section 7);
   - frontend performance: the table (`ui/sort-filter.md` P1–P2) and the CSV export (`ui/export-csv.md` M7) keep their own criteria;
   - timing in CI (Q8);
-  - Opus (no decoder yet, ADR-0030).
+  - a gated Opus budget: Opus files (decoded since detection v8, ADR-0047) are counted in the folder report like the other formats (section 12), and their time is reported by acceptance O8 of `specs/detection/lossy-source.md` section 12.7, not gated here.
 
 ## 2. Fixtures
 

@@ -2,14 +2,14 @@
 id: SPEC-DETECTION-LOSSY
 requirements: [RF-14, RF-15, RF-16]
 status: proposed
-algorithm_version: 7
-params: specs/detection/detection-params.v7.toml
-lossless_rules: specs/detection/rules.md (v4 rules and values, unchanged in v5; v6 adds [edge]; unchanged in v7)
-adr: [ADR-0040, ADR-0041, ADR-0043]
-history: algorithm_version 5 (detection-params.v5.toml, sections 1-10); algorithm_version 7 (detection-params.v7.toml, RF-16, adds rule L6a, section 11)
+algorithm_version: 8
+params: specs/detection/detection-params.v8.toml
+lossless_rules: specs/detection/rules.md (v4 rules and values, unchanged in v5; v6 adds [edge]; unchanged in v7 and v8)
+adr: [ADR-0040, ADR-0041, ADR-0043, ADR-0047]
+history: algorithm_version 5 (detection-params.v5.toml, sections 1-10); algorithm_version 7 (detection-params.v7.toml, RF-16, adds rule L6a, section 11); algorithm_version 8 (detection-params.v8.toml, RF-14/RF-15, Opus stream information in section 2.4 and Opus rows, section 12)
 ---
 
-# Detection rules v5 and v7: lossy files (MP3, M4A) and their source bitrate
+# Detection rules v5, v7 and v8: lossy files (MP3, M4A, Opus) and their source bitrate
 
 > For an MP3 or an AAC file in M4A: read what the stream **declares** (codec, bitrate, bitrate mode, the LAME tag's low-pass), measure where its content **ends** with the band spectra and measurements of `rules.md` (unchanged), compare that edge with the **expected cutoff** of an honest encode at the declared bitrate, and decide **real / suspicious / fake** with an **estimated source bitrate**. The expected cutoffs are a per-codec table in `DetectionParams` (`[lossy.cutoffs]`), and every threshold is a named parameter of `detection-params.v5.toml`; the code never hard-codes them (S4, ADR-0011). Design decision: ADR-0041. Decoding (RF-14 H2): ADR-0040.
 
@@ -17,7 +17,30 @@ The verdict answers ADR-0031's question for lossy files: *is the content consist
 
 **What changes in v7 (RF-16).** One rule, L6a (section 4), between L5 and L6, and an optional section `[lossy.streaming]` with five parameters (section 11). A lossy MP3 or AAC file that L6 would call `Real` becomes `Suspicious` with the new reason `streamingSampleRate` and no estimate when its decoded sample rate is a streaming rate (48 kHz) and its cutoff lies at Opus's 20 kHz band edge: the signature of a rip of a full-band lossy streaming source, typically Opus from YouTube. Against v6, for the same spectra, the only possible verdict change is `Real → Suspicious` on lossy files; lossless files are unchanged. Design decision: ADR-0043 (accepted at G1, #78). Sections 1–10 describe v5 and stay valid under v7 except where they point to section 11.
 
-**Names used here.** `b` is the declared bitrate in kbps (section 2), `fc` the measured content edge, `c_exp` the expected cutoff, `s` the shortfall `c_exp − fc` (section 3). `D`, `fs`, `fe`, `H`, `G` are the measurements of `rules.md` section 2. "Lossy codec" means `mp3`, `aac` or `opus`; "lossless codec" means `pcm` (WAV), `flac` or `alac` (ALAC in M4A). **Opus** is specified only as far as the rules go: its decoder is pending the ADR-0030 spike, and every Opus scenario lives in `specs/pending/opus.feature`, outside `specs/features/` (Q9).
+**What changes in v8 (RF-14, RF-15: Opus).** Opus files (`.opus`, Ogg Opus, channel mapping family 0) are decoded by the adapter with `rusty-opus` and an Ogg reader of its own (ADR-0047; stream information and errors in section 2.4), the scanner lists them, and `detection-params.v8.toml` adds the `opus` rows of `[lossy.cutoffs]` (section 12). For an Opus file the shortfall rules give no estimate (section 12.4). Against v7, for the same spectra, **nothing changes for any file that is not Opus**: WAV, FLAC, ALAC, MP3 and AAC get their v7 verdicts, reasons, cutoffs and estimates, with `algorithm_version` 8. Opus files were never analysed before (v5–v7 make them `Error(unsupportedFormat)` by L0). Sections 1–11 stay valid under v8 except where they point to section 12.
+
+**Names used here.** `b` is the declared bitrate in kbps (section 2), `fc` the measured content edge, `c_exp` the expected cutoff, `s` the shortfall `c_exp − fc` (section 3). `D`, `fs`, `fe`, `H`, `G` are the measurements of `rules.md` section 2. "Lossy codec" means `mp3`, `aac` or `opus`; "lossless codec" means `pcm` (WAV), `flac` or `alac` (ALAC in M4A). **Opus** was specified only as far as the rules go until v8 (its scenarios waited in `specs/pending/opus.feature`, Q9); since v8 it is decoded and judged, and its scenarios are in `specs/features/opus.feature` (section 12).
+
+## Questions for G1 (v8, RF-14/RF-15: Opus): open
+
+ADR-0047 was accepted at G1 on 2026-11-01 with its three defaults (the decoder `rusty-opus =1.0.2`, family 0 only and only `.opus` scanned, `EXTRACTION_VERSION` 2). The questions below are about the spec built on it. The figures they rest on were **measured before G1** (2026-11-01) and are in section 12.8 (F1–F7).
+
+| # | Question | Status |
+|---|---|---|
+| Q29 | **Estimate of an Opus track that L2–L5 judge.** Opus keeps its 20 kHz full band at every bitrate of the table (measured from 16 kbps up, section 12.8 F1, F2), so every Opus row has the same cutoff and the nearest-row rule of section 5 would give the lowest such row (24 kbps) for any early edge: an "≈24 kbps source" for an Opus 256 made from an MP3 128, which means nothing. Options: (a) **null** for Opus whenever L2–L5 fire (the verdict says "fake", the Real bitrate cell shows "—"), as L6a already does for a table that cannot express the source (Q19); (b) an **MP3-equivalent** estimate: `r*` read from `lossy.cutoffs.mp3` for Opus files (needs a new data key, for example `lossy.estimate_rows.opus = "mp3"`, a UI text change, since `help.realBitrate` says "in terms of the file's own codec", and probably its own ADR); (c) section 5 unchanged (gives the meaningless 24) | Open. **Default: (a) null** (section 12.4) |
+| Q30 | **The Opus rows** (section 12.3): eight rows, 24, 32, 48, 64, 96, 128, 160 and 192 kbps, each with `cutoff_hz` = 20000 (libopus's full band, the top CELT band edge), and **no row below 24 kbps**, so a lower declared bitrate leaves `c_exp` undefined and the file is not judged by the shortfall rules. **Measured before G1** (section 12.8): native libopus 1.6.1 decodes of 69 corpus sources report `fc` 20050 or 20150 Hz in 69 of 69 at every bitrate from 16 to 320 kbps (F1, F2; 12 kbps is wideband and falls into L2), and with these rows 0 of 828 honest encodes at 24–320 kbps are `Fake` or `Suspicious` (F1). The full band holds from **16 kbps** (F2); the first row stays at 24 to keep a margin for older libopus versions, which were not measured and may choose a narrower bandwidth just above 16 kbps. Cost of 24 (F3): libopus's VBR payload at a 24 kbps target has a median of 23.9 kbps, so about half of the honest 24 kbps encodes fall below the table and are `Real`, not judged by the shortfall rules. **Alternative:** a first row at **16 kbps** (cutoff 20000), which judges the 20 and 24 kbps encodes too, measured full band in 69 of 69. One row would behave the same as eight with Q29 (a); the eight rows let a calibration run change one bitrate alone | Open. Default: as written (24–192 kbps at 20000 Hz); alternative: first row 16 kbps |
+| Q31 | **Declared bitrate of an Opus file** (section 2.4.3): the total size of the **audio packets** over the duration (Ogg page headers, segment tables and the two header packets excluded), rather than the file size over the duration (what ffprobe shows). The packet size is what the encoder's bitrate targets; the Ogg overhead adds about 0.3–0.6 kbps at 50 packets per page | Open. Default: audio packets |
+| Q32 | **Bitrate mode and encoder of an Opus file**: `bitrate_mode` absent (Ogg Opus does not signal CBR or VBR; as AAC), `encoder` and `encoder_lowpass_hz` absent (the OpusTags vendor string is checked but not reported). Reading the vendor string into `encoder` later would change the adapter's output (`EXTRACTION_VERSION`) | Open. Default: all three absent |
+| Q33 | **Strictness of the Ogg reader** (section 2.4.4): the listed `corruptStream` cases; a second logical stream (another serial number: chained or multiplexed files) is `unsupportedFormat`; the end-of-stream flag is **not** required (a file whose last page lacks it is read up to its last page); no resynchronisation after damage and no leading bytes before the first `OggS` | Open. Default: as written |
+| Q34 | **Contract version.** No type changes: `AudioFormat` and `AudioCodec` already hold `opus`, `bitrateMode` stays null, and `just gen` produces the same bindings. The contract stays **version 7** and `commands.md` gains the section "Opus files (detection v8)" (new supported extension, `NO_AUDIO_FOUND` wording, `algorithmVersion` 8, the null estimate of Q29). A new version 8 would only rename it | Open. Default: stays 7 |
+| Q35 | **Format label** in the table: `OPUS` (the existing rule, `format` in upper case, `ui/lossy-formats.md`), or `Opus` (the codec's own spelling; a new text `format.opus` and a UI change) | Open. Default: `OPUS` (no UI change) |
+| Q36 | **Calibration** (`calibration/lossy.md` C14–C17): Opus rows evaluated by params files with Opus rows (v8) and not evaluated by params files without them (v5–v7, as Q8 does for files without `[lossy]`); `.opus` included by `formats=lossy` and `formats=all`; Opus allowed as the last stage of a lossy entry; a new `calibration.v4.toml` (v3 plus four Opus settings, four honest Opus entries and five cascades ending in Opus; the new settings have `lossless_transcode = false`, so the lossless tables do not change); the default `--config` stays `calibration.v2.toml` | Open. Default: yes to all |
+| Q37 | **Acceptance O1–O8** (section 12.7) and their gate values: honest generated Opus encodes and the negative cascade `cbr320_opus128` `Fake` ≤ 1 % (measured, F1 and F4: 0 of 828 honest encodes and 0 of 69 `cbr320_opus128` `Fake`); the O4 cascades `cbr128_opus256` and `aac128_opus256` caught ≥ **85 %** and `Fake` ≥ **80 %** of their detectable rows (measured over all 69 rows, F4: caught 94 % and `Fake` 94 %; caught 91 % and `Fake` 88 %); the rest reported, `cbr192_opus256` and `cbr128_opus160` included. The O4 cascades end at **256 kbps, not 160**: at 160 kbps or less libopus hides the source's edge by band folding (section 12.6; measured `cbr128_opus160` caught 15 of 69, `aac128_opus160` 6 of 69), so a 160 cascade cannot carry a gate; `cbr128_opus160` stays as a report that documents the limitation. B5's 95 % and 90 % are not proposed: the measured `Fake` rates at 256 kbps (94 % and 88 %) lie below them, so the gates leave a margin under the measurements instead | Open. Default: as written |
+| Q38 | **Changes to approved specs and protected tests** in this PR (section 12.9): the defaults and `algorithmVersion` become v8/8 and the next free `algorithm_version` becomes **9**; `.opus` is scanned; `specs/pending/opus.feature` moves to `specs/features/opus.feature`; the listed scenarios of `decode-lossy.feature`, `detection-lossy.feature`, `detection-lossless.feature`, `detection-edge-step.feature`, `detection-streaming-source.feature`, `calibration.feature` and `calibration-lossy.feature` change; and the protected tests listed in section 12.9 change in the test stage. Agree? | Open. Default: yes to all |
+| Q39 | **ADR for detection v8.** Every detection version so far has its ADR (Q26). v8 adds data rows to a key that ADR-0041 already defined (`lossy.cutoffs.opus`, optional) and one rule detail (Q29 (a), the null estimate, which follows the precedent of Q19); ADR-0047 ("Consequences") already announces the new params version. Proposal: **no new ADR**; ADR-0047's "Notes from implementation" record the version. With Q29 (b) a new ADR would be needed (a cross-codec estimate is a new kind of rule) | Open. Default: no new ADR |
+| Q40 | **The "lower-bitrate source" fixture** (`lossy-fixtures.md` `opus_160_src16k`) is encoded at full band from a signal **low-passed at 16 kHz**, because Opus's own bandwidths (4, 6, 8, 12 and 20 kHz) cannot give an edge between 16 and 17.5 kHz, where the `Fake` rule is tested without little treble (an edge at 12 kHz falls into L2, `opus_160_swb`). ADR-0047 point 3 names `max_bandwidth` as what sets a fixture's edge; this fixture sets it through its input instead. **Measured** (section 12.8 F4): the edge comes from the low-passed input and survives the encode: mono `lp16k` encoded by `rusty-opus` at 160 kbps reports `fc` 16050 Hz with `D` ≈ 33 dB (the edge survives in mono from 96 kbps; in independent-channel stereo only from 192 kbps, because of band folding, section 12.6), so the fixture stays **mono** (a stereo variant would need ≥ 192 kbps) | Open. Default: yes |
+| Q41 | **`EXTRACTION_VERSION` stays 2** (ADR-0047 point 5) | **Decided at G1 (owner, 2026-11-01, ADR-0047)** |
+| Q42 | **Determinism of the fixture encoder across SIMD levels** (ADR-0047 point 3, `lossy-fixtures.md` section 1.3). ADR-0047 assumed that `rusty-opus` gives the same bytes on every SIMD level. **Measured** (section 12.8 F7): same-ISA encodes are byte-identical run to run, but `RUSTY_OPUS_ISA=scalar` (and `sse2`, `avx`) gives **different bytes** from the default AVX2 path for mono fixtures (11 of 18 recipes differed, VBR and CBR; stereo VBR 160, the spike's case, was identical); the decoded difference is about 62 dB SNR (different coding decisions, not rounding), and `fc`, `D` and `H` are unchanged. Proposal: the rule becomes (a) the same recipe and seed give the same bytes within one process and between two runs on the same machine; (b) encoded in a child process with `RUSTY_OPUS_ISA=scalar`, every encoded fixture keeps its **truth** (verdict, reasons, cutoff within the fixture tolerance, sample counts, declared bitrate within 1 kbps of its target), not its bytes. No test asserts fixture bytes against a stored hash, so a CI runner with another SIMD level gets the same verdicts. ADR-0047 point 3 is amended in the same PR | Open. **Default: accept** (rule (a) + (b); ADR-0047 point 3 amended) |
 
 ## Questions for G1 (v7, RF-16): all decided
 
@@ -49,7 +72,7 @@ The owner decided the approach (2026-10-25): the cheap, deterministic 48 kHz ind
 | Q6 | The **LAME tag's low-pass** may only lower `c_exp` (section 3): a user-chosen low-pass is honoured, so a 320 kbps file encoded with `--lowpass 16` and content to 16 kHz is `Real` | Open. Default: yes |
 | Q7 | `G`, `U`, `B`, per-frame bitrates and padding are **not used** by the lossy rules in v5 (reported by the calibration tool only). LAME 320 kbps encodes already show large `G` (rules.md, "Why v2 was replaced"), so `G` cannot separate an honest 320 from a 320-from-128 | Open. Default: not used |
 | Q8 | A lossy track analysed with params **without `[lossy]`** (v2–v4 files) is `Error(unsupportedFormat)` with detail `these DetectionParams have no [lossy] section`. The app always uses v5; the calibration tool does not evaluate lossy rows with such files (calibration/lossy.md section 6) | Open. Default: yes |
-| Q9 | **Opus is pending.** The scanner keeps skipping `.opus` files. The Opus scenarios are written in `specs/pending/opus.feature`. Pending features live in `specs/pending/`, which neither `just trace` (`scripts/trace.mjs` reads `specs/features/*.feature` only, not recursively) nor the test stage reads, so no test is derived from them and their tags are not checked. After the ADR-0030 spike, a later spec PR moves the file to `specs/features/` (dropping its `@pending-opus-decoder` tag, which is only a marker). RF-14 and RF-15 keep their scenarios in `specs/features/`, so `just trace` still passes. Optional note for the owner (agents may not edit CLAUDE.md files): `specs/CLAUDE.md` could say "Features in `specs/pending/` are specified but not testable yet; they move to `features/` in a later spec PR." | Open. Default: yes |
+| Q9 | **Opus is pending.** The scanner keeps skipping `.opus` files. The Opus scenarios are written in `specs/pending/opus.feature`. Pending features live in `specs/pending/`, which neither `just trace` (`scripts/trace.mjs` reads `specs/features/*.feature` only, not recursively) nor the test stage reads, so no test is derived from them and their tags are not checked. After the ADR-0030 spike, a later spec PR moves the file to `specs/features/` (dropping its `@pending-opus-decoder` tag, which is only a marker). RF-14 and RF-15 keep their scenarios in `specs/features/`, so `just trace` still passes. Optional note for the owner (agents may not edit CLAUDE.md files): `specs/CLAUDE.md` could say "Features in `specs/pending/` are specified but not testable yet; they move to `features/` in a later spec PR." | Open. Default: yes. **Superseded by v8** (section 12, Q38): ADR-0047 chose the decoder, `.opus` is scanned and the scenarios live in `specs/features/opus.feature` |
 | Q10 | **HE-AAC** (SBR or PS signalled in the AudioSpecificConfig: object types 5 and 29) and MP3 layers I/II are `Error(unsupportedFormat)` (symphonia decodes AAC-LC and Layer III; ADR-0040) | Open. Default: yes |
 | Q11 | Lossy test files are written by **bitstream fixture writers in test support**, with no new dependency (`lossy-fixtures.md`, ADR-0040), rather than an encoder dev-dependency or committed binary files | Open. Default: writers |
 | Q12 | The **gate values** of section 9 (honest encodes `Fake` ≤ 1 %, high-contrast cascades caught ≥ 95 % and `Fake` ≥ 90 %, confirmed AAC-origin fakes caught ≥ 90 %). They are targets, not measurements | Open. Default: as written |
@@ -62,7 +85,7 @@ The owner decided the approach (2026-10-25): the cheap, deterministic 48 kHz ind
 ## 1. Scope and versions
 
 - **In:** MP3 (MPEG-1, 2 and 2.5 Layer III) and M4A with AAC-LC, judged against their declared bitrate; ALAC in M4A, judged as lossless with `rules.md`; the source-bitrate estimate.
-- **Specified but pending:** Opus (`specs/pending/opus.feature`, Q9). No `[lossy.cutoffs]` row exists for it in v5.
+- **Opus** (since v8): Ogg Opus with channel mapping family 0, judged against its declared bitrate with the `opus` rows of `detection-params.v8.toml` (sections 2.4 and 12). No `[lossy.cutoffs]` row exists for it in v5, v6 or v7 (rule L0). Until v8 it was specified but pending (`specs/pending/opus.feature`, Q9).
 - **Out:** double-compression fingerprints in the MDCT domain (H3, backend.md section 9), upsamples (RF-12), FLAC-to-FLAC quality loss, and grid search over `[lossy]` values (calibration/lossy.md, C10).
 
 **Why one file (Q1).** v5 is `detection-params.v4.toml` with every section and value unchanged plus the optional `[lossy]` section:
@@ -80,15 +103,15 @@ The cost: a change to a lossy value is a new version for lossless results too, s
 
 The audio adapter (`fakeflac-audio`) reports, besides the band spectra, what the stream declares. It reads the file read-only (RNF-05) and never needs an external tool. New fields of `AudioProbe` (core types, no I/O in the core): `codec`, `declared_bitrate_kbps`, `bitrate_mode`, `encoder` and `encoder_lowpass_hz`. The first three reach the contract (`specs/contracts/commands.md`, Q4); `encoder` and `encoder_lowpass_hz` stay in the backend and the calibration tool.
 
-| Field | WAV, FLAC | MP3 | M4A, AAC-LC | M4A, ALAC |
-|---|---|---|---|---|
-| `codec` | `pcm`, `flac` | `mp3` | `aac` | `alac` |
-| `declared_bitrate_kbps` | absent | section 2.1 | section 2.2 | absent |
-| `bitrate_mode` | absent | `cbr`, `vbr` or `abr` (2.1) | absent (AAC does not signal it reliably) | absent |
-| `encoder`, `encoder_lowpass_hz` | absent | from the LAME tag (2.1) | absent (iTunes tags are not read in v5) | absent |
-| `bit_depth` | as in H1 | absent | absent | from the ALAC configuration |
+| Field | WAV, FLAC | MP3 | M4A, AAC-LC | M4A, ALAC | Opus (v8, 2.4) |
+|---|---|---|---|---|---|
+| `codec` | `pcm`, `flac` | `mp3` | `aac` | `alac` | `opus` |
+| `declared_bitrate_kbps` | absent | section 2.1 | section 2.2 | absent | section 2.4.3 |
+| `bitrate_mode` | absent | `cbr`, `vbr` or `abr` (2.1) | absent (AAC does not signal it reliably) | absent | absent (Ogg Opus does not signal it; Q32) |
+| `encoder`, `encoder_lowpass_hz` | absent | from the LAME tag (2.1) | absent (iTunes tags are not read in v5) | absent | absent (Q32) |
+| `bit_depth` | as in H1 | absent | absent | from the ALAC configuration | absent |
 
-The **sample rate** of a lossy file is the decoded rate (44.1 or 48 kHz for most files). **Channels** are mixed to mono for the analysis, as in H1 (rules.md section 1.1).
+The **sample rate** of a lossy file is the decoded rate (44.1 or 48 kHz for most files; always 48 kHz for Opus). **Channels** are mixed to mono for the analysis, as in H1 (rules.md section 1.1).
 
 ### 2.1 MP3
 
@@ -117,6 +140,70 @@ The **sample rate** of a lossy file is the decoded rate (44.1 or 48 kHz for most
 
 As in H1 (ADR-0013, RNF-04): an unreadable file is `unreadable`; a container or bitstream that cannot be parsed or decoded is `corruptStream`; a codec that is recognised but not decoded is `unsupportedFormat`; a track shorter than `min_duration_s` is `tooShort`. **The duration is checked before the declared bitrate**: a stream shorter than `min_duration_s`, a zero-duration stream included, is `tooShort`, whatever its bitrate. The order of these errors against rule L0 is in section 4. **A lossy stream that is long enough but has no declared bitrate after section 2.1 or 2.2 is `corruptStream`** (`no bitrate`); with the fallbacks above this should not happen, so it is a guard, not an expected case. A panic in a decoder is caught and becomes `corruptStream` (as in H1).
 
+### 2.4 Opus (detection v8, ADR-0047)
+
+An `.opus` file is read as **one Ogg logical stream that carries Opus** (RFC 3533, RFC 7845). The Ogg layer is read by a module of `fakeflac-audio` itself (no `ogg` crate, ADR-0047 point 2); the packets are decoded with `rusty-opus` `=1.0.2`. The adapter first reads and checks the **whole Ogg structure** (2.4.1 and 2.4.2), and only then decodes (2.4.3), so a structural error is always reported before any decoder error, and the declared bitrate and duration are known before decoding. The file is opened read-only (RNF-05).
+
+#### 2.4.1 Pages and packets
+
+- **Page.** A 27-byte header, a segment table and a body (RFC 3533 section 6): capture pattern `OggS`, stream structure version, header type flags (`0x01` continued packet, `0x02` beginning of stream, `0x04` end of stream), granule position (signed 64-bit LE), serial number (u32 LE), page sequence number (u32 LE), CRC (u32 LE), number of segments, then that many lacing values. The body length is the sum of the lacing values.
+- **CRC-32.** Polynomial `0x04C11DB7`, initial value 0, no bit reflection, no final XOR, computed over the whole page with the CRC field taken as zero; it must equal the CRC field.
+- **Layout.** The file starts with `OggS` at byte 0. Pages follow each other with no bytes between them, and the last page ends at the end of the file. There is no resynchronisation: bytes that do not start a page are an error (2.4.4).
+- **Packets.** A packet is the concatenation of consecutive segments; a lacing value below 255 ends it. A page whose last lacing value is 255 leaves a packet **unfinished**; the next page continues it and must have the continued flag; a page with the continued flag must follow a page that left a packet unfinished.
+- **One logical stream.** The first page has the beginning-of-stream flag. Every page has the serial number of the first page. Each page's sequence number is the previous page's plus 1. No page follows a page with the end-of-stream flag; the end-of-stream flag itself is **not required** (a file whose last page lacks it is read up to its last page, Q33).
+- **Granule positions.** Only the pages that complete at least one **audio** packet are checked: their granule positions never decrease. The granule positions of the header pages and of pages that complete no packet are not checked.
+
+#### 2.4.2 Header packets
+
+- **OpusHead** (packet 0) is the only packet of page 0 and is complete on it. Magic `OpusHead`; length at least 19 bytes; version byte with major version (high 4 bits) 0 (minor versions 0–15 are accepted); channel count at least 1; pre-skip (u16 LE); input sample rate (u32 LE, **informational only**: an Opus stream always decodes at 48 kHz, so it never reaches `TrackInfo`); output gain (i16 LE, Q7.8 dB); channel mapping family.
+  - **Family 0** (mono and stereo): channel count 1 or 2. Bytes after the 19th are ignored (RFC 7845 allows them for later minor versions).
+  - **Any other family** (multichannel, ADR-0047 point 4): `Error(unsupportedFormat)` with detail `channel mapping family N is not supported`, whatever the rest of the header holds; the packets are never decoded.
+- **OpusTags** (packet 1) is the first packet of page 1, may span several pages, and the page where it ends completes no other packet and leaves none unfinished (the audio starts on a new page). Magic `OpusTags`; vendor string length (u32 LE) and vendor string, user comment count (u32 LE), and for each comment its length (u32 LE) and bytes, all inside the packet; bytes after the last comment are allowed. Its contents are checked, not reported (Q32).
+- **Audio packets**: every packet after OpusTags. There must be at least one.
+
+#### 2.4.3 Stream information and decoding
+
+Names: `pre_skip` from OpusHead; `S` = the number of samples (per channel, at 48 kHz) that all audio packets decode to, from each packet's TOC (RFC 6716 section 3.1); `G` = the granule position of the **last page that completes an audio packet**; `P` = the total size in bytes of the audio packets (page headers, segment tables and the two header packets excluded). An audio packet whose TOC (or, for code 3, its frame-count byte) cannot be parsed while computing `S` (RFC 6716 section 3.2, for example code 3 with a frame count of 0) is reported as **R22**, with detail `Opus packet i: <reason>` and `i` counted from audio packet 0; this check runs before the stream checks below (R20, R21), so such a file never reaches the decoder.
+
+- **Stream checks** (after the structure, in this order): `G ≥ pre_skip`, otherwise `corruptStream` (`granule position below pre-skip`); `G ≤ S`, otherwise `corruptStream` (`granule position beyond the audio`).
+- **Duration.** `L = G − pre_skip` samples per channel; `durationMs = floor(1000 · L / 48000)`. The pre-skip and the end trim (`S − G`) are excluded, so this is the audible length (unlike MP3, section 2.1).
+- **Declared bitrate** (kbps, integer): `round(8 · P / (L / 48000) / 1000)`, halves away from zero (Q31). With `L` = 0 the track is `tooShort` first (section 2.3).
+- **Sample rate** 48000 Hz always; **channels** = the OpusHead channel count (1 or 2); no bit depth; codec `opus`; no bitrate mode, encoder or encoder low-pass (Q32).
+- **Decoding.** One `rusty-opus` decoder at 48 kHz with the header's channel count, `f32` output, every audio packet in stream order (no seeking in v8; ADR-0047 "Speed"). From the concatenated output the adapter **drops the first `pre_skip` samples** per channel and **keeps exactly `L`**, dropping the end trim; then it multiplies every kept sample by the **output gain** `10^(gain / 5120)` (gain in Q7.8 dB, so `gain / 256` dB). The result is mixed to mono for the analysis (rules.md section 1.1). The decoded length is always `L`, so the MP3 "decoded length" tolerance of section 2.1 has no Opus equivalent.
+- A decoder error on audio packet `i` (counted from 0) is `corruptStream` with detail `Opus packet i: <the decoder's error>`; a panic is caught and becomes `corruptStream` (section 2.3).
+- An Opus track whose decode fails before its stream was read keeps `format` `opus` and `codec` `opus` (from the extension, as `.mp3` does, `commands.md` version 3).
+
+#### 2.4.4 Errors (`corruptStream` unless stated)
+
+Pages are read in file order, and the checks of one page run in the order below; a header packet is checked as soon as it is complete; the end-of-file checks run after the last page; the stream checks of 2.4.3 run last. The first failure is reported. Each detail is fixed text (scenarios: `opus.feature`, "Broken Ogg or Opus structure is corruptStream"; fixtures: `lossy-fixtures.md` section 2.2).
+
+| # | Condition | Detail |
+|---|---|---|
+| R1 | The bytes where a page should start (byte 0, or right after a page) are not `OggS`; an empty file | `not an Ogg stream` |
+| R2 | The file ends inside a page header, its segment table or its body | `truncated Ogg page` |
+| R3 | Stream structure version ≠ 0 | `unsupported Ogg page version` |
+| R4 | CRC mismatch | `Ogg page CRC mismatch` |
+| R5 | A serial number other than the first page's (a chained or multiplexed file) | **`unsupportedFormat`**: `multiplexed or chained Ogg streams are not supported` |
+| R6 | The first page lacks the beginning-of-stream flag | `first Ogg page is not a beginning of stream` |
+| R7 | A page after a page with the end-of-stream flag | `Ogg page after end of stream` |
+| R8 | A sequence number other than the previous page's plus 1 | `Ogg page out of sequence` |
+| R9 | The continued flag is set with no unfinished packet, or clear while a packet is unfinished | `Ogg packet continuation mismatch` |
+| R10 | Packet 0 is not a complete, lone packet of page 0 with magic `OpusHead` | `no OpusHead` |
+| R11 | OpusHead shorter than 19 bytes, major version ≠ 0, channel count 0, or family 0 with more than 2 channels | `invalid OpusHead` |
+| R12 | OpusHead family ≠ 0 (after R11's length, version and channel-count checks) | **`unsupportedFormat`**: `channel mapping family N is not supported` |
+| R13 | Packet 1 does not start page 1 or its magic is not `OpusTags` | `no OpusTags` |
+| R14 | An OpusTags length field runs past the end of the packet | `invalid OpusTags` |
+| R15 | The page where OpusTags ends completes another packet or leaves one unfinished | `audio data on the OpusTags page` |
+| R16 | An audio page that completes a packet has a granule position lower than the previous such page's | `Ogg granule position decreases` |
+| R17 | End of file with an unfinished packet | `unfinished Ogg packet at end of stream` |
+| R18 | End of file with fewer than two packets (the stream ends before OpusTags is complete) | `no OpusTags` |
+| R19 | End of file with no audio packet | `no Opus audio packets` |
+| R20 | `G < pre_skip` | `granule position below pre-skip` |
+| R21 | `G > S` | `granule position beyond the audio` |
+| R22 | The TOC of audio packet `i` cannot be parsed while computing `S` (section 2.4.3, checked before R20 and R21), or the decoder rejects audio packet `i` | `Opus packet i: <the reason or the decoder's error>` |
+
+These are the reading errors of rule L1a (section 4). After them the order of section 4 applies as for the other lossy formats: L0 (`no [lossy.cutoffs] rows for opus` with params v5–v7), then L1b (`tooShort` when `durationMs` is below `min_duration_s`; a missing declared bitrate cannot happen once `L` > 0).
+
 ## 3. Measurements
 
 Every lossy file gets the spectra of `rules.md` section 1 and the measurements of `rules.md` section 2 with the same parameters: `L_ref`, `F`, `H`, `fe`, `D` at `fs`, `G`, `U`, `B`. A silent track (no frame above `silence_dbfs`) is `Suspicious` with `lowHighFrequencyContent`, no cutoff and no estimate, as in rules.md section 1.6. Then:
@@ -125,7 +212,7 @@ Every lossy file gets the spectra of `rules.md` section 1 and the measurements o
 |---|---|
 | **Content edge `fc`** | the **reported cutoff frequency** of rules.md section 2: `fc = fs` when `D ≥ step_suspicious_db`, otherwise `fc = fe`. So the cutoff shown in the table is the edge the lossy rules judge |
 | **Table cutoff `T(codec, b)`** | the `cutoff_hz` of the row of `lossy.cutoffs.<codec>` with the largest `bitrate_kbps ≤ b`. **Undefined** when `b` is below the first row's bitrate (nothing can be expected of a stream below the table) |
-| **Tag low-pass `L_tag`** | `encoder_lowpass_hz` when present and in `[cutoff_hz of the codec's first row, nyquist]`; otherwise undefined (a corrupt or meaningless byte is ignored) |
+| **Tag low-pass `L_tag`** | `encoder_lowpass_hz` when present and in `[cutoff_hz of the codec's first row, nyquist]`; otherwise undefined (a corrupt or meaningless byte is ignored). Always undefined for AAC and Opus (section 2) |
 | **Expected cutoff `c_exp`** | `min(T(codec, b), L_tag, nyquist − step_search_top_margin_hz)`, ignoring an undefined `L_tag`. **Undefined** when `T(codec, b)` is undefined |
 | **Shortfall `s`** | `c_exp − fc` when `c_exp` is defined; undefined otherwise. Positive when the content stops below the expected cutoff |
 
@@ -142,8 +229,8 @@ For a track whose `codec` is lossy. Rules are evaluated in the order of the tabl
 
 | # | Condition | Verdict | Reasons | `estimatedSourceBitrateKbps` |
 |---|---|---|---|---|
-| L1a | Reading, probing or decoding failed (section 2.3: `unreadable`, `corruptStream`, or `unsupportedFormat` from sections 2.1 and 2.2, such as HE-AAC or MP3 Layer II) | `Error` | — (the `TrackError` explains it) | null |
-| L0 | The params have no `[lossy]` section (Q8): `unsupportedFormat` with detail `these DetectionParams have no [lossy] section`; or `lossy.cutoffs` has no row for the codec (Opus in v5): `unsupportedFormat` with detail `no [lossy.cutoffs] rows for <codec>` (for example `no [lossy.cutoffs] rows for opus`) | `Error` | — | null |
+| L1a | Reading, probing or decoding failed (section 2.3: `unreadable`, `corruptStream`, or `unsupportedFormat` from sections 2.1, 2.2 and 2.4, such as HE-AAC, MP3 Layer II or an Opus channel mapping family other than 0) | `Error` | — (the `TrackError` explains it) | null |
+| L0 | The params have no `[lossy]` section (Q8): `unsupportedFormat` with detail `these DetectionParams have no [lossy] section`; or `lossy.cutoffs` has no row for the codec (Opus in v5, v6 and v7): `unsupportedFormat` with detail `no [lossy.cutoffs] rows for <codec>` (for example `no [lossy.cutoffs] rows for opus`) | `Error` | — | null |
 | L1b | Too short, or no declared bitrate, in that order (section 2.3) | `Error` | — (the `TrackError` explains it) | null |
 | L2 | `H < low_hf_threshold_db` (little treble) | `Suspicious` | `lowHighFrequencyContent` | null |
 | L3 | `s` defined, `s ≥ fake_shortfall_hz` and `D ≥ fake_min_step_db` | `Fake` | — | section 5 |
@@ -152,7 +239,7 @@ For a track whose `codec` is lossy. Rules are evaluated in the order of the tabl
 | L6a | (v7, RF-16) The params have `[lossy.streaming]`, and `StreamingRate` holds (section 11.2): codec, decoded sample rate, declared bitrate and `fc` all match that section | `Suspicious` | `streamingSampleRate` | null |
 | L6 | Otherwise | `Real` | — | `b` |
 
-A silent track is decided after L1b and before L2 (section 3), with the same result as L2 but no cutoff. L0 depends only on the codec and the params, never on the spectra. It comes **after** L1a for every lossy format, MP3 included: an M4A has to be probed to know whether it holds AAC or ALAC, so both formats follow one order, and a broken file keeps the more informative `corruptStream` (or `unreadable`, or the `unsupportedFormat` of an undecoded codec) whatever the params. It comes **before** L1b: with params that cannot judge the codec, a short or bitrate-less lossy file is `unsupportedFormat`, not `tooShort` or `corruptStream`. In v5 the app never meets an Opus file, because the scanner skips `.opus` (Q9); the row exists so that the core has a defined answer.
+A silent track is decided after L1b and before L2 (section 3), with the same result as L2 but no cutoff. L0 depends only on the codec and the params, never on the spectra. It comes **after** L1a for every lossy format, MP3 included: an M4A has to be probed to know whether it holds AAC or ALAC, so both formats follow one order, and a broken file keeps the more informative `corruptStream` (or `unreadable`, or the `unsupportedFormat` of an undecoded codec) whatever the params. It comes **before** L1b: with params that cannot judge the codec, a short or bitrate-less lossy file is `unsupportedFormat`, not `tooShort` or `corruptStream`. In v5–v7 the app never meets an Opus file, because the scanner skips `.opus` (Q9); the row exists so that the core has a defined answer. Since v8 the scanner lists `.opus` and the defaults have Opus rows, so L0 for Opus is met only with an older params file (the calibration tool, tests).
 
 Consequences (they rely on the checks of section 6):
 - **`Fake` always rests on a clear step:** L3 needs `D ≥ fake_min_step_db ≥ step_suspicious_db`, so `fc = fs`. A track whose content fades without a step (`D < step_suspicious_db`, `fc = fe`) is at most `Suspicious` (L5), whatever its shortfall, in the spirit of planning section 2.5 ("never `Fake` only because of the spectrum shape").
@@ -170,7 +257,8 @@ Consequences (they rely on the checks of section 6):
 - **Lossless codecs, `Error`, silent tracks and L2:** `null`. Nothing reliable can be said.
 - **L6a (v7):** `null` (section 11.2, Q19). The content agrees with the declared bitrate, so it says nothing about the source's bitrate.
 - **L6 (`Real`):** the declared bitrate `b` (Q5): the content is consistent with it.
-- **L3, L4, L5:** `min(b, r*)`, where `r*` is the `bitrate_kbps` of the row of `lossy.cutoffs.<codec>` whose `cutoff_hz` is **nearest to `fc`** (on a tie, the lower bitrate). An `fc` below the first row gives the first row's bitrate, so the value reads as "at most".
+- **L3, L4, L5 of an Opus track (v8):** `null` (section 12.4, Q29). Every Opus row has the same cutoff, so no Opus bitrate corresponds to an early edge.
+- **L3, L4, L5** (MP3 and AAC): `min(b, r*)`, where `r*` is the `bitrate_kbps` of the row of `lossy.cutoffs.<codec>` whose `cutoff_hz` is **nearest to `fc`** (on a tie, the lower bitrate). An `fc` below the first row gives the first row's bitrate, so the value reads as "at most".
 
 The estimate is expressed **in the declared codec's terms**: an MP3 320 made from a streaming site's AAC 128 stream (content to about 16 kHz) shows the MP3 bitrate whose low-pass is nearest, ≈112–128 kbps, not "AAC 128". The contract and the UI call it the real bitrate, and the help explains it (`ui/lossy-formats.md`).
 
@@ -187,6 +275,7 @@ Examples with the v5 table: a 320 kbps MP3 with `fc` = 17000 Hz → `Fake`, esti
 | `lossy.fake_min_step_db` | 10 | The value of `step_fake_db`: a `Fake` needs the same depth of step as on lossless files |
 | `lossy.cutoffs.mp3` | 32 → 5500 … 320 → 20500 Hz (14 rows) | LAME 3.99–3.100's default low-pass per CBR bitrate, as documented for LAME (not verified in this repository). The calibration config records lower `lowpass_hz` for `cbr128` (16000) and `cbr256` (19500); those values only decide undetectability there. B2 measures honest LAME encodes of every setting and decides |
 | `lossy.cutoffs.aac` | 64 → 11000 … 320 → 19500 Hz (7 rows) | A conservative value across common AAC-LC encoders: honest AAC files must not fall below it. B2 (ffmpeg's native encoder) and B3 (streaming-site AAC 128 copied without re-encoding) decide |
+| `lossy.cutoffs.opus` (v8 only) | 24, 32, 48, 64, 96, 128, 160, 192 → 20000 Hz (8 rows) | libopus's full band ends at 20 kHz from 24 kbps up (section 12.3, Q30); acceptance O decides (section 12.7) |
 
 **Shape** (serde, at deserialisation; unknown fields rejected in every table): `[lossy]` may be absent; if present, `suspicious_shortfall_hz`, `fake_shortfall_hz`, `fake_min_step_db` and `[lossy.cutoffs]` are required. In `[lossy.cutoffs]`, `mp3` and `aac` are required arrays and `opus` is optional; any other key is an error. Each row is `{ bitrate_kbps: integer, cutoff_hz: float }`, both required.
 
@@ -200,14 +289,15 @@ Examples with the v5 table: a 320 kbps MP3 with `fc` = 17000 Hz → `Fake`, esti
 
 **v7.** The optional subsection `[lossy.streaming]` has its own shape and value checks, run after the ones above (section 11.3).
 
-**Invariants.** Deterministic; read-only; `algorithm_version` of every `TrackAnalysis` = that of the params (5 with v5; 6 with v6; 7 with the defaults since detection v7); the defaults equal `detection-params.v7.toml` since detection v7, whose `[lossy]` section is v5's plus `[lossy.streaming]` (a test checks it, rules.md section 4); `[input]` and `[fft]` are unchanged, so the spectra of lossless files are the same as with v2–v4 (calibration/lossy.md section 5 on `EXTRACTION_VERSION`).
+**Invariants.** Deterministic; read-only; `algorithm_version` of every `TrackAnalysis` = that of the params (5 with v5; 6 with v6; 7 with v7; 8 with the defaults since detection v8); the defaults equal `detection-params.v8.toml` since detection v8, whose `[lossy]` section is v5's plus `[lossy.streaming]` (v7) plus the `opus` rows of `[lossy.cutoffs]` (v8) (a test checks it, rules.md section 4); `[input]` and `[fft]` are unchanged, so the spectra of lossless files are the same as with v2–v4 (calibration/lossy.md section 5 on `EXTRACTION_VERSION`).
 
 ## 7. Test signals and scenarios
 
 - Lossy test files are generated inside the tests by small bitstream writers (`specs/detection/lossy-fixtures.md`, ADR-0040, Q11): MP3 and AAC streams whose coded spectrum is noise up to a chosen edge and nothing above it, with chosen bitrates, tag frames and LAME fields. No encoder runs in CI and no audio is committed (ADR-0022).
-- Scenarios: `specs/features/decode-lossy.feature` (RF-14 H2: scan, decoding, stream information, ALAC, errors, Unicode, read-only, spectrogram, table), `specs/features/detection-lossy.feature` (RF-15: verdicts on fixtures, rule-level boundaries from given measurements, parameter files, v4 compatibility), `specs/features/calibration-lossy.feature` (calibration and labels); and, not tested yet, `specs/pending/opus.feature` (Q9).
-- Real encoders (LAME, ffmpeg's AAC, libopus) are exercised only by the calibration tool on the local corpus (section 9).
+- Scenarios: `specs/features/decode-lossy.feature` (RF-14 H2: scan, decoding, stream information, ALAC, errors, Unicode, read-only, spectrogram, table), `specs/features/detection-lossy.feature` (RF-15: verdicts on fixtures, rule-level boundaries from given measurements, parameter files, v4 compatibility), `specs/features/calibration-lossy.feature` (calibration and labels).
+- External encoders (LAME, ffmpeg's AAC, libopus) are exercised only by the calibration tool on the local corpus (section 9). The one encoder that runs in tests is `rusty-opus`'s, for the Opus fixtures (ADR-0047 point 3, `lossy-fixtures.md` section 1.3).
 - v7 (RF-16): `specs/features/detection-streaming-source.feature` (section 11.8).
+- v8 (RF-14, RF-15, Opus): `specs/features/opus.feature` (section 12.10).
 
 ## 8. Known limitations (v5)
 
@@ -254,7 +344,7 @@ The acceptance criteria of v7 (RF-16) are K1–K7 in section 11.7. B1–B11 are 
 - The 16 kHz gap step `G` as evidence of an **MP3 origin in an AAC or Opus file** (an AAC 256 made from an MP3 inherits its sfb21 holes).
 - **Per-frame bitrate and padding** of VBR MP3s: a VBR encode of a band-limited source spends fewer bits.
 - **Encoder-specific tables** keyed by `encoder` (LAME, Fraunhofer, ffmpeg's AAC, Apple).
-- **Opus rows** with the Opus decoder (ADR-0030 spike).
+- **Opus rows below 24 kbps** (libopus's narrower bandwidths at low bitrates) and an **estimate for Opus fakes** (Q29 (b)); done in part by v8 (section 12), which adds the rows from 24 kbps up.
 - **MDCT-domain double-compression fingerprints** (H3), which also cover sources without a low-pass and close bitrates. They are also the way to turn the v7 streaming-rate indicator (section 11) into evidence: an Opus origin leaves traces of its own transform (band energies quantised per CELT band, a hard 20 kHz band edge) that a fingerprint could confirm, and they would catch an Opus rip resampled to 44.1 kHz, which v7 cannot see (section 11.6). Not specified (owner's decision, 2026-10-25).
 - **The streaming window for other encoders.** The v7 window `[19800, 20200)` was measured with LAME 3.100, ffmpeg's native AAC encoder and libopus 1.6.1 (section 11.3.1). Other MP3 encoders (Fraunhofer and others), Apple, FDK or Nero AAC and real streaming-site Opus at other settings may need other bounds or encoder-specific windows; acceptance K6 keeps reporting the `fc` distributions.
 
@@ -286,7 +376,7 @@ Consequences:
 - **Only `Real → Suspicious`.** For the same spectra and stream information, every v7 result equals the v6 result except tracks that L6 made `Real` and L6a now makes `Suspicious`; those gain the reason and lose their estimate (`b` → null). Apart from that and `algorithmVersion`, nothing changes (the reported cutoff included).
 - **Reached only with no larger shortfall.** L6a is evaluated after L5, so it only sees tracks with `s < suspicious_shortfall_hz` or `s` undefined (a declared bitrate below the table): the files whose content reaches what their declared bitrate keeps, which would otherwise be `Real`.
 - **Content above the window is not flagged.** A 48 kHz MP3 whose edge lies at 20.25 kHz or above (LAME 320 reports 20250–20450 Hz at 48 kHz; an encode without a low-pass reports more) has content that an Opus source (20 kHz) does not hold, so it is not an Opus rip and stays `Real`. An edge below the window (an encoder low-pass such as LAME 256's, at most 19750 Hz) carries no evidence about the source.
-- **Lossless codecs are never judged by it** (`pcm`, `flac`, `alac` use rules.md only, section 4): a 48 kHz FLAC or ALAC is not flagged. **Opus files are out of scope**: they are natively 48 kHz, `opus` cannot be listed in `P.codecs`, and in v7 an Opus track is `Error(unsupportedFormat)` by L0 anyway (no `[lossy.cutoffs]` rows for it).
+- **Lossless codecs are never judged by it** (`pcm`, `flac`, `alac` use rules.md only, section 4): a 48 kHz FLAC or ALAC is not flagged. **Opus files are out of scope**: they are natively 48 kHz, `opus` cannot be listed in `P.codecs`, and in v7 an Opus track is `Error(unsupportedFormat)` by L0 anyway (no `[lossy.cutoffs]` rows for it). Since v8 (section 12) an Opus track is judged by L1a–L6 with the Opus rows, and still never by L6a.
 - **Where it is computed.** `StreamingRate` and L6a are part of the pure lossy verdict function of `fakeflac_core::detect` (section 3, "Where it is computed"), which already receives the codec, the sample rate, the declared bitrate, `fc` and the params. No new measurement, no I/O, no new input from the adapter.
 
 ### 11.3 Parameters (`[lossy.streaming]`)
@@ -382,7 +472,7 @@ Moving the upper bound from 20200 to 20300 buys 0–0.4 points of recall and cos
 
 ### 11.4 Versions
 
-- **v7 = `detection-params.v6.toml` with every section and value unchanged plus `[lossy.streaming]`**, `algorithm_version = 7`. It is the default: `DetectionParams::default()` equals `detection-params.v7.toml` (a test checks it). The next free `algorithm_version` becomes **8** (`/calibrate` proposals and the sample corpus's `candidate.toml` take 8; the tool computes it from the files, so no code allocates it by hand).
+- **v7 = `detection-params.v6.toml` with every section and value unchanged plus `[lossy.streaming]`**, `algorithm_version = 7`. It was the default until detection v8 (section 12.5, whose `detection-params.v8.toml` keeps `[lossy.streaming]` unchanged): `DetectionParams::default()` equalled `detection-params.v7.toml` (a test checked it). The next free `algorithm_version` becomes **8** (`/calibrate` proposals and the sample corpus's `candidate.toml` take 8; the tool computes it from the files, so no code allocates it by hand).
 - **v5 and v6 stay loadable.** `[lossy.streaming]` is optional; a params file without it gives exactly its own verdicts, reasons, cutoffs and estimates on every file (L6a never fires). Tests check it, so the calibration tool compares v6 and v7 in one run.
 - **Lossless files** get exactly their v6 results (nothing in rules.md reads `[lossy.streaming]`), with `algorithm_version` 7.
 - `[input]` and `[fft]` are unchanged and L6a uses only values already computed, so `fakeflac-audio::EXTRACTION_VERSION` does not change and cached spectra are reused; the app's result cache is invalidated by the new `algorithm_version` (ADR-0008).
@@ -425,3 +515,160 @@ If K3, K4 or K5's `streaming rate` gate fails (K4 only counts as failed when it 
 
 - Fixtures (`lossy-fixtures.md`): the existing `mp3_320_48k_lp20k` (an MP3 320 at 48 kHz with edge 20000 Hz: the motivating case), and three new ones: `mp3_320_lp20k` (the same edge at 44.1 kHz), `m4a_aac_256_48k_lp20k` (AAC 256 at 48 kHz, edge 20000 Hz) and `mp3_320_48k_short` (a 2 s cut of `mp3_320_48k_lp20k`, `tooShort`).
 - Scenarios: `specs/features/detection-streaming-source.feature` (tag `@RF-16`): verdicts on fixtures, rule-level cases from given measurements (the 44.1 kHz control, L3–L5 at 48 kHz, every boundary of the window and of the bitrate), params without the section, Opus, lossless codecs, parameter checks, error tracks (RNF-04), a real run with a Unicode name (RNF-09) that leaves the file unchanged (RNF-05), the CSV cell, the UI text, the calibration report additions, and K5's gate read from the 48 kHz sub-rows (passing and failing).
+
+## 12. Opus (detection v8, RF-14 and RF-15)
+
+### 12.1 What and why
+
+ADR-0047 (accepted at G1, #102) chose the decoder (`rusty-opus =1.0.2`), the adapter's own Ogg reader, family 0 only and `.opus` only. Detection v8 makes `.opus` files analysable: the scanner lists them, the adapter reads them (section 2.4), and the params gain Opus rows so that rule L0 no longer rejects them.
+
+The rule is the v5 rule (section 4) with one more table. Honest libopus encodes keep their **full band up to 20 kHz** (the top edge of CELT's last band) at every bitrate from 16 to 320 kbps: measured before G1 on native decodes of 69 corpus sources, `fc` 20050 or 20150 Hz in 69 of 69 at every bitrate (section 12.8 F1, F2; section 11.3.1 had found the same edge through MP3 re-encodes). So an Opus file whose content stops clearly below 20 kHz was made from a source with less bandwidth: typically an MP3 or AAC at 128 kbps or less converted to Opus. That is what RF-15 asks to flag. The edge shows only where libopus keeps it: at 160 kbps or less (stereo music) it fills the empty bands above a band-limited source's edge with folded energy and hides it, from 192 kbps it keeps it (section 12.6, F4).
+
+### 12.2 Rules
+
+For a track with codec `opus`, rules L1a–L6 of section 4 apply unchanged, with:
+
+- `c_exp = min(T(opus, b), nyquist − step_search_top_margin_hz)` = **20000 Hz** for every `b` ≥ 24 kbps (the Nyquist cap is 23600 Hz at 48 kHz, so it never applies). An Opus stream has no tag low-pass (section 2).
+- `b` < 24 kbps: `T` is undefined, so `c_exp` and `s` are undefined and the track is `Real` unless L2 fires (section 4, "A declared bitrate below the table").
+- **L6a never applies**: `opus` cannot be listed in `lossy.streaming.codecs` (section 11.3).
+- The estimate: section 12.4.
+
+With the v5 thresholds this means, for a clear step (`D` ≥ 10 dB): `fc` ≤ 17500 Hz → `Fake`; 17500 < `fc` ≤ 19000 Hz → `Suspicious` (`cutoffBelowDeclared`); `fc` > 19000 Hz → `Real`. Examples (medians measured before G1, section 12.8 F4): an Opus 256 made from an MP3 128 (`fc` ≈ 16650) or from an AAC 128 (`fc` ≈ 17250) is `Fake` with no estimate; an Opus 256 made from an MP3 192 (`fc` ≈ 18750) is `Suspicious` (`cutoffBelowDeclared`); an Opus 128 made from an MP3 320 is `Real`. An Opus 160 or 128 made from an MP3 128 is mostly `Real`: libopus hides the source's edge at those bitrates (band folding, section 12.6). An Opus file whose edge is 12 kHz or lower has little treble (`H` is the median of the 10–16 kHz bands) and is `Suspicious` with `lowHighFrequencyContent` by L2 (measured for a 12 kHz super-wideband encode: `H` −62.4 dB, F5).
+
+### 12.3 The Opus rows (Q30)
+
+| `bitrate_kbps` | 24 | 32 | 48 | 64 | 96 | 128 | 160 | 192 |
+|---|---|---|---|---|---|---|---|---|
+| `cutoff_hz` | 20000 | 20000 | 20000 | 20000 | 20000 | 20000 | 20000 | 20000 |
+
+- **Why 20000.** It is the nominal full-band edge of libopus. An honest Opus file reports `fc` at the band centre of its edge: **measured** on native decodes (section 12.8 F1), 20050 or 20150 Hz in 69 of 69 sources at every bitrate from 16 to 320 kbps (5th percentile 20050, 95th 20150), with a median `D` of 23–25 dB, so `fc = fs` and `s` is −50 or −150 Hz, far below `suspicious_shortfall_hz` (1000 Hz): honest files keep a margin of about 1000 Hz before `Suspicious` and 2500 Hz before `Fake`. With these rows 0 of the 828 honest encodes at 24–320 kbps are `Fake` or `Suspicious` (F1).
+- **Why no row below 24 kbps.** libopus's default bandwidth depends on the bitrate: at low bitrates it codes only super-wideband (12 kHz), wideband (8 kHz) or narrowband (4 kHz). **Measured** (F2): libopus 1.6.1 stays full band for music from **16 kbps** (69 of 69 at 16, 20 and 24 kbps); at 12 kbps it is wideband, with `H` < −60 dB in 69 of 69 (`Suspicious` by L2). The first row stays at 24 kbps, keeping a margin of one step for older libopus versions (not measured), whose bandwidth choice just above 16 kbps may differ; a first row at 16 kbps is the alternative of Q30. A row below 16 kbps would need the bandwidth libopus picks at each bitrate, which also depends on the content (speech or music) and the channel count. Without a row such files are never `Fake` or shortfall-`Suspicious`.
+- **The border at 24 kbps** (F3). The declared bitrate is the payload (section 2.4.3), and libopus's VBR payload at a 24 kbps target has a median of 23.9 kbps (16: 15.1; 20: 19.8; from 32 kbps up it lies above the target: 32.4 at 32, 330.2 at 320), so **about half of the honest 24 kbps encodes fall below the table**: they are `Real` (unless L2 fires) and are not judged by the shortfall rules. Harmless for honest files; the cost is that a transcode declared below 24 kbps is never judged by the shortfall rules either, which a first row at 16 kbps would change.
+- **Why several equal rows.** With the null estimate of section 12.4 one row from 24 kbps would give the same verdicts; the eight rows are the bitrates the calibration measures, so a later version can change one bitrate alone. A declared bitrate above 192 kbps (an Opus 256 or 320) uses the 192 row, also 20000 Hz.
+- **Status: measured before G1** (section 12.8), with libopus 1.6.1 through ffmpeg on 69 corpus sources; acceptance O3 checks the rows on every run.
+
+### 12.4 Estimate of an Opus track (Q29)
+
+- **L6 (`Real`):** `b`, as for every lossy codec (section 5).
+- **L2, L3, L4, L5:** `null`. Every Opus row has the same cutoff, so the nearest-row rule of section 5 would always return the first row (24 kbps): an "≈24 kbps source" for an Opus 256 made from an MP3 128, which is not true in any codec's terms. The verdict still says `Fake` or `Suspicious`; the Real bitrate cell shows "—" (`ui/lossy-formats.md`). This follows the precedent of L6a (Q19): when the table cannot express the source, no estimate is given.
+- Where it is computed: in the pure lossy functions of `fakeflac_core::detect` (section 3), from the codec; no new parameter.
+
+### 12.5 Versions, extraction and contract
+
+- **v8 = `detection-params.v7.toml` with every section and value unchanged plus the `opus` array of `[lossy.cutoffs]`**, `algorithm_version = 8`. It is the default: `DetectionParams::default()` equals `detection-params.v8.toml` (a test checks it). The next free `algorithm_version` becomes **9** (`/calibrate` proposals and the sample corpus's `candidate.toml` take 9; the tool computes it from the files).
+- **v5, v6 and v7 stay loadable.** With them an Opus track is `Error(unsupportedFormat)` (`no [lossy.cutoffs] rows for opus`, L0), so the calibration tool compares v7 and v8 in one run.
+- **Every file that is not Opus** gets exactly its v7 verdict, reasons, cutoff and estimate with v8 (nothing but an Opus track reads `lossy.cutoffs.opus`), with `algorithm_version` 8. Tests check it on every lossless signal and every MP3 and M4A fixture.
+- **`EXTRACTION_VERSION` stays 2** (ADR-0047 point 5, Q41): the decoding of WAV, FLAC, MP3 and M4A does not change, and Opus results never existed before. `[input]` and `[fft]` are unchanged. The app's result cache is invalidated by the new `algorithm_version` (ADR-0008).
+- **Contract** (Q34): no type change; `commands.md` stays version 7 and documents Opus in "Opus files (detection v8)". **CSV**: the `format` and `codec` columns already allow `opus` (csv-export.md); `csv_format_version` stays 1. **UI**: no new component, prop or text (`ui/lossy-formats.md`, "Opus files (detection v8)").
+
+### 12.6 Known limitations (v8)
+
+- **Band folding hides a band-limited source at 160 kbps or less.** At 160 kbps or less (stereo music), libopus's CELT fills the empty bands above the source's edge with folded energy (about 20 dB below an honest encode's level), so the step the rules find is Opus's own 20 kHz band edge and the file is `Real`. From 192 kbps the source's edge is kept. Measured before G1 (section 12.8 F4, 69 corpus sources, `Fake` of 69): MP3 128 → Opus 128: 0; → Opus 160: 15; → Opus 192: 55; → Opus 256: 65 (`fc` median 16650 Hz). AAC 128 → Opus 160: 6; → Opus 192: 43; → Opus 256: 61. MP3 192 → Opus 160: 0 `Fake` and 0 `Suspicious`. So the common case of a 128 kbps file converted to Opus 128 or 160 is **not caught**, and only conversions to 192 kbps or more are; the gated cascades of acceptance O4 end at 256 kbps for this reason, and `cbr128_opus160` is reported (section 12.7). In mono the edge survives from 96 kbps (the synthetic `lp16k` measured with `rusty-opus`; in independent-channel stereo only from 192 kbps). Codec-domain measurements (section 10) are the way to see such files.
+- **Opus made from a full-band or nearly full-band source** (an MP3 320 or V0, an AAC 256, another Opus) keeps an edge at or above 19.5 kHz and is `Real`: the edge cannot show it. Measured (F4): MP3 320 → Opus 128 69 of 69 `Real`; Opus 64 → 160, 96 → 192 and 128 → 256 207 of 207 `Real`. An Opus made from an MP3 224 or 256 (edge 19.4–19.7 kHz) is `Real` too, and one made from an MP3 192 is mostly `Suspicious` at Opus 256 (measured 2 `Fake`, 50 `Suspicious`, 17 `Real` of 69, `fc` median 18750 Hz) and `Real` at Opus 160 (folding). Codec-domain fingerprints (section 10) are the way to see them.
+- **No estimate for Opus fakes** (section 12.4): the table says nothing about the source's bitrate.
+- **Low bitrates** (`b` < 24 kbps) are not judged by the shortfall rules, about half of the honest 24 kbps encodes included (their payload is just below 24 kbps, section 12.3); speech and podcasts encoded with a narrow bandwidth are `Suspicious` (`lowHighFrequencyContent`) when their edge is low enough for L2, as low-bitrate MP3s are (measured: libopus at 12 kbps is wideband, `H` < −60 dB in 69 of 69 music sources, F2).
+- **A user-chosen bandwidth** (opusenc `--bandwidth`, ffmpeg's libopus `-cutoff`) is not recorded in the stream, so an honest encode limited to 12 kHz or less is `Suspicious` (`lowHighFrequencyContent`) like a transcode (measured, F5: a super-wideband encode reports `fc` 12050 Hz, `D` ≈ 26 dB, `H` −62.4 dB, both with `rusty-opus` `max_bandwidth = Superwideband` and with ffmpeg's libopus `-cutoff 12000`); unlike a LAME low-pass (Q6), nothing can excuse it.
+- **Encoders other than libopus 1.6.1** (through ffmpeg 8.1) **and `rusty-opus` 1.0.2**, its port, were not measured (section 12.8): older libopus versions may choose other bandwidths at low bitrates, and the folding threshold (160 versus 192 kbps) may differ between versions; ffmpeg's native experimental `opus` encoder has its own bandwidth choices.
+- **Duration assumes a stream that starts at granule 0.** A stream cut out of a live broadcast, whose first audio page implies a start offset, reports a longer duration and a slightly lower declared bitrate (RFC 7845 section 4.5). Files saved by encoders start at 0.
+- **Out of scope:** channel mapping families other than 0 (multichannel), chained or multiplexed Ogg streams (`unsupportedFormat`), and Opus in `.ogg`, `.oga`, `.webm` or `.mka` files (not scanned; ADR-0047 point 4).
+- **Sequential decoding.** The whole stream is decoded to analyse the sampled windows (no seeking in v8); acceptance O8 reports the time (measured before G1, F6: about 0.7 s of decoding per 360 s of stereo Opus 128 plus less than 0.1 s of spectral analysis, well under RNF-01's 3 s).
+
+### 12.7 Acceptance criteria (v8)
+
+Measured locally on the real corpus with `just accept --config specs/calibration/calibration.v4.toml --params specs/detection/detection-params.v7.toml --params specs/detection/detection-params.v8.toml` (v7 is the baseline; it evaluates no Opus row, calibration/lossy.md C14), split `all` unless a row says otherwise. Groups, tables and columns are those of `specs/calibration/lossy.md` sections 6.3 and 6.8. Only aggregate figures from `summary.md` go into the implementation PR (ADR-0022). "Detectable" and "non-source-limited" are as in section 9. The corpus holds no `.opus` file today, so the generated entries of `calibration.v4.toml` (calibration/lossy.md section 8) carry O3–O5.
+
+| # | Criterion | Pass |
+|---|---|---|
+| O1 | Lossless results unchanged | **Gate.** On the lossless evaluation set, the verdict-change table v7 × v8 is diagonal, and every reason and cutoff is equal (by construction, section 12.5; a failure is an implementation bug) |
+| O2 | MP3 and AAC results unchanged | **Gate.** In the lossy verdict-change table v7 × v8 (calibration/lossy.md 6.8, over the rows both files evaluate, which excludes Opus rows with v7), every off-diagonal count is 0, and every reason, cutoff and estimate is equal (by construction) |
+| O3 | Honest generated Opus: the single-stage entries `opus64`, `opus96`, `opus128`, `opus160` and the negative cascade `cbr320_opus128` | **Gate:** for each, `Fake` ≤ **1 %** of its non-source-limited rows. **Report:** the `Suspicious` rate, the source-limited count, the median and 5th percentile of `s`, and the median, 5th and 95th percentile of `fc` per entry (they check the 20000 Hz rows, Q30). Measured before G1 (section 12.8 F1, F4): 0 of 828 honest libopus encodes at 24–320 kbps `Fake` or `Suspicious`; `cbr320_opus128` 0 of 69 `Fake` (69 `Real`) |
+| O4 | High-contrast Opus cascades `cbr128_opus256` and `aac128_opus256` (an Opus 256 made from an MP3 128 or an AAC 128; 256 kbps because at 160 kbps or less libopus hides the source's edge, section 12.6) | **Gate:** caught (`Fake` + `Suspicious`) ≥ **85 %** and `Fake` ≥ **80 %** of the detectable rows of each (Q37). Measured before G1 (F4, over all 69 rows, detectability not computed): `cbr128_opus256` caught 94 %, `Fake` 94 % (65 of 69, `fc` median 16650 Hz); `aac128_opus256` caught 91 %, `Fake` 88 % (61 `Fake` and 2 `Suspicious` of 69, `fc` median 17250 Hz). **Report:** their `fc` percentiles |
+| O5 | Other Opus cascades: `cbr192_opus256` (an Opus 256 made from an MP3 192; truth `fake` by the bitrate rule of calibration/lossy.md 4.2, since 192 < 256; its MP3 edge makes it mostly `Suspicious` by design) and `cbr128_opus160` (an Opus 160 made from an MP3 128; truth `fake`; documents the band-folding limitation of section 12.6) | **Report:** their verdict counts, caught and `Fake` rates and `fc` percentiles (known limitations, section 12.6). Measured before G1 (F4, of 69): `cbr192_opus256` 2 `Fake`, 50 `Suspicious`, 17 `Real` (`fc` median 18750 Hz); `cbr128_opus160` 15 `Fake`, 0 `Suspicious`, 54 `Real` (`fc` median 20150 Hz) |
+| O6 | Labelled Opus files (trusted lossy Opus files, `confirmed_real` and `confirmed_fake` with codec `opus`) | **Gate:** 0 `Fake` on trusted `primary` and `confirmed_real` Opus files (n/a when there are none, as today). **Report:** every Opus group's counts |
+| O7 | Synthetic | Every scenario of `opus.feature` passes (`just test`), and `decode-lossy.feature`, `detection-lossy.feature`, `detection-streaming-source.feature`, `detection-lossless.feature`, `detection-edge-step.feature`, `calibration.feature` and `calibration-lossy.feature` still pass |
+| O8 | Time (RNF-01) | **Report:** median and maximum analysis time per Opus track in a release build (`just perf <folder of Opus encodes>`, folder mode, performance.md section 12), in the implementation PR. Context, measured before G1 (section 12.8 F6): decoding with `rusty-opus` takes about 1.9 ms per second of stereo Opus 128 (about 0.7 s per 360 s), and the spectral analysis of the decoded samples less than 0.1 s per track (one thread, release); O8 stays a report. A median above RNF-01's 3 s for a typical-length track goes back to G1 with the figures; the levers of performance.md section 7 (seeking with RFC 7845's 80 ms pre-roll) need a spec change because they alter the decoded samples (`EXTRACTION_VERSION`) |
+
+If O3, O4 or O6 fails, the implementer does not tune the parameters: the run's figures (and, locally, the listed tracks with `b`, `fc`, `s` and `D`) go back to G1, where the owner decides between new values (a new params version) and accepting the result. O1 and O2 hold by construction, so their failure is an implementation bug. An O7 failure is handled like any red test. The v7 criteria K1–K7 are not re-run: O1 and O2 show that v8 changes nothing they measure.
+
+### 12.8 Figures measured before G1 (2026-11-01)
+
+Lesson of RF-16 and RNF-01 (`docs/agents/lessons.md`): every figure that can be measured locally is measured before G1, with a throwaway program outside the repository that calls FakeFlac's own public functions, as section 11.3.1 did. Aggregates only (ADR-0022): no file, folder, track or artist name.
+
+**How.** The Opus streams were decoded to `f32` at 48 kHz with `rusty-opus` 1.0.2 and analysed with FakeFlac's band spectra and `fakeflac_core::detect` (`measure`, `cutoff_estimate`) with the values of `detection-params.v7.toml` (v8 changes no value these functions read); verdicts were **simulated** with the v7 lossy thresholds and an `opus` table at 20000 Hz (the rows of section 12.3), so they are exact for the rules as specified, not a run of v8 code. Declared bitrate as in section 2.4.3: the Ogg payload after the two header packets over (last granule − pre-skip) / 48000.
+
+**Tools.** ffmpeg 8.1 with libopus 1.6.1 (default VBR, application `audio`), LAME 3.100 and ffmpeg's native AAC encoder for the cascades; `rusty-opus` 1.0.2's encoder and decoder for the synthetic fixtures and for decoding. Machine: AMD Ryzen 7 5800X (AVX2), Windows 11.
+
+**Data.**
+- **Corpus sample:** 69 lossless sources of the owner's corpus (60 at 44.1 kHz, 9 at 48 kHz; one per folder, seeded random choice; 60 s excerpts from 30 s), encoded honestly by libopus and through the cascades of F4.
+- **Synthetic:** the fixtures' signals at 48 kHz (white noise, −12 dBFS RMS, 30 s; `full_band` and `lp16k`), encoded by `rusty-opus` in mono and in stereo with independent channels.
+
+**F1 (honest encodes) and F3 (payload).** libopus 1.6.1 at the target bitrates below, 69 sources each:
+
+| target kbps | 16 | 20 | 24 | 32 | 48 | 64 | 80 | 96 | 112 | 128 | 160 | 192 | 256 | 320 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| payload kbps (median) | 15.1 | 19.8 | 23.9 | 32.4 | 49.2 | 64.9 | 80.5 | 96.3 | 112.5 | 129.4 | 162.8 | 195.5 | 263.8 | 330.2 |
+
+- `fc` at every bitrate from 16 to 320 kbps: 20050 or 20150 Hz in 69 of 69 (5th percentile 20050, 95th 20150); median `D` 23–25 dB.
+- With rows at 20000 Hz: **0 of the 828 honest encodes at 24–320 kbps** (12 bitrates × 69) are `Fake` or `Suspicious`.
+- VBR payload (F3): below the target up to 24 kbps (median 23.9 at 24, so about half of the 24 kbps encodes fall below the first row, section 12.3), above it from 32 kbps. `rusty-opus` on the synthetic signals: CBR exactly the target, VBR the target plus 0.4–0.8 kbps.
+
+**F2 (lowest full-band bitrate): 16 kbps.** 69 of 69 report `fc` ≥ 20050 Hz at 16, 20 and 24 kbps. At 12 kbps libopus is wideband, with `H` < −60 dB in 69 of 69 (`Suspicious` by L2).
+
+**F4 (band-limited sources).** Cascades of the same 69 sources, verdicts with rows at 20000 Hz (`—`: payload not recorded):
+
+| Recipe | payload kbps | `fc` p5 / median / p95 (Hz) | Fake | Suspicious | Real |
+|---|---|---|---|---|---|
+| MP3 128 → Opus 128 | 126 | 20050 / 20050 / 20150 | 0 | 0 | 69 |
+| MP3 128 → Opus 160 (`cbr128_opus160`) | 158 | 16550 / 20150 / 20150 | 15 | 0 | 54 |
+| MP3 128 → Opus 192 | 191 | 16150 / 16650 / 20150 | 55 | 0 | 14 |
+| MP3 128 → Opus 256 (`cbr128_opus256`) | 258 | 16150 / 16650 / 16750 | 65 | 0 | 4 |
+| MP3 192 → Opus 160 | — | 20050 / 20050 / 20150 | 0 | 0 | 69 |
+| MP3 192 → Opus 256 (`cbr192_opus256`) | 261 | 18450 / 18750 / 20150 | 2 | 50 | 17 |
+| MP3 320 → Opus 128 (`cbr320_opus128`) | — | 20050 / 20050 / 20150 | 0 | 0 | 69 |
+| AAC 128 → Opus 160 | — | 17350 / 20150 / 20150 | 6 | 0 | 63 |
+| AAC 128 → Opus 192 | 192 | 17250 / 17350 / 20150 | 43 | 0 | 26 |
+| AAC 128 → Opus 256 (`aac128_opus256`) | — | 17250 / 17250 / 20050 | 61 | 2 | 6 |
+| Opus 64 → 160, 96 → 192, 128 → 256 | — | 20050 / 20050 / 20150 | 0 | 0 | 207 |
+
+Cause: at 160 kbps or less (stereo music) CELT fills the empty bands above the source's edge with folded energy (about 20 dB below an honest encode's level), so the step the rules find is the 20 kHz band edge (section 12.6).
+
+Synthetic, `rusty-opus`, reported `fc` (Hz) per bitrate (kbps):
+
+| Input | Channels | 64 | 96 | 128 | 160 | 192 | 256 | 320 |
+|---|---|---|---|---|---|---|---|---|
+| `full_band` | mono / stereo | 20050 | 20050 | 20050 | 20050 | 20050 | 20050 | 20050 |
+| `lp16k` | mono | 20050 | **16050** | 16050 | 16050 | 16050 | 16050 | — |
+| `lp16k` | stereo, independent channels | 20050 | 20050 | 20150 | 20150 | **16050** | 16050 | 16050 |
+
+`lp16k` with its edge kept: `D` ≈ 33 dB. `full_band`: `D` ≈ 26 dB, `H` ≈ 0 dB. So the fixture `opus_160_src16k` (mono, 160 kbps) reports `fc` 16050 Hz with `D` ≈ 33 dB (`Fake`), and a stereo variant would need at least 192 kbps (Q40).
+
+**F5 (super-wideband).** `rusty-opus` with `max_bandwidth = Superwideband` (mono and stereo, 64–256 kbps): `fc` 12050 Hz, `D` ≈ 26 dB (the 12 kHz step is the one found), `H` −62.4 dB, so L2 `lowHighFrequencyContent`. The same with ffmpeg's libopus `-cutoff 12000`. This is the truth of `opus_160_swb` (lossy-fixtures.md section 2.2).
+
+**F6 (time).** `rusty-opus` decodes 119–282 s of stereo libopus 128 in 187–548 ms (about 1.9 ms per second of audio, about 0.7 s per 360 s); FakeFlac's spectral analysis of the decoded samples takes 45–79 ms (one thread, release build). Context for O8 (section 12.7), which stays a report.
+
+**F7 (encoder delay and SIMD).**
+- `rusty-opus` 1.0.2 has **no public lookahead getter**. Its encoder delay, measured by cross-correlating the decode with the input, is **120 samples** (2.5 ms) in mono and stereo; libopus's (through ffmpeg) is 312, and decoding a libopus file with its own pre-skip leaves no residual offset. With a pre-skip of 312, a `rusty-opus` fixture decodes 192 samples early, so the fixtures use **120** (lossy-fixtures.md section 1.3).
+- Encodes on the same ISA level are byte-identical run to run. `RUSTY_OPUS_ISA=scalar` (and `sse2`, `avx`) give **different bytes** from the default AVX2 path for mono fixtures (VBR and CBR: 11 of 18 recipes differed); stereo VBR 160, the ADR-0047 spike's case, was identical. The decoded difference is about 62 dB SNR (different coding decisions, not rounding); `fc`, `D` and `H` are unchanged. So the fixtures are deterministic per machine, not across SIMD levels (Q42).
+
+**What they settle.** The `opus` rows and their first row (Q30, section 12.3); the gate values of O3 and O4 and the choice of 256 kbps for the O4 cascades (Q37); the band-folding limitation (section 12.6); the truths of `opus_160_src16k` and `opus_160_swb` and the mono choice (Q40, lossy-fixtures.md section 2.2); the fixtures' pre-skip and the determinism rule (Q42, lossy-fixtures.md section 1.3); the context of O8.
+
+**Caveats.**
+- Two encoders only (libopus 1.6.1 through ffmpeg 8.1, `rusty-opus` 1.0.2); older libopus versions and other encoders were not measured (section 12.6).
+- 69 sources, one per folder, 60 s excerpts, stereo music; no speech, no mono music, and no real-world Opus file (the corpus holds none). Rows of one album are correlated, so the rates are optimistic.
+- The cascade rates are over all 69 rows: detectability (section 9) was not computed, so the gated rates of O4 over detectable rows may differ slightly.
+- Verdicts are simulated (see "How"), not produced by v8 code; acceptance O3–O5 re-measures them on every run.
+
+### 12.9 Changes to approved specs and protected tests (Q38)
+
+(a) `rules.md` section 4 and its introduction: the defaults and `algorithmVersion` become v8/8, the next free `algorithm_version` becomes **9**; no lossless rule or value changes. (b) `detection-lossless.feature`: "Parameters come from the versioned file" names `detection-params.v8.toml` and `algorithmVersion 8`. (c) `detection-lossy.feature`: its header and "A lossy codec without table rows cannot be judged" (no longer "the scanner never lists an Opus file"), and "The defaults hold the v5 lossy values", whose defaults now have the eight Opus rows. (d) `decode-lossy.feature`: the header, "MP3 and M4A files are found; Opus files are not yet" (now Opus files are found), "A folder with only Opus files has no supported audio yet" (becomes a folder with only `.ogg` and `.oga` files), and "A lossy row has the same fields as a lossless row" (`algorithmVersion 8`). (e) `detection-streaming-source.feature`: its header says that "DetectionParams v7" means the parameters of `detection-params.v7.toml` (no longer the defaults); "Opus tracks are not judged by L6a…", "An Opus track with the defaults is still an error…" (now "with DetectionParams v7"), "The defaults are the v7 file" (now about the v7 file, whose `[lossy.streaming]` the defaults keep), and the real run "A 48 kHz rip with a Unicode name…" (`algorithmVersion 8`). (f) `detection-edge-step.feature`: header (the defaults are v8). (g) `calibration.feature`: the proposals of "The grid search proposes new parameters from tune data" and "The full-band guard can be searched from a v3 baseline" are `detection-params.v9.toml` / `algorithm_version 9`; `calibration/evaluation.md` section 7 and `calibration/sample-corpus.md` section 4: next free version 9. (h) `calibration/lossy.md` (C14–C17), `calibration-lossy.feature` (the Opus corpus file is an Opus fixture; Opus decoded; `formats=lossy` includes `.opus`; Opus allowed as a last stage; a v8 run of the lossy variant), the new `calibration/calibration.v4.toml`. (i) `contracts/commands.md` ("Opus files (detection v8)", "Supported files", `algorithmVersion` 8), `contracts/performance.md` (Opus no longer out of scope for the folder report), `ui/lossy-formats.md` (the Opus rows of the table and the detail line). (j) `lossy-fixtures.md` sections 1.3, 1.4, 2.2 and 3. (k) The protected tests that change in the test stage, as a declared consequence (the test author lists the exact set in the `test(RF-14)` commit; assertions on other values do not change):
+  - `crates/fakeflac-core/tests/{params_lossy,params_streaming,detect_rules,detect_lossy,detect_streaming}.rs`: the defaults' `algorithm_version` (7 → 8) and `lossy.cutoffs.opus` (`None` → the eight rows); the core cannot read a file, so a test that builds "v5" or "v7" params from the defaults must also clear `lossy.cutoffs.opus` and set `algorithm_version` (for example `rf15_a_lossy_codec_without_table_rows_cannot_be_judged` and the RF-16 test "An Opus track with the defaults is still an error"); `supported_extensions` gains `opus`;
+  - `crates/fakeflac-audio/tests/{detection_lossless,detection_lossy,detection_streaming,params_streaming,params_files,detection_edge_step}.rs`: the defaults equal the v8 file; the "v7" side of the v6 × v7 comparisons loads the v7 file instead of taking the defaults; `algorithm_version` 7 → 8 where the defaults are used;
+  - `crates/fakeflac-fs/tests/scan_lossy.rs`: `.opus` is listed;
+  - `src-tauri/tests/{run_analysis_lossy,run_analysis_lossy_v5,run_analysis_streaming,export_csv}.rs`: the Opus scan cases and `algorithmVersion` 8 with the defaults;
+  - `tools/fakeflac-calibrate/tests/{lossy_inputs,lossy_sample,lossy_acceptance,lossy_rows,lossy_streaming}.rs` and `tests/common/mod.rs`: Opus decoded and evaluated by v8, not evaluated by v5–v7; `formats=lossy` includes `.opus`; the "Opus output is not supported yet" error is gone; the comment in `grid.rs` (version 8) is stale.
+
+### 12.10 Test signals and scenarios
+
+- Fixtures: `lossy-fixtures.md` sections 1.3, 1.4 and 2.2 (Opus encoded by `rusty-opus` in test support, written by a test-support Ogg writer; the test stage first confirms section 3).
+- Scenarios: `specs/features/opus.feature` (tags `@RF-14`, `@RF-15`): scan, stream information, pre-skip, end trim and output gain, packets across pages, verdicts on fixtures and from given measurements (every boundary of the shortfall rules, the table borders, L6a never), the v8 file and its checks, v8 against v7 on every other file, every `corruptStream` and `unsupportedFormat` case of section 2.4.4 (RNF-04), the table, the detail line and the spectrogram, read-only (RNF-05), Unicode names (RNF-09), and the fixture encoder's determinism on one machine and the truths of the fixtures encoded on the scalar path (Q42).
+- Calibration: `specs/features/calibration-lossy.feature` (Opus rows in the lossy variant of the sample corpus, C14–C17).

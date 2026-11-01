@@ -1,13 +1,13 @@
 ---
 id: SPEC-CALIBRATION-LOSSY
-requirements: [RP-11, RF-15, RF-16, RNF-04, RNF-09]
+requirements: [RP-11, RF-14, RF-15, RF-16, RNF-04, RNF-09]
 status: proposed
 config: specs/calibration/calibration.v2.toml
 ---
 
 # Calibration for lossy files (RF-15): labels, cascades and evaluation
 
-> Extends the calibration tool so that RF-15 can be measured: `trusted.txt` and `confirmed.txt` accept MP3, M4A and Opus files with a few attributes; the tool generates honest lossy encodes and **cascades** (a lossy file re-encoded to a higher bitrate) from the trusted lossless tracks; tracks of one master in several versions are **paired**; and lossy rows get **their own tables**. Nothing that exists today changes for lossless rows. Main spec: [calibration.md](calibration.md). Rules being evaluated: `specs/detection/lossy-source.md`; acceptance B1–B11 there (section 9). Scenarios: `specs/features/calibration-lossy.feature`.
+> Extends the calibration tool so that RF-15 can be measured: `trusted.txt` and `confirmed.txt` accept MP3, M4A and Opus files with a few attributes (Opus rows are evaluated since detection v8, C14–C17); the tool generates honest lossy encodes and **cascades** (a lossy file re-encoded to a higher bitrate) from the trusted lossless tracks; tracks of one master in several versions are **paired**; and lossy rows get **their own tables**. Nothing that exists today changes for lossless rows. Main spec: [calibration.md](calibration.md). Rules being evaluated: `specs/detection/lossy-source.md`; acceptance B1–B11 there (section 9). Scenarios: `specs/features/calibration-lossy.feature`.
 
 ## Open questions for G1
 
@@ -26,6 +26,10 @@ config: specs/calibration/calibration.v2.toml
 | C11 | Changed messages of approved scenarios: `not a FLAC or WAV file` becomes `not a supported audio file (FLAC, WAV, MP3, M4A or Opus)`, and `unknown kind 'x' (expected fake or false-positive)` becomes `unknown kind 'x' (expected fake, real or false-positive)` (calibration.feature, "Errors in trusted.txt" and "Errors in confirmed.txt") | Open. Default: yes |
 | C12 | No new `[[targets]]` kind for lossy rows: acceptance B is read from the tables of section 6 | Open. Default: yes |
 | C13 | (RF-16) **Report additions for the streaming-sample-rate rule** (section 6.8): a lossy verdict-change table between params files, a `streaming` column and a `streaming rate` column, per-sample-rate sub-rows for the generated, trusted and `confirmed_real` groups, and `fc` percentiles; and the per-upstream and per-sample-rate rows of confirmed lossy fakes hold strong labels only, weak labels only in the `weak` row (6.3), so that K4 reads strong labels. No new input, label or config key; acceptance K is read from them (same as lossy-source.md Q24) | **Decided at G1 (owner, 2026-10-25):** yes, including the `streaming rate` column that the K5 gate reads on `cbr320 @ 48000` and `cbr256 @ 48000` (lossy-source.md Q22, section 11.7) |
+| C14 | (Opus, detection v8) **Which params files evaluate Opus rows.** A params file with `[lossy]` and with `lossy.cutoffs.opus` (v8) evaluates them like any lossy row; a params file without `[lossy]` (v2–v4) or with `[lossy]` but no `opus` rows (v5–v7) does **not** evaluate them: they are counted as not evaluated in the header for that file, never as `Error`, as Q8 does for lossy rows and params without `[lossy]` (section 6.1). So v7 × v8 compares MP3 and AAC rows only, and Opus rows appear with v8 only | Open. Default: yes (same as lossy-source.md Q36) |
+| C15 | (Opus) **`.opus` under folder lines**: `formats=lossy` (the default of `real` folder lines) includes `.mp3`, `.m4a` and **`.opus`**, and `formats=all` the five extensions; a lossy folder with none of them: `no MP3, M4A or Opus files under this folder` (section 1.1). The column `not_evaluated` of `labels.csv` is no longer filled (the decoder is no longer pending); it stays in the file, empty, so `labels.csv` keeps its columns | Open. Default: yes |
+| C16 | (Opus) **Opus as the last stage of a lossy entry** (section 4.1): the last stage's `ext` may be `opus`; the message `lossy entry <id>: Opus output is not supported yet` is removed, and the remaining one reads `lossy entry <id>: the last stage's ext must be mp3, m4a or opus` | Open. Default: yes |
+| C17 | (Opus) **`calibration.v4.toml`** (section 8): v3 plus the settings `opus64`, `opus96`, `opus160` and `opus256` (all `lossless_transcode = false`, so the lossless tables do not change), the single-stage entries `opus64`, `opus96`, `opus128` and `opus160`, and the cascades `cbr128_opus256`, `aac128_opus256` (O4, gated), `cbr192_opus256`, `cbr128_opus160` (O5, reported) and `cbr320_opus128` (O3, negative). The gated cascades end at 256 kbps because at 160 kbps or less libopus hides the source's edge (band folding, measured before G1: lossy-source.md sections 12.6 and 12.8 F4); `cbr128_opus160` is kept as a report of that limitation. About 14 more encode calls per source (about 20,000 on today's corpus, once, then cached). The default `--config` stays v2; acceptance O passes v4 explicitly. The existing setting `opus128` keeps its lossless transcode (it is in v1–v3) | Open. Default: yes |
 
 ## 0. Compatibility
 
@@ -40,8 +44,8 @@ config: specs/calibration/calibration.v2.toml
 ### 1.1 Accepted files
 
 - **File entries** of `trusted.txt` and `confirmed.txt` may name `.flac`, `.wav`, `.mp3`, `.m4a` or `.opus` files (any letter case). Otherwise: `not a supported audio file (FLAC, WAV, MP3, M4A or Opus)` (C11).
-- **Folder entries** include, recursively, the files selected by `formats=` (section 1.2), even though the app's scanner now also lists MP3 and M4A files (the tool filters what it enumerates): `lossless` (the default of `trusted.txt` and `fake` folder lines, as today) → `.flac` and `.wav`; `lossy` (the default of `real` folder lines) → `.mp3` and `.m4a`; `all` → the four. A `real` line accepts only `lossy` (1.2). A folder with no selected file is an error on its line: `no FLAC or WAV files under this folder` (unchanged), `no MP3 or M4A files under this folder`, or `no supported audio files under this folder`.
-- **Opus** (decoder pending, ADR-0030): `.opus` files are never enumerated under folders; a file entry naming one is accepted, labelled, and **not evaluated** (section 6.1).
+- **Folder entries** include, recursively, the files selected by `formats=` (section 1.2), even though the app's scanner now also lists MP3 and M4A files (the tool filters what it enumerates): `lossless` (the default of `trusted.txt` and `fake` folder lines, as today) → `.flac` and `.wav`; `lossy` (the default of `real` folder lines) → `.mp3`, `.m4a` and `.opus` (`.opus` since detection v8, C15); `all` → the five. A `real` line accepts only `lossy` (1.2). A folder with no selected file is an error on its line: `no FLAC or WAV files under this folder` (unchanged), `no MP3, M4A or Opus files under this folder`, or `no supported audio files under this folder`.
+- **Opus** (since detection v8, ADR-0047): `.opus` files are decoded by the app's pipeline like the other lossy files and are evaluated by the params files that have Opus rows (C14, section 6.1). Before v8 (decoder pending) they were never enumerated under folders, and a file entry naming one was labelled and not evaluated.
 - **Domain.** Each labelled track is `lossless` or `lossy` by its codec, known after extraction (lossy-source.md section 2): `pcm`, `flac`, `alac` → `lossless`; `mp3`, `aac`, `opus` → `lossy`. An `.m4a` that cannot be probed is an `Error` row of the lossy domain. A trusted ALAC `.m4a` is a lossless trusted track like any FLAC, and a transcode source.
 
 ### 1.2 Field 2: a word and attributes
@@ -102,7 +106,7 @@ Appended after `watch_id`, in this order. Empty when the row says nothing.
 | `label_strength` | `weak` for weak labels |
 | `chain_id`, `chain_key` | section 6.5 |
 | `split_unit` | section 3 |
-| `not_evaluated` | `opus decoder pending` for Opus tracks |
+| `not_evaluated` | empty since detection v8 (C15); before it, `opus decoder pending` for Opus tracks. Which params files evaluate a row is in the report header (section 6.1) |
 
 New values in existing columns: `origin` `confirmed_real`; `class` `generated` (honest generated lossy rows); `setting` the `[[generate.lossy]]` id for generated lossy rows; `encoder` the last stage's encoder for them. Rows keep the sort order of inputs.md section 3.
 
@@ -119,7 +123,7 @@ New values in existing columns: `origin` `confirmed_real`; `class` `generated` (
 
 ### 4.1 Configuration
 
-- `[[generate.lossy]]` entries: `id` and `stages`, a non-empty list of `[[generate.settings]]` ids applied in order. The last stage decides the declared format of the file. Checks (exit 2): `id` unique among the lossy entries (it may equal a setting id: the single-stage entry `cbr320` is the lossy file of the setting `cbr320`; the `domain` column tells the two rows apart); every stage id exists; in an entry with two or more stages every stage has `bitrate_kbps`; the last stage's `ext` is `mp3` or `m4a`. Messages: `lossy entry <id> is defined twice`, `lossy entry <id>: no stages`, `lossy entry <id>: unknown stage <setting>`, `lossy entry <id>: stage <setting> has no bitrate_kbps`, `lossy entry <id>: Opus output is not supported yet` (last stage's `ext` is `opus`, any letter case), `lossy entry <id>: the last stage's ext must be mp3 or m4a` (any other `ext`).
+- `[[generate.lossy]]` entries: `id` and `stages`, a non-empty list of `[[generate.settings]]` ids applied in order. The last stage decides the declared format of the file. Checks (exit 2): `id` unique among the lossy entries (it may equal a setting id: the single-stage entry `cbr320` is the lossy file of the setting `cbr320`; the `domain` column tells the two rows apart); every stage id exists; in an entry with two or more stages every stage has `bitrate_kbps`; the last stage's `ext` is `mp3`, `m4a` or `opus` (any letter case; `opus` since detection v8, C16). Messages: `lossy entry <id> is defined twice`, `lossy entry <id>: no stages`, `lossy entry <id>: unknown stage <setting>`, `lossy entry <id>: stage <setting> has no bitrate_kbps`, `lossy entry <id>: the last stage's ext must be mp3, m4a or opus` (any other `ext`). Before v8 an `opus` last stage was refused with `lossy entry <id>: Opus output is not supported yet`.
 - `[[generate.settings]]` gains the optional `lossless_transcode` (default `true`). With `false` the setting is only used as a stage and gets no FLAC transcode, so the lossless tables do not change (used by the sample corpus, section 9).
 - **Sources** are those of generation.md section 1: trusted lossless tracks that are not `Error` and not silent. Lossy tracks are never sources.
 
@@ -165,7 +169,7 @@ The last stage writes `<generated>/<id>.<ext>`. There is no decode call. The sam
 
 - Every table, figure, list and target of evaluation.md sections 3–9, and the grid search, use **lossless-domain rows only**, as before this spec.
 - Lossy rows appear only in the tables below, and only for params files with a `[lossy]` section. For a params file without it, lossy rows are **not evaluated**: the header gives their count per params file; they are never counted as `Error`.
-- Opus rows are not evaluated by any params file while the decoder is pending; the header counts them and `report.md` lists them.
+- **Opus rows** (since detection v8, C14) are evaluated only by params files whose `[lossy.cutoffs]` has `opus` rows (v8). For a params file without them (v5–v7, and v2–v4, which have no `[lossy]`), Opus rows are **not evaluated**, exactly like lossy rows for a params file without `[lossy]`: the header counts them per params file, `report.md` lists them, and they are never counted as `Error`, whatever their extraction gave. Before v8 no params file evaluated them (the decoder was pending).
 
 ### 6.2 Lossy confusion matrix
 
@@ -193,7 +197,7 @@ Lossy rows fill the measurement columns of evaluation.md section 8 (`H`, `F`, `f
 
 ### 6.5 Chains (C5)
 
-- The **version** of a chained track is its codec (`flac`, `pcm`, `alac`, `aac`, `mp3`).
+- The **version** of a chained track is its codec (`flac`, `pcm`, `alac`, `aac`, `mp3`, `opus`).
 - Its **key** (`chain_key`): when the file stem starts with a run of 1 to 3 ASCII digits, that run as an integer (`03 – x` → `3`). Otherwise, that is, when the stem does not start with a digit or its leading run has 4 or more digits (a year or a catalogue number, not a track number: `2024 – x`), the stem lower-cased with only its letters and digits kept, Unicode included (`2024 – x` → `2024x`, `Ópera` → `ópera`).
 - Within one chain, tracks of different versions with the same key form a **pair group**. A key that appears twice within one version is ambiguous: its tracks are listed and not paired.
 - **`report.md`**, per chain and key: path, version, verdict, reasons, `fc`, estimate, declared bitrate and watch id. **`summary.md`**, per chain id: keys, pair groups, versions present, verdict counts per version, the median `|fc(mp3) − fc(aac)|` over the keys that have both versions, and the watch ids in the chain (the owner's full-chain album holds FP4, watch id W4). Lossless versions are judged with the lossless rules of the same params file.
@@ -210,7 +214,7 @@ A lossy `false-positive` track is listed in every run with, per params file: ver
 
 Additions so that acceptance K of `specs/detection/lossy-source.md` section 11.7 can be read from `summary.md`. They apply to every run; with params files without `[lossy.streaming]` they simply show no streaming-rate rows.
 
-- **Lossy verdict changes.** The **lossy baseline** is the first `--params` file with a `[lossy]` section. For each later file with `[lossy]`, a 4 × 4 count table (lossy-baseline verdict × verdict) over the lossy rows that both files evaluate (strong and weak labels; rows not evaluated, such as Opus, are left out), in `summary.md` and `report.md`, followed by one count, **"of which `streamingSampleRate`"**: the off-diagonal rows whose reasons include `streamingSampleRate` with the later file and not with the baseline. `report.md` also lists each changed lossy row with truth, group, codec, sample rate, declared bitrate, `fc`, `s`, `D` and both verdicts. The lossless verdict-change table of evaluation.md section 9 does not change.
+- **Lossy verdict changes.** The **lossy baseline** is the first `--params` file with a `[lossy]` section. For each later file with `[lossy]`, a 4 × 4 count table (lossy-baseline verdict × verdict) over the lossy rows that both files evaluate (strong and weak labels; rows not evaluated, such as Opus rows with v5–v7, are left out), in `summary.md` and `report.md`, followed by one count, **"of which `streamingSampleRate`"**: the off-diagonal rows whose reasons include `streamingSampleRate` with the later file and not with the baseline. `report.md` also lists each changed lossy row with truth, group, codec, sample rate, declared bitrate, `fc`, `s`, `D` and both verdicts. The lossless verdict-change table of evaluation.md section 9 does not change.
 - **Column `streaming`** in every row of the per-group table (6.3): the rows whose reasons include `streamingSampleRate` (0 for a params file without `[lossy.streaming]`).
 - **Column `streaming rate`** in every row of 6.3, next to `streaming`: the share of the row's rate denominator (its rows minus `Undetectable`, `Source-limited` and `Error`, the denominator of the rates of 6.2) whose reasons include `streamingSampleRate`, as a percentage with one decimal (`10.0 %`); empty when that denominator is 0. Acceptance K5 of lossy-source.md section 11.7 gates it on the honest generated sub-rows `cbr320 @ 48000` (at most 10 %) and `cbr256 @ 48000` (at most 2 %), checked on the counts, not on the rounded percentage; the tool shows the figures and evaluates no lossy gate (C12).
 - **Per sample rate.** In 6.3, each `[[generate.lossy]]` row, the trusted lossy files rows and the `confirmed_real` row are each followed by one sub-row per decoded sample-rate bucket that has at least one row: `44100`, `48000` and `other`, labelled `<group> @ <bucket>` (for example `cbr320 @ 48000`), with the same columns. A sub-row is positive or negative as its group.
@@ -228,6 +232,7 @@ Lossy rows never enter the grid's data, cost or constraints. A grid key in `[los
 - `specs/calibration/calibration.v2.toml` = `calibration.v1.toml` with `config_version = 2`, the 14 `[[generate.lossy]]` entries and `[labels.upstream_by_rate]`. Every v1 value is unchanged.
 - **`--config` defaults to `calibration.v2.toml`** (C8); calibration.md section 2 changes accordingly. v1 stays loadable (no lossy entries, no table).
 - The single-stage entries are the honest negatives of B2; the cascades are `cbr128_cbr320`, `aac128_cbr320` (gated, B5), `cbr192_cbr320`, `cbr128_aac256`, `opus128_cbr320` (reported, B6) and the negative `cbr320_cbr128` (B2).
+- **`specs/calibration/calibration.v4.toml`** (Opus, detection v8, C17) = `calibration.v3.toml` with `config_version = 4`, four Opus settings (`opus64`, `opus96`, `opus160`, `opus256`: libopus at 64, 96, 160 and 256 kbps, `lowpass_hz = 20000`, `lossless_transcode = false`) and nine lossy entries ending in Opus: the honest `opus64`, `opus96`, `opus128`, `opus160` and the negative cascade `cbr320_opus128` (O3, gated), the cascades `cbr128_opus256` and `aac128_opus256` (O4, gated), and `cbr192_opus256` and `cbr128_opus160` (O5, reported; both truth `fake` by 4.2, since 192 < 256 and 128 < 160). The O4 cascades end at 256 kbps, not 160: at 160 kbps or less libopus fills the bands above a band-limited source's edge with folded energy and the edge is lost (measured before G1: `cbr128_opus160` 15 of 69 `Fake`, `aac128_opus160` 6 of 69; at 256 kbps 65 and 61 of 69; lossy-source.md sections 12.6 and 12.8 F4). Every v3 value is unchanged, so the lossless tables of a v4 run equal those of a v3 run. The default `--config` stays `calibration.v2.toml`; acceptance O of lossy-source.md section 12.7 passes v4 explicitly. The Opus entries are written as `<generated>/<id>.opus` and analysed by the app's pipeline (section 4.4), whose Opus decoding is lossy-source.md section 2.4.
 
 ## 9. Sample corpus, lossy variant (CI; extends sample-corpus.md)
 
@@ -255,7 +260,7 @@ The base sample corpus and its expectations (sample-corpus.md sections 1–5) do
 |---|---|---|---|
 | 12 | `Pérdidas/Vídeo/07 – Falso 320.mp3` | `mp3_320_lp17k` | `confirmed.txt` line 4 |
 | 13 | `Pérdidas/Vídeo/08 – Señal ’AAC’.m4a` | `m4a_aac_128_lp16k` | `confirmed.txt` line 5 |
-| 14 | `Pérdidas/Vídeo/09 – Ópera.opus` | (any bytes) | `confirmed.txt` line 6 |
+| 14 | `Pérdidas/Vídeo/09 – Ópera.opus` | `opus_160_src16k` (since detection v8; before, any bytes) | `confirmed.txt` line 6 |
 | 15 | `Cadena/MP3 – Ørsted/01 – Tres.mp3` | `mp3_320_lp17k` | `confirmed.txt` line 7 |
 
 - **`trusted.txt`**: line 7 becomes `Revisión/Ørsted/ | revisado chain=C1 | barras normales y separador final`. **`confirmed.txt`** gains:
@@ -270,11 +275,12 @@ The base sample corpus and its expectations (sample-corpus.md sections 1–5) do
 **Expected results** with `--params detection-params.v2.toml --params detection-params.v5.toml`:
 
 - **Lossless:** on split `all`, every lossless table equals the base corpus's (sample-corpus.md section 3), for both files.
-- **Labelled rows:** 55 (the base 33, 18 generated lossy rows from the 6 sources, and the 4 corpus lossy files). **Decodes on a cold run:** 54 (the Opus file is never decoded).
-- **Not evaluated:** v2: 22 lossy rows; v5: 1 (the Opus file).
+- **Labelled rows:** 55 (the base 33, 18 generated lossy rows from the 6 sources, and the 4 corpus lossy files). **Decodes on a cold run:** 55 (since detection v8 the Opus file is decoded too; before, 54).
+- **Not evaluated:** v2: 22 lossy rows; v5: 1 (the Opus file: v5 has no Opus rows, C14).
 - **Lossy matrix (v5, split `all`):** real row 11 `Real`, 2 `Source-limited` (`l128` and `l320` from track 5, `low_hf`, whose own cutoff is about 6 kHz), total 13; fake row 7 `Fake`, 1 `Undetectable` (`l128_320` from track 5), total 8; fake (weak) row empty.
 - **What the test stage confirms first** (derived, not measured): that the reported cutoff of `low_hf` with v5 is below 16000 Hz (the source-limited threshold of `l128`, `17000 − 1000`; it is expected near 6 kHz, its `fe`); that the other five sources (`full_band`, `hf_bursts`) report a cutoff above 19500 Hz (the threshold of `l320`); and the checks of `lossy-fixtures.md` section 3 for the three fixtures written. If one does not hold, it stops and returns to G1.
 - **Per group (v5):** `l128` 5 Real + 1 source-limited; `l320` 5 Real + 1 source-limited; `l128_320` 5 Fake + 1 undetectable, median estimate of the `Fake` rows 128; `confirmed_real` 1 Real; confirmed fakes `aac` 2 Fake; `opus` 0 rows evaluated. Track 12's estimate (128) is at most its bound (128).
+- **With `--params detection-params.v5.toml --params detection-params.v8.toml`** (detection v8, C14): v8 leaves no lossy row not evaluated and v5 leaves 1. Every v8 figure of the MP3 and M4A rows equals v5's (all of them are 44.1 kHz, so `[lossy.streaming]` never fires, and `[edge]` and the Opus rows do not act on them). The Opus file (`opus_160_src16k`, truth `fake`, strong label, upstream `opus`, 48 kHz) is `Fake` with no estimate (`lossy-fixtures.md` section 2.2), so the v8 lossy matrix (split `all`) has the real row of v5 (11 `Real`, 2 `Source-limited`, total 13) and the fake row 8 `Fake`, 1 `Undetectable`, total 9; the per-group rows `confirmed_fake opus` and `confirmed_fake 48000` each hold 1 `Fake`. This rests on the fixture check of `lossy-fixtures.md` section 3 for `opus_160_src16k` (measured before G1: `fc` 16050 Hz, `D` ≈ 33 dB, figure F4 of lossy-source.md section 12.8); the test stage still runs the check, and if it fails it stops (G1).
 - **Chain `C1`:** keys 1, 2 and 3; one pair group (key 1: the WAV track 7, `Real`, and the MP3 track 15, `Fake`, estimate 128); keys 2 and 3 have the WAV version only (both `Error`).
 - The Ørsted album and `Cadena/MP3 – Ørsted` form the unit `chain:C1`.
 

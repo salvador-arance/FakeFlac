@@ -1,0 +1,146 @@
+# DetectionParams v8 (S4, ADR-0011). Lossless rules: specs/detection/rules.md (v6, unchanged in v7 and v8).
+# Lossy rules: specs/detection/lossy-source.md (RF-15; rule L6a, RF-16: section 11; Opus, RF-14/RF-15: section 12).
+# v8 = every v7 section and value unchanged, plus the "opus" rows of [lossy.cutoffs] (Opus files, ADR-0047; measured, section 12.8).
+# Same extraction as v2-v7 ([input] and [fft] unchanged, so cached spectra are reused; EXTRACTION_VERSION stays 2).
+# Changing any value means a new file version and a new algorithm_version (cache invalidation).
+algorithm_version = 8
+
+[input]
+min_duration_s = 5.0          # shorter tracks -> Error(TooShort)
+edge_skip_percent = 5.0       # skip intros/outros
+segments = 64                 # analysis positions spread over the track
+frames_per_segment = 4        # consecutive FFT frames per position (64 x 4 = 256 frames)
+silence_dbfs = -60.0          # frames quieter than this are ignored
+
+[fft]
+target_bin_hz = 10.8          # N = nearest power of two to sample_rate / target_bin_hz (4096 at 44.1/48 kHz)
+window = "hann"               # hann | blackman_harris_4 | nuttall_4 | kaiser (ADR-0025)
+kaiser_beta = 10.0            # only used when window = "kaiser"
+overlap = 0.5
+band_hz = 100.0               # band width of the mean and median spectra
+
+[bands]
+ref_band_low_hz = 1000.0
+ref_band_high_hz = 10000.0
+hf_band_low_hz = 10000.0
+hf_band_high_hz = 16000.0
+nyquist_guard_hz = 100.0
+noise_floor_percentile = 5.0  # reported only
+
+[extent]
+content_drop_db = 60.0        # content extent fe: bands less than this below L_ref (GradualRolloff, and fc of lossy files without a step)
+content_min_width_hz = 200.0
+
+[step]
+search_low_hz = 11000.0       # lowest transition-band centre considered
+search_top_margin_hz = 400.0  # highest centre considered = nyquist - this (also caps c_exp of lossy files)
+window_bands = 3              # bands on each side of the transition band
+rebound_db = 6.0              # content this far above the 'above' level higher up -> not a cutoff
+
+[gaps]
+edge_hz = 16000.0             # start of MP3 sfb21 at 44.1 and 48 kHz
+band_hz = 700.0               # width of each comparison band
+
+[full_band]                   # rules.md section 2 (ADR-0038, ADR-0039). Lossless files only
+low_hz = 20700.0              # upper window: bands with centre in [low_hz, high_hz); above the 320 kbps LAME low-pass
+high_hz = 21000.0             # ... and at or below the content of the confirmed false positives FP1-FP3
+min_level_db = -70.0          # U = median of M - L_ref in the window; FullBand needs U at or above this
+min_burst_db = 3.0            # B = median of M - Q in the window; FullBand needs B at or above this
+max_lossy_step_db = 3.0       # a cutoff step D at or above this with fs in the lossy range -> not FullBand
+
+[edge]                        # rules.md section 2 (ADR-0042). Lossless files only, rule V4. Absent = EdgeStep never holds
+floor_low_hz = 20900.0        # F_top: median of M over the bands with centre in [floor_low_hz, floor_high_hz), at or below top
+floor_high_hz = 22000.0
+floor_min_db = -104.0         # files above 16 bits: F_top is never taken below this absolute level (16-bit rounding floor)
+max_median_step_db = 3.0      # EdgeStep needs the median step D_Q below this
+min_residual_db = 15.0        # ... the post-step residual R at or above this
+max_step_db = 16.0            # ... and the cutoff step D below this
+
+[verdict]
+low_hf_threshold_db = -60.0           # H below this -> Suspicious(LowHighFrequencyContent); also rule L2 of lossy files
+gap_fake_db = 6.0                     # G at or above this, and not FullBand -> Fake (lossless files)
+gap_suspicious_db = 4.0               # G at or above this -> Suspicious(HighBandGaps) (lossless files)
+step_fake_db = 10.0                   # D in the lossy range at or above this, and not FullBand -> Fake (lossless files)
+step_suspicious_db = 7.0              # D at or above this -> the reported cutoff is fs (all files); lossless V6
+step_low_suspicious_db = 10.0         # D below the lossy range at or above this -> Suspicious(AmbiguousCutoff)
+step_high_suspicious_db = 12.0        # D just above the lossy range at or above this -> Suspicious(AmbiguousCutoff)
+lossy_min_cutoff_hz = 14500.0         # lossy range: [lossy_min_cutoff_hz, fake_max_cutoff_hz) (lossless rules only)
+fake_max_cutoff_hz = 20300.0
+ambiguous_max_cutoff_hz = 20800.0
+gradual_min_cutoff_hz = 19000.0       # no step but content ends below this -> Suspicious(GradualRolloff)
+
+[lossy]                               # lossy-source.md (RF-15, ADR-0041). MP3, AAC and Opus files only.
+# Absent section (v2-v4 files) = lossy files are not judged: Error(UnsupportedFormat).
+# The three values below are INDICATIVE starting values, not measured on the corpus; acceptance B decides
+# (lossy-source.md sections 6 and 9).
+suspicious_shortfall_hz = 1000.0      # s = c_exp - fc at or above this -> at least Suspicious (rules L4, L5)
+fake_shortfall_hz = 2500.0            # s at or above this, with D >= fake_min_step_db -> Fake (rule L3)
+fake_min_step_db = 10.0               # a Fake needs a clear cutoff step (same value as step_fake_db)
+
+[lossy.cutoffs]
+# Nominal low-pass (Hz) of an honest encode at each declared bitrate (kbps), per codec. Rows in increasing
+# bitrate. The expected cutoff of a file is the row with the largest bitrate <= its declared bitrate.
+# mp3 and aac are INDICATIVE, NOT MEASURED HERE:
+#   mp3: LAME 3.99-3.100 default low-pass per CBR bitrate (as documented for LAME; not verified in this repo).
+#   aac: a conservative value across common AAC-LC encoders (Apple, FDK, ffmpeg native, streaming sites).
+# opus (v8, lossy-source.md section 12.3) is MEASURED before G1 (lossy-source.md section 12.8, 2026-11-01): libopus
+#   1.6.1's full band ends at the top CELT band edge, 20 kHz; native decodes of 69 corpus sources report fc 20050 or
+#   20150 Hz in 69 of 69 at every bitrate from 16 to 320 kbps, and 0 of 828 honest encodes at 24-320 kbps are Fake
+#   or Suspicious with these rows. Full band measured from 16 kbps; the first row stays at 24 kbps as a margin for
+#   older libopus versions (lossy-source.md Q30), so files declared below 24 kbps are not judged by the shortfall rules.
+mp3 = [
+  { bitrate_kbps = 32,  cutoff_hz = 5500.0 },
+  { bitrate_kbps = 40,  cutoff_hz = 7000.0 },
+  { bitrate_kbps = 48,  cutoff_hz = 7500.0 },
+  { bitrate_kbps = 56,  cutoff_hz = 10000.0 },
+  { bitrate_kbps = 64,  cutoff_hz = 11000.0 },
+  { bitrate_kbps = 80,  cutoff_hz = 13500.0 },
+  { bitrate_kbps = 96,  cutoff_hz = 15100.0 },
+  { bitrate_kbps = 112, cutoff_hz = 15600.0 },
+  { bitrate_kbps = 128, cutoff_hz = 17000.0 },
+  { bitrate_kbps = 160, cutoff_hz = 17500.0 },
+  { bitrate_kbps = 192, cutoff_hz = 18600.0 },
+  { bitrate_kbps = 224, cutoff_hz = 19400.0 },
+  { bitrate_kbps = 256, cutoff_hz = 19700.0 },
+  { bitrate_kbps = 320, cutoff_hz = 20500.0 },
+]
+aac = [
+  { bitrate_kbps = 64,  cutoff_hz = 11000.0 },
+  { bitrate_kbps = 96,  cutoff_hz = 13000.0 },
+  { bitrate_kbps = 128, cutoff_hz = 15500.0 },
+  { bitrate_kbps = 160, cutoff_hz = 16000.0 },
+  { bitrate_kbps = 192, cutoff_hz = 17000.0 },
+  { bitrate_kbps = 256, cutoff_hz = 19000.0 },
+  { bitrate_kbps = 320, cutoff_hz = 19500.0 },
+]
+opus = [
+  { bitrate_kbps = 24,  cutoff_hz = 20000.0 },
+  { bitrate_kbps = 32,  cutoff_hz = 20000.0 },
+  { bitrate_kbps = 48,  cutoff_hz = 20000.0 },
+  { bitrate_kbps = 64,  cutoff_hz = 20000.0 },
+  { bitrate_kbps = 96,  cutoff_hz = 20000.0 },
+  { bitrate_kbps = 128, cutoff_hz = 20000.0 },
+  { bitrate_kbps = 160, cutoff_hz = 20000.0 },
+  { bitrate_kbps = 192, cutoff_hz = 20000.0 },
+]
+
+[lossy.streaming]                     # lossy-source.md section 11 (RF-16), rule L6a. Absent (v5, v6 files) = L6a never fires.
+# A lossy file that rule L6 would call Real becomes Suspicious(StreamingSampleRate), with no estimate, when its codec,
+# decoded sample rate, declared bitrate and reported cutoff fc all match below. Never Fake; never overrides L1-L5.
+# sample_rates_hz, codecs and min_declared_bitrate_kbps are INDICATIVE starting values, not measured on the corpus.
+# min_cutoff_hz and max_cutoff_hz are MEASURED (lossy-source.md section 11.3.1; decided at G1, 2026-10-25).
+# Acceptance K (section 11.7) checks all five.
+sample_rates_hz = [48000]             # decoded rates that count: Opus always decodes at 48 kHz, so an Opus rip kept at its rate is 48 kHz
+codecs = ["mp3", "aac"]               # codecs judged ("mp3", "aac"); "opus" is not allowed (every Opus file is natively 48 kHz)
+min_declared_bitrate_kbps = 192       # declared bitrate b at or above this: excludes the 128-class files (the window, not this bound, excludes the LAME 224/256 low-passes)
+min_cutoff_hz = 19800.0               # fc in [min_cutoff_hz, max_cutoff_hz): an edge at Opus's 20 kHz reports 20050 or 20150 Hz; above the 19750 Hz of LAME 224/256 (lossy-source.md 11.3.1)
+max_cutoff_hz = 20200.0               # ... and below the 20250-20450 Hz that LAME 320 reports at 48 kHz: content past 20.2 kHz is more than Opus codes
+
+[spectrogram]
+window = "hann"
+fft_size = 2048
+overlap = 0.75
+max_width = 1200              # time bins
+height = 512                  # frequency bins
+db_floor = -120.0
+db_ceiling = 0.0
