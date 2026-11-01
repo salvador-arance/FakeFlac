@@ -4,6 +4,7 @@
 
 | Requirement | Milestone | Spec | Tests | Module |
 |---|---|---|---|---|
+| RP-01 / RP-03 / RP-04 / RP-06 / RP-10 local harness parity | H0 maintenance | `contracts/agent-harness.md`, `features/agent-harness.feature`, ADR-0048 (owner G1 approvals in chat, 2026-11-01) | `scripts/{sync-agents,codex-hooks,codex-models}.test.mjs` (71 tests); fresh-session lifecycle hooks and native host enforcement remain manual and unverified | `scripts/sync-agents.mjs`, `.codex/hooks/dispatch.mjs`, canonical `.claude/codex-models.json`, generated `AGENTS.md`, `.agents/skills/`, `.codex/agents/`, `.codex/hooks.json`; Claude remains canonical |
 | RF-01 folder dialog / drop | H1 | `contracts/commands.md`, `features/analyze-folder.feature`, `ui/main-screen.md` | `src/lib/api/index.test.ts`, `src-tauri/tests/{contract,run_analysis,bindings}.rs`, `crates/fakeflac-fs/tests/scan.rs` (adapter, drop helper), `src/lib/api/window.test.ts`, `src/lib/components/{atoms/IconButton,organisms/FolderDropZone,organisms/Toolbar}.test.ts`, `src/lib/pages/AnalysisPage.test.ts` | `src-tauri`, `AnalysisPage`, `Toolbar`, `FolderDropZone` |
 | RF-02 recursive scan | H1 | `contracts/commands.md`, `features/analyze-folder.feature` | `crates/fakeflac-fs/tests/scan.rs`, `crates/fakeflac-core/tests/analyze_folder.rs` | `fakeflac-fs`, `fakeflac-core::analyze_folder` |
 | RF-03 band spectra | H1 | `detection/rules.md`, `features/detection-lossless.feature` | `crates/fakeflac-audio/tests/{detection_lossless,window_and_fft}.rs` | `fakeflac-audio` |
