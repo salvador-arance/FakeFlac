@@ -7,7 +7,7 @@ version: 7
 
 # Backend ↔ frontend contract (H1, with the H2 lossy formats, CSV export and album summaries)
 
-> The commands, events and types the frontend can use. They are defined once in Rust and the TypeScript bindings are **generated** with `tauri-specta` (S3, ADR-0003); this document is the readable reference. Field names are camelCase on the TS side. Settings commands arrive later in H2 (the cache command is version 7). Version 3 adds MP3 and M4A files (RF-14 H2) and the source-bitrate estimate (RF-15); changes are listed in "Lossy formats (version 3)". Version 4 adds `export_csv` (RF-09); changes are listed in "CSV export (version 4)". Version 5 adds the album summary to every `trackDone` event (RF-10); changes are listed in "Album summary (version 5)". Version 6 adds the reason `streamingSampleRate` (RF-16, detection v7, ADR-0043); changes are listed in "Streaming sample rate (version 6)". Version 7 adds the result cache (RF-11, ADR-0044): the command `clear_cache`, the error `CACHE_FAILED` and the summary fields `fromCache` and `cache`; changes are listed in "Result cache (version 7)".
+> The commands, events and types the frontend can use. They are defined once in Rust and the TypeScript bindings are **generated** with `tauri-specta` (S3, ADR-0003); this document is the readable reference. Field names are camelCase on the TS side. Settings commands arrive later in H2 (the cache command is version 7). Version 3 adds MP3 and M4A files (RF-14 H2) and the source-bitrate estimate (RF-15); changes are listed in "Lossy formats (version 3)". Version 4 adds `export_csv` (RF-09); changes are listed in "CSV export (version 4)". Version 5 adds the album summary to every `trackDone` event (RF-10); changes are listed in "Album summary (version 5)". Version 6 adds the reason `streamingSampleRate` (RF-16, detection v7, ADR-0043); changes are listed in "Streaming sample rate (version 6)". Version 7 adds the result cache (RF-11, ADR-0044): the command `clear_cache`, the error `CACHE_FAILED` and the summary fields `fromCache` and `cache`; changes are listed in "Result cache (version 7)". Detection v8 adds Opus files (RF-14, RF-15, ADR-0047) **without a new contract version**: no type changes; changes are listed in "Opus files (detection v8)".
 
 ## Commands
 
@@ -67,7 +67,7 @@ type TrackInfo = {
   codec: AudioCodec | null                           // version 3; null only when an M4A could not be probed
   sampleRate: number; bitDepth: number | null; channels: number
   declaredBitrateKbps: number | null                 // lossy codecs (mp3, aac, opus); null for lossless codecs and when not known (errors before the stream was read)
-  bitrateMode: BitrateMode | null                    // version 3; MP3 only (AAC does not signal it)
+  bitrateMode: BitrateMode | null                    // version 3; MP3 only (AAC and Opus do not signal it)
   durationMs: number; sizeBytes: number; modifiedUnix: number
 }
 
@@ -83,10 +83,10 @@ type TrackAnalysis = {
   info: TrackInfo
   verdict: Verdict
   cutoff: CutoffEstimate | null
-  estimatedSourceBitrateKbps: number | null          // RF-15: lossy codecs only (specs/detection/lossy-source.md section 5); null with streamingSampleRate (version 6)
+  estimatedSourceBitrateKbps: number | null          // RF-15: lossy codecs only (specs/detection/lossy-source.md section 5); null with streamingSampleRate (version 6); null for an Opus track that is not real (detection v8)
   reasons: SuspicionReason[]
   error: TrackError | null
-  algorithmVersion: number                           // 7 with the default DetectionParams (detection v7: lossless rules of rules.md, lossy rules of lossy-source.md)
+  algorithmVersion: number                           // 8 with the default DetectionParams (detection v8: lossless rules of rules.md, lossy rules of lossy-source.md)
 }
 
 type AnalysisSummary = {
@@ -144,6 +144,8 @@ Detection v4 (ADR-0039) does not change them either. It adds the optional field 
 Detection v6 (ADR-0042) does not change them either. It adds the optional section `edge` to `DetectionParams` (internal to the backend; values: `specs/detection/detection-params.v6.toml`), which can only turn a lossless `fake` into `suspicious` with `ambiguousCutoff` (or `highBandGaps`). The only visible change is `algorithmVersion` = 6 with the defaults, which invalidates cached results (ADR-0008); lossy results equal version 5's.
 
 Detection v7 (RF-16, ADR-0043) **does** change them: it adds the reason `streamingSampleRate` (contract version 6, "Streaming sample rate (version 6)").
+
+Detection v8 (RF-14, RF-15, ADR-0047) does not change them: `AudioFormat` and `AudioCodec` already hold `opus`. It adds Opus files to the scan and the `opus` rows of `[lossy.cutoffs]` ("Opus files (detection v8)"); `algorithmVersion` is 8 with the defaults.
 
 ## Lossy formats (version 3)
 
@@ -289,6 +291,21 @@ Version 7 (RF-11; ADR-0007, ADR-0008 as extended by ADR-0044; full spec: `specs/
 
 `just gen` produces new bindings (the command `clearCache`, the type `CacheStatus`, the two summary fields and the error code); `just gen-check` must pass. The API client adds `clearCache(): Promise<void>`, which rejects with `ApiError` on a contract error, like `exportCsv`. The frontend needs the texts of `ui/result-cache.md`.
 
+## Opus files (detection v8)
+
+Detection v8 (RF-14, RF-15; ADR-0047; rules: `specs/detection/lossy-source.md` sections 2.4 and 12, `detection-params.v8.toml`; UI: `specs/ui/lossy-formats.md`, "Opus files (detection v8)"; scenarios: `specs/features/opus.feature`). **The contract version stays 7** (lossy-source.md Q34): `just gen` produces the same bindings.
+
+- **Scan.** `.opus` files are listed (any letter case), so `scanned.total`, `AlbumUpdate.files` and `NO_AUDIO_FOUND` count them. `NO_AUDIO_FOUND` now means "no WAV, FLAC, MP3, M4A or Opus file".
+- **`TrackInfo` of an Opus track:** `format` `opus`, `codec` `opus` (also for an `Error` track: from the extension), `sampleRate` 48000 (Opus always decodes at 48 kHz), `bitDepth` null, `channels` 1 or 2 (channel mapping family 0), `declaredBitrateKbps` the average of the audio packets over the duration (lossy-source.md section 2.4.3), `bitrateMode` null, `durationMs` the audible length (pre-skip and end trim excluded).
+- **Verdicts.** The lossy rules with the `opus` rows; the reasons are the existing ones (`lowHighFrequencyContent`, `cutoffBelowDeclared`, `gradualRolloff`); never `streamingSampleRate` on an Opus track.
+- **`estimatedSourceBitrateKbps`** of an Opus track is the declared bitrate when it is `real` and `null` otherwise (lossy-source.md section 12.4, Q29), in addition to the null cases of versions 3 and 6.
+- **Errors.** A broken Ogg or Opus structure or packet is `corruptStream`; an Opus stream with a channel mapping family other than 0 (multichannel) or a chained or multiplexed Ogg file is `unsupportedFormat` (`TrackError` unchanged; details in lossy-source.md section 2.4.4).
+- **`algorithmVersion`** is 8 with the defaults (cached results of version 7 are recomputed, ADR-0008). For every file that is not Opus the verdicts, reasons, cutoffs and estimates equal version 7's.
+- **`get_spectrogram`** decodes Opus files like the others (`sampleRate` 48000, `maxFrequencyHz` 24000); its contract does not change.
+- **CSV export:** `format` and `codec` already allow `opus` (csv-export.md); `csv_format_version` stays 1.
+- **Unchanged:** the commands, events, `AppError` codes and every type.
+- **Layers.** `fakeflac-fs` lists `.opus`; `fakeflac-audio` reads the Ogg layer and decodes with `rusty-opus` (ADR-0047); `fakeflac-core` gains no type (it already has `AudioCodec::Opus`) and computes the null estimate in its pure lossy functions; `src-tauri` maps nothing new.
+
 ## Supported files (RF-14)
 
-Extensions, case-insensitive: `.wav`, `.flac` (H1); `.mp3`, `.m4a` (H2, version 3). **`.opus` is still skipped** until the Opus decoder is chosen (ADR-0030 spike; pending scenarios in `specs/pending/opus.feature`). `.mp4`, `.m4b`, `.aac` and `.ogg` are not supported. Other files are skipped silently by the scan. Hidden files and folders (starting with `.`) are skipped. Symbolic links are not followed.
+Extensions, case-insensitive: `.wav`, `.flac` (H1); `.mp3`, `.m4a` (H2, version 3); `.opus` (H2, detection v8, ADR-0047; Ogg Opus with channel mapping family 0). `.mp4`, `.m4b`, `.aac`, `.ogg` and `.oga` are not supported (`.ogg` and `.oga` may hold Vorbis or FLAC, ADR-0047 point 4). Other files are skipped silently by the scan. Hidden files and folders (starting with `.`) are skipped. Symbolic links are not followed.

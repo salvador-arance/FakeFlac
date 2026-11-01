@@ -23,6 +23,12 @@ Feature: Calibration and acceptance for lossy files
   its counts do not change. No derived test compares the whole table or
   summary.md as exact text, so no test changes (declared consequence, lossy.md
   6.8 and lossy-source.md Q25 (h), (j)).
+  Changed for detection v8 (lossy.md C14-C17, lossy-source.md section 12.9 (h);
+  RF-14/RF-15 Opus): the corpus file "Pérdidas/Vídeo/09 – Ópera.opus" is now the
+  Opus fixture opus_160_src16k and is decoded; params files without Opus rows
+  (v2, v5) still leave it not evaluated, and a run with detection-params.v8.toml
+  evaluates it; formats=lossy includes ".opus"; Opus may be the last stage of a
+  lossy entry.
 
   # --- Lossless rows do not change -------------------------------------------
 
@@ -42,12 +48,12 @@ Feature: Calibration and acceptance for lossy files
     And the "l128" and "l320" rows have truth "real" and class "generated"
     And the row of "Pérdidas/Vídeo/08 – Señal ’AAC’.m4a" has truth "real", origin "confirmed_real", class "reviewed", codec "aac" and declared_bitrate_kbps 128
     And the row of "Pérdidas/Vídeo/07 – Falso 320.mp3" has truth "fake", origin "confirmed_fake", upstream "aac" and source_bitrate_kbps 128
-    And the row of "Pérdidas/Vídeo/09 – Ópera.opus" has not_evaluated "opus decoder pending"
+    And the row of "Pérdidas/Vídeo/09 – Ópera.opus" has truth "fake", origin "confirmed_fake", upstream "opus", codec "opus" and an empty not_evaluated
 
-  @RP-11 @RF-15
-  Scenario: A cold run decodes every lossy file once, except Opus
+  @RP-11 @RF-15 @RF-14
+  Scenario: A cold run decodes every lossy file once, Opus included
     When "accept" runs on the lossy variant of the sample corpus with an empty features folder
-    Then 54 files are decoded
+    Then 55 files are decoded
     And a second run decodes 0 files and transcodes 0 entries
 
   # --- Lossy evaluation ---------------------------------------------------------
@@ -58,6 +64,22 @@ Feature: Calibration and acceptance for lossy files
     Then the header says that detection-params.v2.toml evaluates no lossy row (22 not evaluated)
     And the header says that detection-params.v5.toml leaves 1 lossy row not evaluated
     And no lossy row is counted in any Error column
+
+  @RP-11 @RF-15 @RF-14
+  Scenario: Opus rows are evaluated by a params file with Opus rows
+    detection-params.v5.toml has no Opus row; detection-params.v8.toml has
+    (lossy.md C14). The MP3 and M4A rows of the variant are all 44.1 kHz, so v8
+    gives them their v5 results.
+    When "accept" runs on the lossy variant of the sample corpus with the params files detection-params.v5.toml and detection-params.v8.toml
+    Then the header says that detection-params.v5.toml leaves 1 lossy row not evaluated and detection-params.v8.toml leaves 0
+    And the lossy confusion matrix of detection-params.v8.toml for split "all" is:
+      | truth | Real | Suspicious | Fake | Undetectable | Source-limited | Error | total |
+      | real        | 11 | 0 | 0 | — | 2 | 0 | 13 |
+      | fake        | 0  | 0 | 8 | 1 | — | 0 | 9  |
+      | fake (weak) | 0  | 0 | 0 | — | — | 0 | 0  |
+    And with detection-params.v8.toml the per-group rows "confirmed_fake opus" and "confirmed_fake 48000" each have 1 row, Fake 1
+    And the row of "Pérdidas/Vídeo/09 – Ópera.opus" in tracks.csv for detection-params.v8.toml has codec "opus", c_exp_hz 20000 and an empty estimate_kbps
+    And the lossy verdict-change table v5 × v8 counts no Opus row and has every off-diagonal count 0
 
   @RP-11 @RF-15
   Scenario: Lossy confusion matrix
@@ -148,12 +170,12 @@ Feature: Calibration and acceptance for lossy files
     Then its labels.csv row has truth "real", origin "trusted", class "primary" and domain "lossy"
     And no generated entry has it as source_path
 
-  @RP-11 @RF-15
-  Scenario: A folder line with formats=lossy includes MP3 and M4A files only
+  @RP-11 @RF-15 @RF-14
+  Scenario: A folder line with formats=lossy includes MP3, M4A and Opus files
+    Changed for detection v8 (lossy.md C15): ".opus" is included.
     Given lines 4 to 6 of the sample lossy confirmed.txt are replaced by the single line "Pérdidas\Vídeo | real formats=lossy"
     When "accept" runs on the lossy variant of the sample corpus
-    Then "Pérdidas/Vídeo/07 – Falso 320.mp3" and "Pérdidas/Vídeo/08 – Señal ’AAC’.m4a" have truth "real" and origin "confirmed_real"
-    And "Pérdidas/Vídeo/09 – Ópera.opus" has no labels.csv row
+    Then "Pérdidas/Vídeo/07 – Falso 320.mp3", "Pérdidas/Vídeo/08 – Señal ’AAC’.m4a" and "Pérdidas/Vídeo/09 – Ópera.opus" have truth "real" and origin "confirmed_real"
 
   @RP-11 @RF-15
   Scenario Outline: Errors in the attributes of confirmed.txt
@@ -215,8 +237,22 @@ Feature: Calibration and acceptance for lossy files
       | a lossy entry "x" with stages ["v0", "cbr320"]  | lossy entry x: stage v0 has no bitrate_kbps      |
       | a lossy entry "y" with stages ["nope"]          | lossy entry y: unknown stage nope                |
       | a lossy entry "w" with stages []                | lossy entry w: no stages                         |
-      | a lossy entry "z" with stages ["opus128"]       | lossy entry z: Opus output is not supported yet  |
+      | a setting "wav1" with ext "wav" and bitrate_kbps 128, and a lossy entry "z" with stages ["cbr128", "wav1"] | lossy entry z: the last stage's ext must be mp3, m4a or opus |
       | a second lossy entry "cbr128"                   | lossy entry cbr128 is defined twice              |
+
+  @RP-11 @RF-15 @RF-14
+  Scenario: Opus can be the last stage of a lossy entry
+    Changed for detection v8 (lossy.md C16): before, this config was refused
+    with "Opus output is not supported yet".
+    cbr128_opus256 is a gated O4 cascade (lossy-source.md section 12.7); the
+    O4 cascades end at 256 kbps because at 160 kbps or less a band-limited
+    source's edge shows only where the decoded signal clips (section 12.6).
+    Given the lossy entry "cbr128_opus256" of specs/calibration/calibration.v4.toml and the source "Compras/Ñandú – Ácido, Vol. 1 (2024)/01 – Intro ’A’.flac" with full track default
+    When the config is loaded and the ffmpeg calls are built
+    Then the config is accepted
+    And there are 2 encode calls and no decode call
+    And the second is "-nostdin -hide_banner -loglevel error -i <generated>/<id>.s1.mp3 -map 0:a:0 -map_metadata -1 -c:a libopus -b:a 256k -y <generated>/<id>.opus"
+    And the entry's label row will have truth "fake", class "positive", stages "cbr128>opus256", source_bitrate_kbps 128 and upstream "mp3"
 
   @RP-11 @RF-15
   Scenario: Lossy parameters cannot be searched

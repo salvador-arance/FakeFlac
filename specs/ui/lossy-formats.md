@@ -6,7 +6,7 @@ status: proposed
 
 # Lossy formats in the main screen (H2)
 
-> What the main screen shows for MP3 and M4A files (contract version 3, `specs/contracts/commands.md`, "Lossy formats"): the declared and the real (estimated source) bitrate in two new table columns and in the detail line, the codec where the container is ambiguous, and the texts of the new reason and errors. Layout, states and interaction stay those of `main-screen.md`; components follow `components.md` (atomic design, ADR-0014: a story per state and a component test before use, S6). Rules behind the values: `specs/detection/lossy-source.md`.
+> What the main screen shows for MP3 and M4A files (and, since detection v8, Opus files: section "Opus files (detection v8)") (contract version 3, `specs/contracts/commands.md`, "Lossy formats"): the declared and the real (estimated source) bitrate in two new table columns and in the detail line, the codec where the container is ambiguous, and the texts of the new reason and errors. Layout, states and interaction stay those of `main-screen.md`; components follow `components.md` (atomic design, ADR-0014: a story per state and a component test before use, S6). Rules behind the values: `specs/detection/lossy-source.md`.
 
 ## Table (`ResultsTable`, `main-screen.md`)
 
@@ -14,7 +14,7 @@ Columns, in order: State · File · Folder · Format · Samplerate · Bits · Du
 
 | Column | Cell | Lossless rows | Sort |
 |---|---|---|---|
-| Format | `format` in upper case (`MP3`, `M4A`, `FLAC`, `WAV`); an M4A with codec `alac` shows `M4A (ALAC)` (`format.m4aAlac`) | as H1 | by the text |
+| Format | `format` in upper case (`MP3`, `M4A`, `FLAC`, `WAV`, `OPUS`); an M4A with codec `alac` shows `M4A (ALAC)` (`format.m4aAlac`) | as H1 | by the text |
 | Bitrate | `BitrateValue` with `declaredBitrateKbps` and `bitrateMode` | "—" (`BitrateValue` state none, accessible label "No bitrate") | numeric; "—" cells last |
 | Real bitrate | `BitrateValue` with `estimatedSourceBitrateKbps`, `approx` = the estimate is lower than the declared bitrate. Its column header carries the tooltip `help.realBitrate` | "—" (state none) | numeric; "—" cells last |
 
@@ -37,7 +37,7 @@ Examples: "Cutoff 17.0 kHz · 320 kbps · ≈128 kbps source · Fake"; "Cutoff 1
 
 ## Texts (keys in `src/lib/i18n/`; English is the default, Spanish falls back to English until RF-13)
 
-New: `column.bitrate` Bitrate · `column.realBitrate` Real bitrate · `bitrate.kbps` {kbps} kbps · `bitrate.vbr` VBR · `bitrate.abr` ABR · `bitrate.approx` ≈{kbps} kbps · `bitrate.none` — · `bitrate.noneLabel` No bitrate (the accessible label of `bitrate.none`) · `format.m4aAlac` M4A (ALAC) · `detail.declared` {kbps} kbps · `detail.source` ≈{kbps} kbps source · `reason.cutoffBelowDeclared` Cutoff lower than expected for its bitrate · `error.unsupportedFormat` Unsupported audio format (shown for HE-AAC and MP3 layers I/II, and for any other `unsupportedFormat` error) · `help.realBitrate` The real bitrate is an estimate from the cutoff, in terms of the file's own codec. Files from sources with little treble, from encoders without a low-pass, or re-encoded from a close bitrate may not be detected.
+New: `column.bitrate` Bitrate · `column.realBitrate` Real bitrate · `bitrate.kbps` {kbps} kbps · `bitrate.vbr` VBR · `bitrate.abr` ABR · `bitrate.approx` ≈{kbps} kbps · `bitrate.none` — · `bitrate.noneLabel` No bitrate (the accessible label of `bitrate.none`) · `format.m4aAlac` M4A (ALAC) · `detail.declared` {kbps} kbps · `detail.source` ≈{kbps} kbps source · `reason.cutoffBelowDeclared` Cutoff lower than expected for its bitrate · `error.unsupportedFormat` Unsupported audio format (shown for HE-AAC and MP3 layers I/II, multichannel Opus, and any other `unsupportedFormat` error) · `help.realBitrate` The real bitrate is an estimate from the cutoff, in terms of the file's own codec. Files from sources with little treble, from encoders without a low-pass, or re-encoded from a close bitrate may not be detected.
 
 Changed: `error.NO_AUDIO_FOUND` "No WAV or FLAC files in this folder" → **"No supported audio files in this folder"** (`main-screen.md`).
 
@@ -55,6 +55,18 @@ Contract version 6 (`specs/contracts/commands.md`, "Streaming sample rate (versi
 - `help.realBitrate` does not change.
 
 Scenarios: `specs/features/detection-streaming-source.feature`, "Table cells and tooltip of a flagged track" (`@RF-06`) and "Detail line of a flagged track" (`@RF-07`).
+
+## Opus files (detection v8)
+
+Detection v8 (RF-14, RF-15; `specs/contracts/commands.md`, "Opus files (detection v8)", no contract change; rules: `specs/detection/lossy-source.md` section 12). **No new component, prop, state, variant or text** (lossy-source.md Q35):
+
+- **Format cell:** `OPUS` (the existing rule: `format` in upper case). Samplerate `48000`; the Bits cell as for MP3 (no bit depth).
+- **Bitrate cell:** `BitrateValue` with the declared bitrate and no mode ("128 kbps", never "VBR": Ogg Opus does not signal it).
+- **Real bitrate cell:** the declared bitrate for a `Real` Opus track; "—" (state none, "No bitrate") for a `Fake` or `Suspicious` one, because the estimate is `null` (lossy-source.md section 12.4). `help.realBitrate` stays true ("in terms of the file's own codec": no Opus estimate is shown when none exists).
+- **Detail line:** as for every lossy track; with a `null` estimate there is no "≈… kbps source" part. Examples: "Cutoff 20.0 kHz · 128 kbps · Genuine"; "Cutoff 16.0 kHz · 160 kbps · Fake".
+- **Errors:** `error.unsupportedFormat` ("Unsupported audio format") also covers multichannel Opus and chained Ogg files; `corruptStream` keeps its text.
+
+Scenarios: `specs/features/opus.feature`, "Opus rows in the table" (`@RF-06`), "Detail line of an Opus track" and "An unsupported Opus file shows its error text" (`@RF-07`).
 
 ## Scenarios
 

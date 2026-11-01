@@ -6,7 +6,10 @@ Feature: Edge step on the step rule V4 (detection v6)
   (lossy-source.md Q25 (a), RF-16): the defaults are detection-params.v7.toml,
   which adds only [lossy.streaming] and gives the same lossless results; the
   tests may use the defaults for v6's values, except where a step checks the
-  algorithmVersion 6, which needs the parameters of detection-params.v6.toml. The thresholds are:
+  algorithmVersion 6, which needs the parameters of detection-params.v6.toml.
+  Since detection v8 (lossy-source.md section 12.9 (f)) the defaults are
+  detection-params.v8.toml, which adds only Opus rows to v7 and gives the same
+  lossless results, so the same holds. The thresholds are:
   edge.max_median_step_db = 3, edge.min_residual_db = 15, edge.max_step_db = 16,
   edge.floor_min_db = -104 (absolute; F_top is never below it, whatever the
   bit depth), floor window [20900, 22000) Hz,

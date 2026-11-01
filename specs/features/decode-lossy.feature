@@ -1,29 +1,36 @@
 @RF-14
-Feature: Decode MP3 and M4A files (H2)
+Feature: Decode MP3 and M4A files (H2; Opus in opus.feature)
   MP3 and M4A (AAC-LC or ALAC) are decoded with symphonia, without external
   tools, and give the same TrackAnalysis contract as WAV and FLAC
   (specs/contracts/commands.md, version 3). Stream information:
   specs/detection/lossy-source.md section 2. Test files: the synthetic lossy
   fixtures of specs/detection/lossy-fixtures.md, written inside the tests
   (ADR-0040); the test stage first confirms the checks of its section 3.
-  Opus is specified in specs/pending/opus.feature and not tested yet.
-  Parameters: the default DetectionParams (detection-params.v7.toml since
-  detection v7, lossy-source.md Q25 (d): v6's values plus [lossy.streaming],
-  algorithmVersion 7; no scenario here analyses a 48 kHz fixture for a verdict,
+  Opus (decoded with rusty-opus since detection v8, ADR-0047) is specified in
+  specs/features/opus.feature.
+  Parameters: the default DetectionParams (detection-params.v8.toml since
+  detection v8, lossy-source.md Q38: v7's values plus the Opus rows of
+  [lossy.cutoffs], algorithmVersion 8; detection-params.v7.toml since detection
+  v7, lossy-source.md Q25 (d): v6's values plus [lossy.streaming]; no scenario
+  here analyses a 48 kHz fixture for a verdict, and none analyses an Opus file,
   so only the algorithmVersion changes).
+  Changed for detection v8 (lossy-source.md section 12.9 (d)): ".opus" files
+  are scanned, so the scan scenario lists them and the "no supported audio"
+  scenario uses Ogg extensions that stay out of scope.
 
   # --- Scan ----------------------------------------------------------------
 
   @RF-02 @RF-14
-  Scenario: MP3 and M4A files are found; Opus files are not yet
+  Scenario: MP3, M4A and Opus files are found
     Given a folder "Library" containing "a.flac", "b.mp3", "c.M4A", "d.opus", "e.ogg", "f.mp4" and "notes.txt", and a subfolder "CD2" containing "g.MP3"
     When I analyse "Library"
-    Then 4 files are scanned: "a.flac", "b.mp3", "c.M4A" and "CD2/g.MP3"
+    Then 5 files are scanned: "a.flac", "b.mp3", "c.M4A", "d.opus" and "CD2/g.MP3"
 
   @RF-02 @RF-14
-  Scenario: A folder with only Opus files has no supported audio yet
-    Given a folder "Opus only" containing only "a.opus"
-    When I analyse "Opus only"
+  Scenario: A folder with only .ogg and .oga files has no supported audio
+    ".ogg" and ".oga" may hold Vorbis or FLAC and are not scanned (ADR-0047 point 4).
+    Given a folder "Ogg only" containing only "a.ogg" and "b.oga"
+    When I analyse "Ogg only"
     Then the analysis fails with error "NO_AUDIO_FOUND"
 
   # --- Stream information --------------------------------------------------
@@ -97,7 +104,7 @@ Feature: Decode MP3 and M4A files (H2)
   Scenario: A lossy row has the same fields as a lossless row
     Given a folder "Mixed" with "full_band.flac" and the lossy fixtures "mp3_320_lp17k.mp3" and "m4a_aac_128_lp16k.m4a"
     When I analyse "Mixed"
-    Then every trackDone event carries a complete TrackAnalysis with algorithmVersion 7
+    Then every trackDone event carries a complete TrackAnalysis with algorithmVersion 8
     And the table shows "mp3_320_lp17k.mp3" with format "MP3", bitrate "320 kbps", real bitrate "≈128 kbps" and state "Fake", and a cutoff within 200 Hz of 17.0 kHz
     And the table shows "m4a_aac_128_lp16k.m4a" with format "M4A", bitrate "128 kbps", real bitrate "128 kbps" and state "Real"
     And the table shows "full_band.flac" with "—" in its bitrate and real bitrate cells

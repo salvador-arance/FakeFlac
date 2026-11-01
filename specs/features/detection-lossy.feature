@@ -10,8 +10,13 @@ Feature: Source bitrate of lossy files (detection v5)
   and the fixture mp3_320_48k_lp20k are suspicious (streamingSampleRate,
   detection-streaming-source.feature). So in this feature "DetectionParams v5"
   means a params set without [lossy.streaming], the parameters of
-  detection-params.v5.toml or detection-params.v6.toml, never the v7 defaults;
-  only the algorithmVersion they carry differs): the content edge fc (the reported
+  detection-params.v5.toml or detection-params.v6.toml, never the v7 or v8
+  defaults; only the algorithmVersion they carry differs. Changed for detection
+  v8 (lossy-source.md section 12.9 (c), Opus): the defaults are now
+  detection-params.v8.toml, which also has Opus rows in [lossy.cutoffs], so
+  "the default DetectionParams of the code" below holds the v5 MP3 and AAC rows
+  and the v8 Opus rows; no scenario here analyses an Opus file with v8,
+  opus.feature does): the content edge fc (the reported
   cutoff: fs when D >= step_suspicious_db = 7, otherwise fe), the expected
   cutoff c_exp = min(table row of the declared bitrate, LAME tag low-pass,
   nyquist - 400), the shortfall s = c_exp - fc, and rules L0-L6:
@@ -139,8 +144,9 @@ Feature: Source bitrate of lossy files (detection v5)
 
   @RF-15
   Scenario: A lossy codec without table rows cannot be judged
-    detection-params.v5.toml has no Opus row; in v5 the scanner never lists an
-    Opus file (specs/pending/opus.feature), so only the core meets this case.
+    detection-params.v5.toml has no Opus row (nor do v6 and v7). Since
+    detection v8 the scanner lists Opus files and the defaults have Opus rows
+    (opus.feature), so in the app only an older params file meets this case.
     Given a lossy track with codec "opus", sample rate 48000 Hz, declared bitrate 128 kbps and tag low-pass — Hz
     When the verdict of DetectionParams v5 is computed for the track
     Then the verdict is "error" with error "unsupportedFormat"
@@ -184,9 +190,11 @@ Feature: Source bitrate of lossy files (detection v5)
 
   @RF-15
   Scenario: The defaults hold the v5 lossy values
+    Changed for detection v8 (lossy-source.md section 12.9 (c)): the defaults
+    also have the 6 Opus rows of detection-params.v8.toml (opus.feature).
     Given the default DetectionParams of the code
     Then lossy.suspicious_shortfall_hz is 1000, lossy.fake_shortfall_hz is 2500 and lossy.fake_min_step_db is 10
-    And lossy.cutoffs has 14 mp3 rows, 7 aac rows and no opus row
+    And lossy.cutoffs has the 14 mp3 rows and the 7 aac rows of specs/detection/detection-params.v5.toml, and 6 opus rows
 
   @RF-15
   Scenario Outline: Invalid [lossy] sections are rejected
