@@ -28,7 +28,7 @@ const SPLITS: [SplitSel; 3] = [SplitSel::All, SplitSel::Tune, SplitSel::Holdout]
 /// The verdict of one lossy row under one params file (lossy.md sections 4.5 and 6.4).
 #[derive(Debug, Clone, PartialEq)]
 pub struct LossyRowEval {
-    /// `false` for an Opus track and for every row under params without `[lossy]`.
+    /// `false` for rows whose codec has no table in these parameters.
     pub evaluated: bool,
     pub verdict: Verdict,
     pub reasons: Vec<SuspicionReason>,
@@ -92,6 +92,9 @@ pub fn evaluate_lossy_row(
             "the stream has no codec".to_string(),
         ));
     };
+    if stream.codec == fakeflac_core::AudioCodec::Opus && lossy.cutoffs.opus.is_none() {
+        return LossyRowEval::not_evaluated();
+    }
     // L0, then L1b: the guards of `analyze_track`, from the same function of the core.
     if let Some(e) = track_guard(
         Some(stream.codec),

@@ -4,6 +4,7 @@
 mod decode;
 mod mp3;
 mod mp4;
+mod opus;
 mod spectrogram;
 mod spectrum;
 pub mod window;
@@ -85,6 +86,16 @@ impl SymphoniaAnalyzer {
 /// The test stage chooses this seam per opus.feature; implementation must reuse
 /// its actual decoder path, including pre-skip, trim and output gain.
 #[doc(hidden)]
-pub fn decode_opus_samples_for_test(_path: &Path) -> Result<Vec<Vec<f32>>, TrackError> {
-    todo!("RF-14 Opus sample access")
+pub fn decode_opus_samples_for_test(path: &Path) -> Result<Vec<Vec<f32>>, TrackError> {
+    let mut stream = opus::OpusStream::open(path)?;
+    let channels = usize::from(stream.channels);
+    let mut samples = vec![Vec::new(); channels];
+    stream.for_each_interleaved(|_, pcm| {
+        for frame in pcm.chunks_exact(channels) {
+            for (channel, sample) in frame.iter().enumerate() {
+                samples[channel].push(*sample);
+            }
+        }
+    })?;
+    Ok(samples)
 }

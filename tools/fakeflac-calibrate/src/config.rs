@@ -203,13 +203,9 @@ impl Config {
             }
             if let Some(last) = stages.last() {
                 let ext = last.ext.to_ascii_lowercase();
-                if ext == "opus" {
+                if ext != "opus" && ext != "mp3" && ext != "m4a" {
                     errors.push(format!(
-                        "lossy entry {id}: Opus output is not supported yet"
-                    ));
-                } else if ext != "mp3" && ext != "m4a" {
-                    errors.push(format!(
-                        "lossy entry {id}: the last stage's ext must be mp3 or m4a"
+                        "lossy entry {id}: the last stage's ext must be mp3, m4a or opus"
                     ));
                 }
             }

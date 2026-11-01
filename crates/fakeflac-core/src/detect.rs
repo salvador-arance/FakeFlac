@@ -518,7 +518,7 @@ pub fn decide_track(
     let shortfall = expected_cutoff_hz(stream, params).map(|c| c - fc);
     let at_least = |s: f64, limit: f64| s >= limit - EPS;
     if let (Some(s), Some(b)) = (shortfall, b) {
-        let estimate = Some(shortfall_estimate(rows, fc, b));
+        let estimate = (stream.codec != AudioCodec::Opus).then(|| shortfall_estimate(rows, fc, b));
         // L3
         if at_least(s, lossy.fake_shortfall_hz) && m.step_db >= lossy.fake_min_step_db {
             return decision(Verdict::Fake, vec![], estimate);

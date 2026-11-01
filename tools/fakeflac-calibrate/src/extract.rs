@@ -24,9 +24,6 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc;
 use std::sync::Arc;
 
-/// The `not_evaluated` text of an Opus track (lossy.md section 6.1, ADR-0030).
-pub const OPUS_PENDING: &str = "opus decoder pending";
-
 /// A labelled corpus track (trusted, confirmed fake or confirmed real) before extraction.
 #[derive(Debug, Clone)]
 pub struct CorpusItem {
@@ -52,7 +49,7 @@ fn has_extension(path: &str, ext: &str) -> bool {
         .is_some_and(|(_, e)| e.eq_ignore_ascii_case(ext))
 }
 
-/// Opus files are labelled and never decoded while the decoder is pending.
+/// Whether a file has the Opus extension.
 pub fn is_opus(path: &str) -> bool {
     has_extension(path, "opus")
 }
@@ -286,15 +283,6 @@ pub fn extract_group(
             None => misses.push(i),
         }
     }
-    // Opus is labelled and never decoded (lossy.md section 1.1).
-    for (i, item) in items.iter().enumerate() {
-        if is_opus(&item.track.rel) {
-            results[i] = Some(Arc::new(Extracted::Error(TrackError::UnsupportedFormat(
-                OPUS_PENDING.to_string(),
-            ))));
-        }
-    }
-    misses.retain(|i| results[*i].is_none());
     // --no-generate evaluates only what is already cached: uncached tracks are not decoded. They are
     // labelled tracks, not generated entries, so they are not counted as "not generated".
     let mut not_generated = 0;
@@ -810,9 +798,6 @@ fn corpus_meta(item: &CorpusItem, extracted: &Extracted, lossy: bool, config: &C
     if let Some(chain) = &attrs.chain {
         meta.chain_id = chain.clone();
         meta.chain_key = chain_key(&item.track.rel);
-    }
-    if is_opus(&item.track.rel) {
-        meta.not_evaluated = OPUS_PENDING.to_string();
     }
     if lossy && item.origin == "confirmed_fake" {
         let (upstream, bound) = match attrs.upstream.as_deref() {

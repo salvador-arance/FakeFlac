@@ -28,13 +28,14 @@ pub enum AudioFormat {
 
 impl AudioFormat {
     /// Format for a file extension (case-insensitive, without the dot). WAV and FLAC (H1), MP3 and
-    /// M4A (H2, ADR-0040); Opus is still skipped (RF-14).
+    /// M4A (H2, ADR-0040) and Ogg Opus (detection v8, ADR-0047).
     pub fn from_extension(ext: &str) -> Option<AudioFormat> {
         match ext.to_ascii_lowercase().as_str() {
             "wav" => Some(AudioFormat::Wav),
             "flac" => Some(AudioFormat::Flac),
             "mp3" => Some(AudioFormat::Mp3),
             "m4a" => Some(AudioFormat::M4a),
+            "opus" => Some(AudioFormat::Opus),
             _ => None,
         }
     }
@@ -47,7 +48,8 @@ impl AudioCodec {
             AudioFormat::Wav => Some(AudioCodec::Pcm),
             AudioFormat::Flac => Some(AudioCodec::Flac),
             AudioFormat::Mp3 => Some(AudioCodec::Mp3),
-            AudioFormat::M4a | AudioFormat::Opus => None,
+            AudioFormat::Opus => Some(AudioCodec::Opus),
+            AudioFormat::M4a => None,
         }
     }
 
