@@ -2,6 +2,21 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-01 - Portable Codex hook commands (#104)
+
+**Done**
+- Replaced the seven machine-specific paths in `.codex/hooks.json` with quoted paths resolved by `git rev-parse --show-toplevel`, following the official hooks guidance: https://learn.chatgpt.com/docs/hooks.
+- Verified every configured command in PowerShell from the root and a subdirectory, and in Git Bash from a subdirectory; verified that guard-bash receives stdin and preserves Node's blocking exit code.
+- Documented path resolution in the agent workflow. `just check` is green (including 60 frontend test files, 752 tests).
+
+**Pending**
+- G2 for #104. The Opus work and other pending items in the previous blocks remain unchanged.
+
+**Blockers / questions for the human**
+- None.
+
+**Next step:** review and merge #104 at G2.
+
 ## 2026-11-01 - Opus decoder spike; ADR-0047 accepted at G1 (#102)
 
 **Done**
