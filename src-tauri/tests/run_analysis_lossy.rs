@@ -179,8 +179,17 @@ fn rf14_opus_analysis_events_and_audio_are_preserved() {
         .unwrap();
     assert_eq!(good_row.verdict, Verdict::Real);
     assert_eq!(good_row.info.sample_rate, 48000);
-    assert_eq!(good_row.info.declared_bitrate_kbps, Some(128));
-    assert_eq!(good_row.estimated_source_bitrate_kbps, Some(128));
+    // @RF-14 "Stream information of Opus fixtures": VBR fixture targets allow ±1 kbps.
+    // Compare the event against its exact packet-byte/duration formula, then check the target.
+    let encoded = opus_support::opus::encoded("opus_128_fb");
+    let packet_bytes: usize = encoded.packets.iter().map(Vec::len).sum();
+    let declared =
+        (8.0 * packet_bytes as f64 * 48000.0 / encoded.samples as f64 / 1000.0).round() as u32;
+    assert_eq!(good_row.info.duration_ms, 30000);
+    assert!(declared.abs_diff(128) <= 1, "fixture bitrate {declared}");
+    assert_eq!(good_row.info.declared_bitrate_kbps, Some(declared));
+    // @RF-15 "Verdict of Opus fixtures": a real Opus estimate equals its declared bitrate.
+    assert_eq!(good_row.estimated_source_bitrate_kbps, Some(declared));
     let bad_row = rows
         .iter()
         .find(|a| a.info.path == dir.join(bad).to_string_lossy())
