@@ -86,9 +86,9 @@ Selection protocol (phase 5, planned recipe `just bench-windows`, not written ye
 | FLAC | Lossless | `symphonia` | H1 | |
 | MP3 | Lossy | `symphonia` (MPEG) | H2 | Also read the Xing/LAME header (encoder, lowpass, bitrate) |
 | M4A | Lossy (AAC); may hold ALAC (lossless) | `symphonia` (isomp4 + AAC) | H2 | Codec inside the container is detected; ALAC is treated as lossless |
-| Opus | Lossy | Separate decoder (ADR-0030) | H2 | symphonia does not decode Opus; spike first |
+| Opus | Lossy | `rusty-opus`, pure Rust (ADR-0047) | H2 | symphonia does not decode Opus; the ADR-0030 spike chose `rusty-opus`; the adapter reads the Ogg layer; pending its spec PR |
 
-All formats go through the same `SpectrumAnalyzer` port: the adapter picks a decoder by format and returns `f32` samples; the rest of the pipeline is common (ADR-0031). H2 decoding of MP3 and M4A (symphonia features `mp3`, `aac`, `isomp4`, `alac`) and the stream information the adapter reports (codec, declared bitrate, bitrate mode, LAME tag): ADR-0040 and `specs/detection/lossy-source.md` section 2. Opus stays pending the spike.
+All formats go through the same `SpectrumAnalyzer` port: the adapter picks a decoder by format and returns `f32` samples; the rest of the pipeline is common (ADR-0031). H2 decoding of MP3 and M4A (symphonia features `mp3`, `aac`, `isomp4`, `alac`) and the stream information the adapter reports (codec, declared bitrate, bitrate mode, LAME tag): ADR-0040 and `specs/detection/lossy-source.md` section 2. Opus: the ADR-0030 spike chose `rusty-opus` and an Ogg reader in the adapter (ADR-0047); the format stays pending until its spec PR moves `specs/pending/opus.feature` to `specs/features/`.
 
 ## 9. Provenance of lossy files (RF-15)
 
