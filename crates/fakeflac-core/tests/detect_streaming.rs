@@ -29,7 +29,12 @@ use SuspicionReason::{
 
 /// DetectionParams v7: the defaults (lossy-source.md section 11.4).
 fn v7() -> DetectionParams {
-    DetectionParams::default()
+    let mut p = DetectionParams {
+        algorithm_version: 7,
+        ..DetectionParams::default()
+    };
+    p.lossy.as_mut().expect("lossy defaults").cutoffs.opus = None;
+    p
 }
 
 /// The defaults without `[lossy.streaming]` and with `algorithm_version` 6: what
@@ -40,6 +45,7 @@ fn v6() -> DetectionParams {
         algorithm_version: 6,
         ..DetectionParams::default()
     };
+    p.lossy.as_mut().expect("lossy defaults").cutoffs.opus = None;
     p.lossy
         .as_mut()
         .expect("the defaults have a [lossy] section")
@@ -505,7 +511,7 @@ fn rf16_an_opus_track_with_the_defaults_is_still_an_error() {
     let p = v7();
     assert_eq!(
         p.algorithm_version, 7,
-        "DetectionParams v7 are the defaults"
+        "DetectionParams v7 are the explicit baseline"
     );
     let s = stream(AudioCodec::Opus, 48_000, Some(128), None);
     // Measurements that would be in the window for an MP3 or AAC track.

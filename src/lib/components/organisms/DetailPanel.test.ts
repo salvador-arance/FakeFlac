@@ -211,3 +211,25 @@ describe("DetailPanel: a lossy track (specs/ui/lossy-formats.md, Detail line)", 
     expect(text(container)).not.toMatch(/kbps/);
   });
 });
+
+// @RF-07 @RF-15 opus.feature: Detail line of an Opus track.
+describe("DetailPanel: Opus", () => {
+  it.each([
+    [128, 128, 20000, "real", [], "Cutoff 20.0 kHz · 128 kbps · Genuine"],
+    [160, null, 16000, "fake", [], "Cutoff 16.0 kHz · 160 kbps · Fake"],
+    [128, null, 18500, "suspicious", ["cutoffBelowDeclared"], "Cutoff 18.5 kHz · 128 kbps · Suspicious · Cutoff lower than expected for its bitrate"],
+  ] as const)("declared %s, estimate %s, cutoff %s, %s", (declared, estimate, cutoff, verdict, reasons, line) => {
+    const { container } = render(DetailPanel, { props: {
+      track: makeTrack({ path: "C:/Opus/a.opus", format: "opus", codec: "opus", declaredBitrateKbps: declared, bitrateMode: null, estimatedSourceBitrateKbps: estimate, cutoffHz: cutoff, verdict, reasons: [...reasons] }),
+      spectrogram: makeSpectrogram({ width: 8, height: 4 }), loading: false,
+    }});
+    expect(text(container)).toContain(line);
+    expect(text(container)).not.toContain("kbps source");
+  });
+  // @RF-07 @RF-14 opus.feature: An unsupported Opus file shows its error text.
+  it("shows unsupported Opus instead of a spectrogram", () => {
+    render(DetailPanel, { props: { track: makeTrack({ format: "opus", codec: "opus", verdict: "error", error: { kind: "unsupportedFormat", detail: "channel mapping family 1 is not supported" } }), spectrogram: null, loading: false }});
+    expect(screen.getByText("Unsupported audio format")).toBeTruthy();
+    expect(image()).toBeNull();
+  });
+});

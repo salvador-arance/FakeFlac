@@ -10,6 +10,8 @@
 
 #[path = "../../crates/fakeflac-audio/tests/common/lossy.rs"]
 mod lossy;
+#[path = "common/opus_support.rs"]
+mod opus_support;
 
 use fakeflac_core::AnalysisSlot;
 use fakeflac_lib::dto::{self, AppErrorCode, ProgressEvent, Verdict};
@@ -57,9 +59,9 @@ fn analyses(events: &[ProgressEvent]) -> Vec<&dto::TrackAnalysis> {
 
 // @RF-02 @RF-14 Scenario: A folder with only Opus files has no supported audio yet
 #[test]
-fn rf14_a_folder_with_only_opus_files_has_no_supported_audio_yet() {
+fn rf14_a_folder_with_only_other_ogg_files_has_no_supported_audio() {
     let dir = temp_dir("opus_only");
-    std::fs::write(dir.join("a.opus"), b"OggS dummy").unwrap();
+    std::fs::write(dir.join("a.ogg"), b"OggS dummy").unwrap();
     let (result, events) = collect(&dir);
     assert_eq!(result.unwrap_err().code, AppErrorCode::NoAudioFound);
     assert!(events.is_empty());
@@ -133,4 +135,79 @@ fn rnf05_analysed_lossy_files_are_never_modified() {
     assert_eq!(summary.total, 2, "both lossy files are analysed");
     assert_eq!(analyses(&events).len(), 2);
     assert_eq!(before, snapshot());
+}
+
+// @RF-14 @RF-15 @RF-06 @RNF-04 @RNF-05 @RNF-09 opus.feature:
+// Opus-only folders, complete table events, corrupt-track isolation, read-only and Unicode paths.
+#[test]
+fn rf14_opus_analysis_events_and_audio_are_preserved() {
+    let dir = temp_dir("opus_mixed").join("Álbum ″Ñandú″");
+    std::fs::create_dir_all(&dir).unwrap();
+    let good = "01 – Canción ‘x’.opus";
+    let bad = "02 – Ópera «Ça va» 🎵.opus";
+    for (fixture, name) in [
+        ("opus_128_fb", good),
+        ("opus_bad_crc", bad),
+        ("opus_160_src16k", "fake.opus"),
+    ] {
+        std::fs::copy(opus_support::opus::fixture(fixture), dir.join(name)).unwrap();
+    }
+    let snapshot = || {
+        [good, bad, "fake.opus"].map(|name| {
+            let p = dir.join(name);
+            let m = std::fs::metadata(&p).unwrap();
+            (m.len(), m.modified().unwrap(), std::fs::read(&p).unwrap())
+        })
+    };
+    let before = snapshot();
+    let (summary, events) = collect(&dir);
+    let summary = summary.unwrap();
+    assert_eq!((summary.total, summary.errors), (3, 1));
+    assert_eq!(snapshot(), before);
+    assert!(
+        matches!(events.last(), Some(ProgressEvent::Finished { summary }) if summary.errors == 1)
+    );
+    let rows = analyses(&events);
+    for a in &rows {
+        assert_eq!(a.algorithm_version, 8);
+        assert_eq!(a.info.format, dto::AudioFormat::Opus);
+        assert_eq!(a.info.codec, Some(dto::AudioCodec::Opus));
+    }
+    let good_row = rows
+        .iter()
+        .find(|a| a.info.path == dir.join(good).to_string_lossy())
+        .unwrap();
+    assert_eq!(good_row.verdict, Verdict::Real);
+    assert_eq!(good_row.info.sample_rate, 48000);
+    assert_eq!(good_row.info.declared_bitrate_kbps, Some(128));
+    assert_eq!(good_row.estimated_source_bitrate_kbps, Some(128));
+    let bad_row = rows
+        .iter()
+        .find(|a| a.info.path == dir.join(bad).to_string_lossy())
+        .unwrap();
+    assert!(matches!(
+        bad_row.error,
+        Some(dto::TrackError::CorruptStream { .. })
+    ));
+    let fake = rows
+        .iter()
+        .find(|a| a.info.path.ends_with("fake.opus"))
+        .unwrap();
+    assert_eq!(fake.verdict, Verdict::Fake);
+    assert_eq!(fake.estimated_source_bitrate_kbps, None);
+    assert!((f64::from(fake.cutoff.as_ref().unwrap().frequency_hz) - 16000.0).abs() <= 200.0);
+}
+
+// @RF-02 @RF-14 opus.feature: A folder with only Opus files is analysed.
+#[test]
+fn rf14_a_folder_with_only_opus_is_analysed() {
+    let dir = temp_dir("opus_only_valid");
+    std::fs::copy(
+        opus_support::opus::fixture("opus_128_fb"),
+        dir.join("a.opus"),
+    )
+    .unwrap();
+    let (result, _) = collect(&dir);
+    let s = result.unwrap();
+    assert_eq!((s.total, s.errors), (1, 0));
 }

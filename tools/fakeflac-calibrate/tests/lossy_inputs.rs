@@ -211,7 +211,7 @@ fn rf15_a_trusted_lossy_file_is_an_honest_negative_not_a_source() {
 
 // Scenario: A folder line with formats=lossy includes MP3 and M4A files only (@RP-11 @RF-15)
 #[test]
-fn rf15_a_folder_line_with_formats_lossy_includes_mp3_and_m4a_only() {
+fn rf15_a_folder_line_with_formats_lossy_includes_mp3_m4a_and_opus() {
     let sample = Sample::new_lossy("lossy-folder-formats");
     let mut confirmed = sample.lossy_confirmed_lines();
     confirmed.splice(3..6, ["Pérdidas\\Vídeo | real formats=lossy".to_string()]);
@@ -219,15 +219,11 @@ fn rf15_a_folder_line_with_formats_lossy_includes_mp3_and_m4a_only() {
     let o = sample.accept_lossy();
     assert_ok(&o);
     let labels = labels(&o, &sample);
-    for path in [TRACK_12, TRACK_13] {
+    for path in [TRACK_12, TRACK_13, TRACK_14] {
         let row = corpus_row(&labels, path).unwrap_or_else(|| panic!("no row for {path}"));
         assert_eq!(labels.get(row, "truth"), "real", "{path}");
         assert_eq!(labels.get(row, "origin"), "confirmed_real", "{path}");
     }
-    assert!(
-        corpus_row(&labels, TRACK_14).is_none(),
-        "the Opus file is never enumerated under a folder"
-    );
 }
 
 // Scenario: A real label on a lossless file is excluded after extraction (@RP-11 @RF-15)
@@ -511,14 +507,41 @@ fn rf15_invalid_lossy_entry_no_stages() {
     );
 }
 
-// Scenario Outline: Invalid lossy entries in the config (@RP-11 @RF-15), row "Opus output"
+// @RF-14 @RF-15 @RP-11 Scenario: Opus can be the last stage of a lossy entry
 #[test]
-fn rf15_invalid_lossy_entry_opus_output() {
-    invalid_lossy_entry(
-        "lossy-cfg-opus",
-        "[[generate.lossy]]\nid = \"z\"\nstages = [\"opus128\"]",
-        "lossy entry z: Opus output is not supported yet",
-    );
+fn rf14_opus_can_be_the_last_stage_of_a_lossy_entry() {
+    let text = read(&repo_root().join("specs/calibration/calibration.v4.toml"));
+    let config = Config::parse(&text).expect("Opus output is accepted");
+    let stages = config
+        .generate
+        .lossy
+        .iter()
+        .find(|e| e.id == "cbr128_opus256")
+        .unwrap();
+    assert_eq!(stages.stages, vec!["cbr128", "opus256"]);
+    let stages = config.stages_of(stages);
+    let generated = Path::new("generated");
+    let calls = lossy_args(Path::new(TRACK_1), None, &stages, generated, "id");
+    assert_eq!(calls.len(), 2);
+    let second = strings(&[
+        "-nostdin",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        &generated.join("id.s1.mp3").to_string_lossy(),
+        "-map",
+        "0:a:0",
+        "-map_metadata",
+        "-1",
+        "-c:a",
+        "libopus",
+        "-b:a",
+        "256k",
+        "-y",
+        &generated.join("id.opus").to_string_lossy(),
+    ]);
+    assert_eq!(calls[1], second);
 }
 
 // Scenario Outline: Invalid lossy entries in the config (@RP-11 @RF-15), row "defined twice"
@@ -700,7 +723,7 @@ fn rf15_a_real_folder_line_defaults_to_lossy_files() {
     let o = sample.accept_lossy();
     assert_ok(&o);
     let labels = labels(&o, &sample);
-    for path in [TRACK_12, TRACK_13] {
+    for path in [TRACK_12, TRACK_13, TRACK_14] {
         let row = corpus_row(&labels, path).unwrap_or_else(|| panic!("no row for {path}"));
         assert_eq!(labels.get(row, "origin"), "confirmed_real", "{path}");
     }

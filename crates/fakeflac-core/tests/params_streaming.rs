@@ -31,7 +31,7 @@ fn streaming(p: &DetectionParams) -> &StreamingParams {
 #[test]
 fn rf16_the_defaults_hold_the_v7_streaming_values() {
     let p = DetectionParams::default();
-    assert_eq!(p.algorithm_version, 7);
+    assert_eq!(p.algorithm_version, 8);
     assert_eq!(
         streaming(&p),
         &StreamingParams {

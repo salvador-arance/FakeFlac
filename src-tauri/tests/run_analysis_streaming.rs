@@ -99,7 +99,7 @@ fn rf16_a_48k_rip_with_a_unicode_name_is_flagged_in_a_real_run_and_left_unchange
     assert_eq!(rip.info.sample_rate, 48_000);
     assert_eq!(rip.info.declared_bitrate_kbps, Some(320));
     assert_eq!(rip.estimated_source_bitrate_kbps, None);
-    assert_eq!(rip.algorithm_version, 7);
+    assert_eq!(rip.algorithm_version, 8);
     assert_eq!(
         serde_json::to_value(&rip.reasons).unwrap(),
         serde_json::json!(["streamingSampleRate"]),

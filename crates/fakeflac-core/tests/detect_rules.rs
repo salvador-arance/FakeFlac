@@ -879,7 +879,8 @@ fn supported_extensions() {
     assert_eq!(AudioFormat::from_extension("MP3"), Some(AudioFormat::Mp3));
     assert_eq!(AudioFormat::from_extension("m4a"), Some(AudioFormat::M4a));
     assert_eq!(AudioFormat::from_extension("M4A"), Some(AudioFormat::M4a));
-    assert_eq!(AudioFormat::from_extension("opus"), None);
+    assert_eq!(AudioFormat::from_extension("opus"), Some(AudioFormat::Opus));
+    assert_eq!(AudioFormat::from_extension("OPUS"), Some(AudioFormat::Opus));
     assert_eq!(AudioFormat::from_extension("ogg"), None);
     assert_eq!(AudioFormat::from_extension("mp4"), None);
     assert_eq!(AudioFormat::from_extension("aac"), None);
@@ -1263,7 +1264,7 @@ fn rf04_v3_without_a_full_band_section_the_guard_is_disabled() {
 #[test]
 fn rf04_v3_defaults_are_v3() {
     let p = DetectionParams::default();
-    assert_eq!(p.algorithm_version, 7);
+    assert_eq!(p.algorithm_version, 8);
     assert_eq!(
         p.full_band,
         Some(FullBandParams {

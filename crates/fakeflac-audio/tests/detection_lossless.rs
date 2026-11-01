@@ -545,6 +545,7 @@ fn deterministic() {
 fn without_streaming(mut p: DetectionParams) -> DetectionParams {
     if let Some(lossy) = p.lossy.as_mut() {
         lossy.streaming = None;
+        lossy.cutoffs.opus = None;
     }
     p
 }
@@ -553,11 +554,11 @@ fn without_streaming(mut p: DetectionParams) -> DetectionParams {
 #[test]
 fn default_params_equal_versioned_file() {
     let file = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../specs/detection/detection-params.v7.toml");
+        .join("../../specs/detection/detection-params.v8.toml");
     let text = std::fs::read_to_string(file).unwrap();
     let from_file: DetectionParams = toml::from_str(&text).unwrap();
     assert_eq!(DetectionParams::default(), from_file);
-    assert_eq!(from_file.algorithm_version, 7);
+    assert_eq!(from_file.algorithm_version, 8);
     assert!(from_file.lossy.is_some(), "v7 keeps the [lossy] section");
     assert!(
         from_file.lossy.as_ref().unwrap().streaming.is_some(),
@@ -595,10 +596,10 @@ fn default_params_equal_versioned_file() {
 }
 
 #[test]
-fn every_analysis_carries_algorithm_version_7() {
+fn every_analysis_carries_algorithm_version_8() {
     // Analysed, too short and corrupt tracks alike.
     for name in ["lp16k", "silence", "short", "corrupt"] {
-        assert_eq!(analyze(name, Flac).algorithm_version, 7, "{name}");
+        assert_eq!(analyze(name, Flac).algorithm_version, 8, "{name}");
     }
 }
 

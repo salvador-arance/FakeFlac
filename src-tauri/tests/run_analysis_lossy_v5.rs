@@ -101,7 +101,7 @@ fn rf15_a_lossy_row_has_the_same_fields_as_a_lossless_row() {
     let rows = analyses(&events);
     assert_eq!(rows.len(), 3);
     for a in &rows {
-        assert_eq!(a.algorithm_version, 7, "{:?}", a.info.path);
+        assert_eq!(a.algorithm_version, 8, "{:?}", a.info.path);
         assert_eq!(a.error, None, "{:?}", a.info.path);
         assert!(a.cutoff.is_some(), "{:?}: a cutoff", a.info.path);
         assert!(a.info.sample_rate > 0 && a.info.duration_ms > 0);
@@ -150,7 +150,7 @@ fn rf15_a_variable_bitrate_is_marked_in_the_table() {
     assert_eq!(a.info.bitrate_mode, Some(dto::BitrateMode::Vbr));
     assert_eq!(a.estimated_source_bitrate_kbps, Some(240));
     assert_eq!(a.verdict, Verdict::Real, "{a:#?}");
-    assert_eq!(a.algorithm_version, 7);
+    assert_eq!(a.algorithm_version, 8);
 }
 
 // @RNF-09 Scenario: Unicode names of lossy files

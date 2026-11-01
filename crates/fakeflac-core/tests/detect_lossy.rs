@@ -32,7 +32,11 @@ use std::path::{Path, PathBuf};
 use SuspicionReason::{CutoffBelowDeclared, GradualRolloff, LowHighFrequencyContent};
 
 fn v5() -> DetectionParams {
-    let mut p = DetectionParams::default();
+    let mut p = DetectionParams {
+        algorithm_version: 5,
+        ..DetectionParams::default()
+    };
+    p.lossy.as_mut().expect("lossy defaults").cutoffs.opus = None;
     p.lossy
         .as_mut()
         .expect("the defaults have a [lossy] section")
@@ -661,7 +665,7 @@ fn rf15_analyze_track_fills_the_estimate_and_the_cutoff_of_a_320_made_from_128()
     assert_eq!(a.info.declared_bitrate_kbps, Some(320));
     assert_eq!(a.info.bitrate_mode, Some(BitrateMode::Cbr));
     assert_eq!(a.info.codec, Some(AudioCodec::Mp3));
-    assert_eq!(a.algorithm_version, 7);
+    assert_eq!(a.algorithm_version, 5);
     assert_eq!(a.error, None);
     let c = a.cutoff.expect("a cutoff is reported");
     assert!(
@@ -696,7 +700,7 @@ fn rf15_analyze_track_of_a_silent_lossy_track_has_no_cutoff_and_no_estimate() {
     assert_eq!(a.reasons, vec![LowHighFrequencyContent]);
     assert_eq!(a.cutoff, None);
     assert_eq!(a.estimated_source_bitrate_kbps, None);
-    assert_eq!(a.algorithm_version, 7);
+    assert_eq!(a.algorithm_version, 5);
 }
 
 #[test]

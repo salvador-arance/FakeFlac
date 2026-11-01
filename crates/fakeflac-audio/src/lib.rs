@@ -80,3 +80,11 @@ impl SymphoniaAnalyzer {
         spectrogram::compute(path, params)
     }
 }
+
+/// Per-channel decoded samples used by the spectrum pipeline (test access for RF-14).
+/// The test stage chooses this seam per opus.feature; implementation must reuse
+/// its actual decoder path, including pre-skip, trim and output gain.
+#[doc(hidden)]
+pub fn decode_opus_samples_for_test(_path: &Path) -> Result<Vec<Vec<f32>>, TrackError> {
+    todo!("RF-14 Opus sample access")
+}
