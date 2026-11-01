@@ -110,3 +110,91 @@ fn rf14_opus_fixture_preconditions() {
         }
     }
 }
+
+// @RF-14 Scenario: A packet split across pages is reassembled (fixture precondition).
+// Check the independent writer in memory so an old generated file cannot hide a broken recipe.
+#[test]
+fn rf14_split_fixture_contains_real_packet_continuations() {
+    let encoded = opus::encoded("opus_128_fb");
+    let pages = opus::pages(&encoded, true);
+    let audio = &pages[2..];
+    assert!(encoded.packets.iter().any(|p| p.len() > 255));
+    assert!(audio.iter().all(|p| p.body.len() <= 255));
+    assert!(audio.iter().any(|p| p.flags & 1 != 0));
+    assert!(audio.iter().any(|p| p.segments.last() == Some(&255)));
+    let mut completed = 0;
+    let mut reconstructed = Vec::new();
+    let mut packet = Vec::new();
+    let mut unfinished = false;
+    for (index, page) in audio.iter().enumerate() {
+        assert_eq!(page.flags & 1 != 0, unfinished);
+        let mut offset = 0;
+        let mut completed_here = 0;
+        for &len in &page.segments {
+            let end = offset + usize::from(len);
+            packet.extend_from_slice(&page.body[offset..end]);
+            offset = end;
+            unfinished = len == 255;
+            if !unfinished {
+                reconstructed.push(std::mem::take(&mut packet));
+                completed += 1;
+                completed_here += 1;
+            }
+        }
+        assert_eq!(offset, page.body.len());
+        if index == audio.len() - 1 {
+            assert_eq!(page.granule, (encoded.samples + 120) as i64);
+        } else if completed_here == 0 {
+            assert_eq!(page.granule, -1);
+        } else {
+            assert_eq!(page.granule, completed * 960);
+        }
+    }
+    assert!(!unfinished);
+    assert_eq!(reconstructed, encoded.packets);
+    // Both malformed variants must actually be constructible from these split pages.
+    assert!(!opus::bytes("opus_continuation").is_empty());
+    assert!(!opus::bytes("opus_unfinished_packet").is_empty());
+}
+
+// @RF-14 Scenario: The fixture encoder is deterministic on one machine.
+// Concurrent test callers must observe the same complete synthetic file, including a cold write.
+#[test]
+fn rf14_fixture_publication_is_safe_for_concurrent_test_callers() {
+    use std::sync::{Arc, Barrier};
+    let unique = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("opus-publication-{}-{unique}", std::process::id()));
+    let expected = opus::bytes("opus_128_fb");
+    let barrier = Arc::new(Barrier::new(16));
+    let paths = std::thread::scope(|scope| {
+        let threads: Vec<_> = (0..16)
+            .map(|_| {
+                let dir = &dir;
+                let expected = &expected;
+                let barrier = Arc::clone(&barrier);
+                scope.spawn(move || {
+                    barrier.wait();
+                    let path = opus::fixture_in(dir, "opus_128_fb");
+                    assert_eq!(std::fs::read(&path).unwrap(), *expected);
+                    path
+                })
+            })
+            .collect();
+        threads
+            .into_iter()
+            .map(|t| t.join().unwrap())
+            .collect::<Vec<_>>()
+    });
+    assert!(paths.iter().all(|path| path == &paths[0]));
+    assert_eq!(
+        std::fs::read_dir(&dir).unwrap().count(),
+        1,
+        "no leftover temporary file"
+    );
+    std::fs::remove_file(&paths[0]).unwrap();
+    std::fs::remove_dir(dir).unwrap();
+}

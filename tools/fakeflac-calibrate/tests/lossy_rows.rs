@@ -104,13 +104,14 @@ fn probe_of(
 // Scenario: Params without a [lossy] section do not evaluate lossy rows (@RP-11 @RF-15), and lossy-source.md
 // section 4: the order of the guards is L1a (decode failed), L0 (no rows for the codec in the params), L1b
 // (too short, then no declared bitrate), the order of `analyze_track` of the core. The v5 params have no
-// `[lossy.cutoffs]` rows for Opus, which is how L0 is reached with a `[lossy]` section.
+// `[lossy.cutoffs]` rows for Opus: C14 excludes those rows from calibration evaluation,
+// checked separately below; the core still applies L0 to them.
 #[test]
 fn rf15_lossy_row_guards_follow_the_order_of_the_core() {
     let params = v5();
     let long = 30_000;
     let short = 2_000;
-    use AudioCodec::{Mp3, Opus};
+    use AudioCodec::Mp3;
     let cases: Vec<(&str, AudioProbe, AudioFormat, Option<&str>)> = vec![
         // A long-enough lossy stream with no declared bitrate is a guard failure, not a Real verdict.
         (
@@ -118,25 +119,6 @@ fn rf15_lossy_row_guards_follow_the_order_of_the_core() {
             probe_of("mp3_320_lp20k5", Mp3, long, None),
             AudioFormat::Mp3,
             Some("corruptStream"),
-        ),
-        // L0 comes before the too-short guard.
-        (
-            "short opus",
-            probe_of("mp3_320_lp20k5", Opus, short, Some(128)),
-            AudioFormat::Opus,
-            Some("unsupportedFormat"),
-        ),
-        (
-            "short opus without a bitrate",
-            probe_of("mp3_320_lp20k5", Opus, short, None),
-            AudioFormat::Opus,
-            Some("unsupportedFormat"),
-        ),
-        (
-            "long opus without a bitrate",
-            probe_of("mp3_320_lp20k5", Opus, long, None),
-            AudioFormat::Opus,
-            Some("unsupportedFormat"),
         ),
         // L1b: too short first, then no bitrate.
         (
@@ -183,6 +165,52 @@ fn rf15_lossy_row_guards_follow_the_order_of_the_core() {
         }
     }
     assert!(mismatches.is_empty(), "{mismatches:#?}");
+}
+
+// @RF-14 @RF-15 @RP-11 Scenario: Opus rows are evaluated by a params file with Opus rows.
+// C14 excludes Opus for v5-v7 whatever extraction gave, before the core's guards.
+#[test]
+fn rf14_opus_without_table_rows_is_not_evaluated_whatever_extraction_gave() {
+    let long = 30_000;
+    let short = 2_000;
+    for version in [5, 6, 7] {
+        let params: DetectionParams = toml::from_str(&read(
+            &repo_root().join(format!("specs/detection/detection-params.v{version}.toml")),
+        ))
+        .unwrap();
+        let results = [
+            Ok(probe_of(
+                "mp3_320_lp20k5",
+                AudioCodec::Opus,
+                short,
+                Some(128),
+            )),
+            Ok(probe_of("mp3_320_lp20k5", AudioCodec::Opus, short, None)),
+            Ok(probe_of("mp3_320_lp20k5", AudioCodec::Opus, long, None)),
+            Err(TrackError::CorruptStream("invalid Opus packet".into())),
+            Err(TrackError::Unreadable("denied".into())),
+        ];
+        for result in results {
+            let mut row = label_row(Extracted::from_analysis(result.clone()));
+            row.path = "a/b.opus".into();
+            let tool = evaluate_lossy_row(&row, &RowMeta::default(), &params);
+            assert!(!tool.evaluated, "v{version}: {result:?}");
+            assert!(tool.error.is_none(), "not counted as an Error: {tool:?}");
+            let entry = FileEntry {
+                path: PathBuf::from("a/b.opus"),
+                folder: PathBuf::from("a"),
+                format: AudioFormat::Opus,
+                size_bytes: 1,
+                modified_unix: 0,
+            };
+            let core = analyze_track(&Fixed(result.clone()), &entry, &params);
+            assert_eq!(core.verdict, Verdict::Error);
+            match result {
+                Ok(_) => assert!(matches!(core.error, Some(TrackError::UnsupportedFormat(_)))),
+                Err(e) => assert_eq!(core.error, Some(e)),
+            }
+        }
+    }
 }
 
 // L1a: a decode failure is reported as it is, before L0, whatever the codec the extension implies.

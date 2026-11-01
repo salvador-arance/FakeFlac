@@ -4,7 +4,7 @@
 use rusty_opus::{Application, Bandwidth, OpusDecoder, OpusEncoder};
 use std::{
     collections::HashMap,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex, OnceLock},
 };
 
@@ -148,7 +148,7 @@ pub fn pages(e: &Encoded, split: bool) -> Vec<Page> {
             let mut offset = 0;
             loop {
                 let len = (packet.len() - offset).min(255);
-                if current.body.len() + len > 1000 || current.segments.len() == 255 {
+                if current.body.len() + len > 255 || current.segments.len() == 255 {
                     let continued = current.segments.last() == Some(&255);
                     out.push(current);
                     current = page(&[], u8::from(continued), -1);
@@ -319,14 +319,33 @@ pub fn bytes(name: &str) -> Vec<u8> {
     out
 }
 pub fn fixture(name: &str) -> PathBuf {
-    let dir = super::fixture_dir().join("opus");
-    std::fs::create_dir_all(&dir).unwrap();
-    let p = dir.join(format!("{name}.opus"));
-    if !p.exists() {
-        let tmp = p.with_extension(format!("{}.tmp", std::process::id()));
-        std::fs::write(&tmp, bytes(name)).unwrap();
-        let _ = std::fs::hard_link(&tmp, &p);
-        let _ = std::fs::remove_file(tmp);
-    }
-    p
+    // Keep files produced by the superseded 1000-byte split recipe out of these tests.
+    fixture_in(&super::fixture_dir().join("opus-split255"), name)
+}
+
+/// Publish one complete fixture per path. The cell serialises threads, while a
+/// process-specific temporary file and atomic hard link also isolate child processes.
+pub fn fixture_in(dir: &Path, name: &str) -> PathBuf {
+    type Cells = Mutex<HashMap<PathBuf, Arc<OnceLock<PathBuf>>>>;
+    static CACHE: OnceLock<Cells> = OnceLock::new();
+    let path = dir.join(format!("{name}.opus"));
+    let cell = {
+        let mut cells = CACHE.get_or_init(Default::default).lock().unwrap();
+        cells.entry(path.clone()).or_default().clone()
+    };
+    cell.get_or_init(|| {
+        std::fs::create_dir_all(dir).unwrap();
+        if !path.exists() {
+            let tmp = path.with_extension(format!("{}.tmp", std::process::id()));
+            std::fs::write(&tmp, bytes(name)).unwrap();
+            match std::fs::hard_link(&tmp, &path) {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(e) => panic!("cannot publish Opus fixture: {e}"),
+            }
+            std::fs::remove_file(tmp).unwrap();
+        }
+        path
+    })
+    .clone()
 }
