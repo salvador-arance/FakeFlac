@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "files": [
+    ".agents/skills/calibrate/SKILL.md",
+    ".agents/skills/feature/SKILL.md",
+    ".agents/skills/handoff/SKILL.md",
+    ".agents/skills/new-adr/SKILL.md",
+    ".agents/skills/new-spec/SKILL.md",
+    ".codex/agents/code-reviewer.toml",
+    ".codex/agents/rust-implementer.toml",
+    ".codex/agents/spec-writer.toml",
+    ".codex/agents/svelte-implementer.toml",
+    ".codex/agents/test-author.toml",
+    ".codex/hooks.json",
+    ".codex/hooks/_lib.mjs",
+    ".codex/hooks/format.mjs",
+    ".codex/hooks/guard-agents.mjs",
+    ".codex/hooks/guard-bash.mjs",
+    ".codex/hooks/guard-protected.mjs",
+    ".codex/hooks/hooks.test.mjs",
+    ".codex/hooks/session-context.mjs",
+    ".codex/hooks/stop-check.mjs",
+    "AGENTS.md",
+    "crates/fakeflac-audio/AGENTS.md",
+    "crates/fakeflac-core/AGENTS.md",
+    "specs/AGENTS.md",
+    "src-tauri/AGENTS.md",
+    "src/AGENTS.md"
+  ]
+}

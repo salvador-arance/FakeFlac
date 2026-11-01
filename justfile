@@ -7,6 +7,7 @@ default:
 
 # Fast checks: formatting, lint, types, architecture rules, quick tests. Target < 60 s (RP-08).
 check-fast:
+    just agents-check
     cargo fmt --all -- --check
     cargo clippy --workspace --exclude fakeflac --all-targets -- -D warnings
     npm run check
@@ -15,6 +16,14 @@ check-fast:
 
 # Full check: fast checks plus all tests.
 check: check-fast test
+
+# Claude is canonical; Codex discovery files are generated (ADR-0048).
+agents-sync:
+    node scripts/sync-agents.mjs
+
+# Read-only source/output drift check, included in check-fast and CI.
+agents-check:
+    node scripts/sync-agents.mjs --check
 
 test:
     cargo test --workspace --exclude fakeflac

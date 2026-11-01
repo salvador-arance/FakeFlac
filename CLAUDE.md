@@ -24,6 +24,8 @@ Repo docs and code are in English. `docs/planning/` is the historical planning d
 ```
 just check-fast   # fmt, clippy, svelte-check, arch lint, quick tests
 just check        # check-fast plus all tests
+just agents-sync  # regenerate Codex compatibility files from canonical Claude sources
+just agents-check # fail on generated drift without changing files (part of check-fast)
 just test         # all tests
 just gen          # regenerate TS bindings from Rust (tauri-specta)
 just check-app    # src-tauri adapter checks: bindings up to date, clippy, tests (Windows; not in `just check`)
@@ -50,4 +52,6 @@ just prune-branches  # delete merged branches and clean agent worktrees (after G
 - Current state and next step: `docs/agents/progress.md`
 
 ## End of session
+Agent configuration is maintained in `CLAUDE.md` and `.claude/` only. After changing instructions, roles, skills or hook registrations, run `just agents-sync`. Never hand-edit the generated Codex files (ADR-0048).
+
 Run `/handoff`: update `docs/agents/progress.md` (done · pending · blockers).
