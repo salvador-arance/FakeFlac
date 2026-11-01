@@ -2,6 +2,28 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-01 - Opus implementation checkpoint; G1 needed for fixture corrections
+
+**Done**
+- #102, #103 and #104 are merged; `just prune-branches` removed the merged Codex setup branch.
+- Started `/feature RF-14` / RF-15 on `codex/feat-RF-14-opus`. Baseline `just check` passed (752 frontend tests).
+- Approved pinned dependency: `4bfe545`; the same package is available to Tauri/calibration fixture tests through dev-dependencies (`d09884d`), with no additional package.
+- Test stage `54b5558`: independent Opus writer, fixture preconditions, scalar/deterministic subprocesses, per-channel decoder seam, rules, scan, native events, UI and calibration tests. Exact protected files are listed in the commit. Independent fixture preconditions and exhaustive non-Opus v7/v8 regression pass.
+- Implementation checkpoint `83bb40b` (incomplete): streaming Ogg validation/packet indexing, 48 kHz decode shared by analysis and spectrogram, pre-skip/end trim/gain, v8 defaults, Opus estimates and calibration support. Focused core suites pass; audio Opus suite: 16 pass, 2 fixture failures. Compilation and test-target Clippy passed.
+
+**Pending**
+- G1: correct the split-fixture recipe in `lossy-fixtures.md` 1.4/2.2 and `opus.feature`: the approved 1000-byte cap can fit three whole 320-byte packets, producing no continued packet. Proposed cap: 255 bytes; packets longer than 255 bytes necessarily span pages. Reviewable proposed spec diff: local ignored `target/opus-g1-proposal.patch` (not applied).
+- After G1, return to the test stage with a fresh test-author: update the split writer/continuation preconditions, synchronise same-process fixture creation (the current PID-based temporary name races), and align `lossy_rows.rs` with approved C14 (v5-v7 leave Opus unevaluated; the old test still expects `unsupportedFormat`). Never edit protected tests in the implement stage.
+- Resume implementation with a fresh implementer: finish `tools/fakeflac-calibrate/src/lists.rs` `Formats::Lossy` filtering and its folder-empty message, then fix any remaining production failures.
+- Full `just check` is not green. `just check-app`, `just ci`, fresh `just perf`, installer size check, independent review and PR are pending. No PR opened; do not treat this checkpoint as completed.
+- Corpus acceptance O1-O6 and timing O8 are pending. `just accept` writes to external `FAKEFLAC_CALIBRATION`; reconcile that with the repository-only write rule before running it. O8 requires the owner's Opus folder.
+- Earlier optional/manual follow-ups remain unchanged.
+
+**Blockers / questions for the human**
+- Approve the 255-byte split-fixture recipe at G1 and the return to test stage for the two fixture defects and the C14 test correction. Production work stopped; no protected test or spec was changed during implementation.
+
+**Next step:** G1 on the split-fixture correction, then a fresh test-author iteration.
+
 ## 2026-11-01 - Portable Codex hook commands (#104)
 
 **Done**
