@@ -59,6 +59,8 @@ Minimal capabilities (folder dialog, read of the chosen path, write only of the 
 
 ## Related
 
+- RF-13 language preference proposal: [ADR-0049](../adr/0049-persist-language-preference-in-app-config-json.md), [settings contract](../../specs/contracts/settings.md). Pending G1; language-only settings, independent of detection and the result cache.
+
 - Local harness consolidation: [ADR-0048](../adr/0048-claude-canonical-harness-codex-generated-adapter.md), [contract](../../specs/contracts/agent-harness.md). Claude remains canonical; Codex compatibility is generated.
 
 - [dependencies.md](dependencies.md) · [backend.md](backend.md) · [data-model.md](data-model.md) · [frontend.md](frontend.md) · [glossary.md](glossary.md)

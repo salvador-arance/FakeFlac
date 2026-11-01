@@ -33,4 +33,4 @@ CREATE TABLE track_result (
 - **Migrations:** `user_version` plus sequential scripts, run in one write transaction at open.
 - **Failures** never fail a run: the summary reports `cache: 'unavailable'` or `'degraded'` (contract version 7).
 - **Clearing:** `clear_cache` deletes `-wal`, `-shm` and the database file, in that order, without opening it.
-- **Settings:** `Settings { language: "es" | "en", windowsCount, sampleWindows, params: DetectionParams }` as JSON. Settings are RF-13, which is not specified yet; their location is decided there.
+- **Settings (RF-13 proposal, pending G1):** the owner limited RF-13 to Spanish/English with a persistent preference. `Settings { language: "es" | "en" }` is proposed as versioned JSON at `app_config_dir()/settings.json`, independent of the result cache ([ADR-0049](../adr/0049-persist-language-preference-in-app-config-json.md), [contract](../../specs/contracts/settings.md)). Sampling and detection-parameter controls from historical planning are deferred. The app has no settings persistence until implementation follows G1.

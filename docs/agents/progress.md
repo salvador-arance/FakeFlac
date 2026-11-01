@@ -2,6 +2,25 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-01 - RF-13 bilingual interface and persistent preference specification
+
+**Done**
+- Started `/new-spec RF-13` on `spec/RF-13` from `fcee584` (merged #106). The owner selected Spanish/English with a persistent preference; advanced analysis settings are deferred.
+- A spec-writer prepared `contracts/settings.md`, `ui/language-settings.md`, `ui/translations.md` and 22 Gherkin scenarios in `features/language-settings.feature`; RF-13, proposed command contract version 8 and traceability are linked.
+- Added proposed ADR-0049: language-only JSON in the app configuration directory using existing dependencies; version-aware recovery, explicit saves and preserved previous settings on failure. Architecture links distinguish this proposal from implemented behavior.
+- `just check` passed (all Rust suites and 757 frontend tests); `just trace` passed (38 requirements, 28 tagged). All 73 current English catalogue keys are covered and placeholder sets match. The English/Spanish name-order example was verified with the local `Intl.Collator`.
+- Independent read-only review identified and prompted corrections to the new AppError union and focus handling during saves/read-only failures. No production code or executable tests were changed.
+
+**Pending**
+- G1 review of Q1-Q4 in `specs/contracts/settings.md`: initial English default, Save/Cancel interaction, persistence/recovery and translation/numeric conventions. ADR-0049 remains proposed.
+- After human approval and merge: reconcile accepted ADR status and handoff, then `/feature RF-13` with an independent test stage. Existing fallback assertions must be updated in that stage per the UI spec.
+- Fresh-session harness lifecycle acceptance from #106 remains a separate manual follow-up.
+
+**Blockers / questions for the human**
+- No implementation is authorized until G1 approves the proposal. Human merge only.
+
+**Next step:** review the RF-13 specification PR at G1.
+
 ## 2026-11-01 - Claude canonical harness; generated Codex compatibility
 
 **Done**
