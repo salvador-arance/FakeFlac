@@ -1,7 +1,7 @@
 # ADR-0047: Opus decoding with `rusty-opus` (pure Rust, pinned); the Ogg layer is read by the adapter; Opus test files are encoded in test support with the same crate
 
-- Status: proposed
-- Date: 2026-11-01
+- Status: accepted
+- Date: 2026-11-01 (G1: 2026-11-01, the owner accepted every default of #102)
 
 ## Context and rationale
 
@@ -92,6 +92,14 @@ Encoder check (for test files): the encoders of `rusty-opus`, `opus-rs` and `opu
 - **Speed:** a 360 s stereo Opus track decodes in about 0.5–1.2 s on one thread (spike rate: 44–99 ms per 30 s), inside RNF-01's 3 s with the rest of the pipeline. The first implementation may decode the stream sequentially and keep only the sampled windows (ADR-0010). Seeking by granule with the 80 ms pre-roll of RFC 7845 is a lever the RNF-01 rules (performance.md section 7) allow if a budget is missed.
 - **Robustness:** all three Rust candidates returned errors, never panics, on 72 020 corrupt packets. `analyze_folder` keeps its `catch_unwind` around each track as the last line of defence (RNF-04).
 - Amends ADR-0030 (the decoder is chosen), ADR-0033 (dependency set) and ADR-0040 (point 4: Opus is no longer pending once the spec PR lands; point 5: Opus test files come from the encoder, not a bitstream writer).
+
+## G1 decisions (2026-11-01)
+
+The owner accepted the defaults of the three questions in #102:
+
+1. `rusty-opus` is accepted with its supply-chain profile. The mitigation is the exact pin, a reviewed diff on every bump and `cargo deny`; `opus-rs` is the fallback.
+2. Only channel mapping family 0 (mono and stereo) is decoded. Other families are `Error(unsupportedFormat)`, and only `.opus` is scanned.
+3. `EXTRACTION_VERSION` stays 2.
 
 ## Notes from implementation
 
