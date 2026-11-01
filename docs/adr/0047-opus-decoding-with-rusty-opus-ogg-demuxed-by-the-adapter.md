@@ -125,4 +125,8 @@ This amendment was proposed in the Opus spec PR (#103) and accepted at its G1 (d
 
 ## Notes from implementation
 
-(Filled in by the implement stage: confirmed crate version, installer sizes before and after, SIMD/scalar determinism test result.)
+- Confirmed `rusty-opus` `=1.0.2`, with no transitive dependencies. Test-only composition roots name the same pin to reuse the independent fixture writer; this adds no package to the graph.
+- The adapter validates the Ogg structure before decoding, records packet byte ranges and reuses packet/PCM buffers. Analysis and spectrogram share the sequential decode path; only the hidden per-channel sample test seam collects complete PCM.
+- Default-ISA determinism and scalar-path fixture truth tests pass. The fixture split-page cap was corrected from 1000 to 255 bytes at G1 in chat on 2026-11-01: 1000 bytes can fit three complete 320-byte packets and exercise no continuation. A cold concurrent-write regression protects fixture publication.
+- Installer sizes: released v0.1.0 baseline NSIS 2,738,475 bytes, MSI 3,821,568 bytes; this branch's Windows build NSIS 2,854,359 bytes (+115,884), MSI 4,628,480 bytes (+806,912). Both are below RNF-06's 20,000,000-byte limit. These are build/packaging figures, not a new release.
+- Supplementary Opus timing: one synthetic 360-second stereo libopus encode, 3.9 MB, analysed by `just perf` folder mode in release: median 612 ms per track, maximum 612 ms, zero errors. Corpus acceptance O1–O6 and the owner's O8 folder remain separate manual checks.
