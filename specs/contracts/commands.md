@@ -1,8 +1,8 @@
 ---
 id: SPEC-CONTRACT-H1
-requirements: [RF-01, RF-02, RF-05, RF-06, RF-07, RF-09, RF-10, RF-11, RF-14, RF-15, RF-16]
+requirements: [RF-01, RF-02, RF-05, RF-06, RF-07, RF-09, RF-10, RF-11, RF-13, RF-14, RF-15, RF-16]
 status: proposed
-version: 7
+version: 8
 ---
 
 # Backend ↔ frontend contract (H1, with the H2 lossy formats, CSV export and album summaries)
@@ -10,6 +10,14 @@ version: 7
 > The commands, events and types the frontend can use. They are defined once in Rust and the TypeScript bindings are **generated** with `tauri-specta` (S3, ADR-0003); this document is the readable reference. Field names are camelCase on the TS side. Settings commands arrive later in H2 (the cache command is version 7). Version 3 adds MP3 and M4A files (RF-14 H2) and the source-bitrate estimate (RF-15); changes are listed in "Lossy formats (version 3)". Version 4 adds `export_csv` (RF-09); changes are listed in "CSV export (version 4)". Version 5 adds the album summary to every `trackDone` event (RF-10); changes are listed in "Album summary (version 5)". Version 6 adds the reason `streamingSampleRate` (RF-16, detection v7, ADR-0043); changes are listed in "Streaming sample rate (version 6)". Version 7 adds the result cache (RF-11, ADR-0044): the command `clear_cache`, the error `CACHE_FAILED` and the summary fields `fromCache` and `cache`; changes are listed in "Result cache (version 7)". Detection v8 adds Opus files (RF-14, RF-15, ADR-0047) **without a new contract version**: no type changes; changes are listed in "Opus files (detection v8)".
 
 ## Commands
+
+**Version 8 proposal (RF-13, G1 pending):** `settings.md` defines the language-only
+`get_settings` / `set_settings` commands, `Language`, `Settings`, `SettingsSnapshot`,
+`SettingsLoadStatus` and the additional `AppError.code` values `SETTINGS_WRITE_FAILED` and
+`SETTINGS_READ_ONLY`. It supersedes the introductory deferral of Settings above. All version
+7 analysis/cache/export/spectrogram fields remain unchanged. Language never changes their
+values, the cache engine key or CSV bytes. See `../ui/language-settings.md` for startup gating
+and live translation of already displayed results and messages. ADR-0049 records persistence.
 
 | Command | Input | Output | Errors (`AppError.code`) | Req. |
 |---|---|---|---|---|
@@ -19,6 +27,8 @@ version: 7
 | `get_spectrogram` | `path: string` | `Spectrogram` | `NOT_ANALYZED` is not used in H1; `INTERNAL` if the file cannot be decoded | RF-07 |
 | `export_csv` (version 4) | — (the destination comes from the native save dialog, never from the frontend) | `ExportResult \| null` (`null` if the dialog is cancelled) | `NOT_ANALYZED`, `ANALYSIS_RUNNING`, `EXPORT_FAILED`, `INTERNAL` | RF-09 |
 | `clear_cache` (version 7) | — | `void` | `ANALYSIS_RUNNING`, `CACHE_FAILED`, `INTERNAL` | RF-11 |
+| `get_settings` (version 8, proposed) | — | `SettingsSnapshot` (`settings.md`) | `INTERNAL` | RF-13 |
+| `set_settings` (version 8, proposed) | `settings: Settings` | `SettingsSnapshot` (`settings.md`) | `SETTINGS_WRITE_FAILED`, `SETTINGS_READ_ONLY`, `INTERNAL` | RF-13 |
 
 Drag and drop uses Tauri's native drag-drop event. The frontend cannot tell a folder from a file (it has no file-system access), so it calls `start_analysis` with each dropped path in order until one does not fail with `NOT_A_FOLDER`. Dropped files are ignored in H1: if every dropped path is a file, nothing starts and no error is shown. Any other error is shown as usual.
 
@@ -130,6 +140,7 @@ type ExportResult = {     // version 4 (RF-09)
 type AppError = {
   code: 'NO_AUDIO_FOUND' | 'NOT_A_FOLDER' | 'FOLDER_UNREADABLE' | 'ANALYSIS_RUNNING' | 'NOT_ANALYZED' | 'EXPORT_FAILED'
       | 'CACHE_FAILED'                               // version 7 (RF-11): only from clear_cache
+      | 'SETTINGS_WRITE_FAILED' | 'SETTINGS_READ_ONLY' // version 8 proposal (RF-13): only from set_settings
       | 'INTERNAL'
   message: string
 }
