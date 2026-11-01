@@ -39,6 +39,7 @@ function setup(extra: Extra = {}) {
       canCancel: false,
       canExport: true,
       canFilter: true,
+      canSettings: false,
       verdictFilter: [],
       query: '',
       ...extra,

@@ -17,6 +17,7 @@ import type { AnalysisSummary, ProgressEvent } from '../api'
 import * as api from '../api'
 import type { Verdict } from '../model'
 import { makeAlbum, makeSummary, makeTrack } from '../testing/fixtures'
+import { mockSettings, waitForMainScreen } from './tests/settingsHarness'
 import AnalysisPage from './AnalysisPage.svelte'
 
 vi.mock('../api', () => {
@@ -40,6 +41,8 @@ vi.mock('../api', () => {
     minimizeWindow: vi.fn(),
     toggleMaximizeWindow: vi.fn(),
     closeWindow: vi.fn(),
+    getSettings: vi.fn(),
+    setSettings: vi.fn(),
   }
 })
 
@@ -136,6 +139,7 @@ const current = (o: HTMLElement) => o.getAttribute('aria-selected') === 'true'
 async function mountPage() {
   const view = render(AnalysisPage)
   await vi.waitFor(() => expect(api.onDragDrop).toHaveBeenCalled())
+  await waitForMainScreen()
   return view
 }
 
@@ -176,6 +180,8 @@ const B: AlbumSpec = { index: 1, name: 'Lib\\B', files: 1 }
 const C: AlbumSpec = { index: 2, name: 'Lib\\C', files: 1 }
 
 beforeEach(() => {
+  // RF-13: English default settings, locale reset (tests/settingsHarness.ts)
+  mockSettings()
   vi.mocked(api.pickFolder).mockReset()
   vi.mocked(api.startAnalysis).mockReset()
   vi.mocked(api.startAnalysisOfDropped).mockReset()
@@ -371,7 +377,7 @@ describe('Albums panel: while the analysis runs', () => {
     vi.useFakeTimers()
     const run = fakeRun()
     render(AnalysisPage)
-    await vi.advanceTimersByTimeAsync(0)
+    await waitForMainScreen()
     vi.mocked(api.pickFolder).mockResolvedValue('C:/Music/Lib')
     await fireEvent.click(openButton())
     await vi.advanceTimersByTimeAsync(0)
@@ -509,7 +515,7 @@ describe('Albums panel: states', () => {
     vi.useFakeTimers()
     const run = fakeRun()
     render(AnalysisPage)
-    await vi.advanceTimersByTimeAsync(0)
+    await waitForMainScreen()
     vi.mocked(api.pickFolder).mockResolvedValue('C:/Music/Album A')
     await fireEvent.click(openButton())
     await vi.advanceTimersByTimeAsync(0)

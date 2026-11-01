@@ -1,6 +1,6 @@
 // The reason text of rule L6a (specs/ui/lossy-formats.md, "Streaming sample rate (RF-16)";
-// specs/features/detection-streaming-source.feature, @RF-16). English only: the Spanish catalogue
-// is not extended before RF-13, so it falls back to English.
+// specs/features/detection-streaming-source.feature, @RF-16). The Spanish text comes from
+// specs/ui/translations.md section 2 (RF-13), which replaces the English fallback of Q28.
 import { afterEach, describe, expect, it } from 'vitest'
 import { setLocale, t } from './index'
 
@@ -16,9 +16,11 @@ describe('i18n: reason.streamingSampleRate', () => {
     expect(STREAMING_TEXT).toHaveLength(82)
   })
 
-  // @RF-16 the Spanish catalogue falls back to English for this reason (Q28)
-  it('falls back to English in Spanish', () => {
+  // @RF-13 the explicit Spanish text (translations.md section 2)
+  it('has the Spanish text in Spanish', () => {
     setLocale('es')
-    expect(t('reason.streamingSampleRate')).toBe(STREAMING_TEXT)
+    expect(t('reason.streamingSampleRate')).toBe(
+      'Banda completa a 48 kHz: posible ripeo de streaming; los archivos auténticos a 48 kHz se ven igual.',
+    )
   })
 })

@@ -16,6 +16,7 @@ import type { AnalysisSummary, ProgressEvent } from '../api'
 import * as api from '../api'
 import type { Verdict } from '../model'
 import { makeAlbum, makeSummary, makeTrack } from '../testing/fixtures'
+import { mockSettings, waitForMainScreen } from './tests/settingsHarness'
 import AnalysisPage from './AnalysisPage.svelte'
 
 vi.mock('../api', () => {
@@ -40,6 +41,8 @@ vi.mock('../api', () => {
     minimizeWindow: vi.fn(),
     toggleMaximizeWindow: vi.fn(),
     closeWindow: vi.fn(),
+    getSettings: vi.fn(),
+    setSettings: vi.fn(),
   }
 })
 
@@ -96,6 +99,7 @@ const STATE31 = '31 tracks · 28 real · 2 suspicious · 1 fake · 0 errors'
 async function mountPage() {
   render(AnalysisPage)
   await vi.waitFor(() => expect(api.onDragDrop).toHaveBeenCalled())
+  await waitForMainScreen()
 }
 
 async function openFolder(path = 'C:/Music/Album A') {
@@ -142,6 +146,8 @@ function pendingClear() {
 }
 
 beforeEach(() => {
+  // RF-13: English default settings, locale reset (tests/settingsHarness.ts)
+  mockSettings()
   vi.mocked(api.pickFolder).mockReset()
   vi.mocked(api.startAnalysis).mockReset()
   vi.mocked(api.startAnalysisOfDropped).mockReset()

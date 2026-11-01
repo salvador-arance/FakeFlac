@@ -49,6 +49,8 @@ vi.mock('../api', () => {
     minimizeWindow: vi.fn(),
     toggleMaximizeWindow: vi.fn(),
     closeWindow: vi.fn(),
+    getSettings: vi.fn(),
+    setSettings: vi.fn(),
   }
 })
 
