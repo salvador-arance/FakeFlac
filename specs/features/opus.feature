@@ -3,14 +3,17 @@ Feature: Opus files (detection v8)
   Opus in Ogg (.opus) is decoded by the audio adapter with rusty-opus =1.0.2,
   without external tools, and gives the same TrackAnalysis contract as the other
   formats (ADR-0047; specs/contracts/commands.md, "Opus files (detection v8)").
+  The decoder limits its f32 output to [-1, 1] (lossy-source.md section 2.4.3,
+  accepted at G1); the fixtures' input peaks at -1 dBFS, and their truths were
+  re-measured at G1 with this decoder (lossy-source.md section 12.8 F8).
   The adapter reads the Ogg layer itself: pages with their CRC-32, packets,
   OpusHead and OpusTags, granule positions (specs/detection/lossy-source.md
   section 2.4). Only channel mapping family 0 (mono and stereo) is decoded;
   every other family is unsupportedFormat. Only ".opus" is scanned.
   Rules: lossy-source.md section 12 with DetectionParams v8 (the defaults,
   detection-params.v8.toml = v7 plus the "opus" rows of [lossy.cutoffs]):
-  every Opus row from 24 to 192 kbps has cutoff 20000 Hz, there is no row
-  below 24 kbps, and the rest is the v5 lossy rules (detection-lossy.feature):
+  every Opus row from 48 to 192 kbps has cutoff 20000 Hz, there is no row
+  below 48 kbps, and the rest is the v5 lossy rules (detection-lossy.feature):
   fc = fs when D >= 7 dB, otherwise fe; c_exp = min(table row of the declared
   bitrate, nyquist - 400) (Opus has no tag low-pass); s = c_exp - fc;
   L3 fake when s >= 2500 Hz and D >= 10 dB; L4 suspicious (cutoffBelowDeclared)
@@ -19,12 +22,14 @@ Feature: Opus files (detection v8)
   never applies to Opus ("opus" cannot be listed in lossy.streaming.codecs).
   The estimate of an Opus track is its declared bitrate when it is real, and
   none (null) when L2-L5 fire (lossy-source.md section 12.4, Q29).
-  The Opus rows were measured before G1 (lossy-source.md Q30, sections 12.3
-  and 12.8: honest libopus decodes report fc 20050 or 20150 Hz at 16-320 kbps);
-  acceptance O checks them on every run (section 12.7). At 160 kbps or less
-  libopus hides a band-limited source's edge by band folding (section 12.6),
-  so the rule-level cases "from an MP3 128" and "from an MP3 192" below use
-  the cutoffs measured on Opus 256 cascades.
+  The Opus rows were measured before G1 and their first row decided at G1
+  (lossy-source.md Q30, sections 12.3 and 12.8: honest libopus encodes report
+  fc 20050 or 20150 Hz at 16-320 kbps; the table starts at 48 kbps); acceptance
+  O checks them on every run (section 12.7). At 160 kbps or less libopus hides
+  a band-limited source's edge by band folding unless the decoder's output
+  limit clips the decoded signal (section 12.6), so the rule-level cases "from
+  an MP3 128" and "from an MP3 192" below use the cutoffs measured on Opus 256
+  cascades (the same medians with either decoder, section 12.8 F8).
   Test files: the Opus fixtures of specs/detection/lossy-fixtures.md section
   2.2, encoded inside the tests by rusty-opus's own encoder and written to Ogg
   by a test-support writer that shares no code with the adapter's reader
@@ -114,8 +119,9 @@ Feature: Opus files (detection v8)
 
   @RF-14
   Scenario: An output gain that makes the track silent
-    The gain of -15360 (-60 dB) puts every frame of the -12 dBFS signal near
-    -72 dBFS, below silence_dbfs (-60 dBFS): the gain is applied before the
+    The gain of -15360 (-60 dB) puts every frame of the signal (about -15 dBFS
+    RMS: -12 dBFS scaled to a -1 dBFS peak, lossy-fixtures.md section 1.3) near
+    -75 dBFS, below silence_dbfs (-60 dBFS): the gain is applied before the
     analysis, so the track has no frame to analyse.
     Given the Opus fixture "opus_128_fb_gain_m60"
     When it is analysed
@@ -191,7 +197,8 @@ Feature: Opus files (detection v8)
       | large shortfall, step not deep enough      | 128 | -20 | 8  | 16050 | 24000 | 20000 | suspicious | cutoffBelowDeclared     | none     |
       | no step, content fades at 18.5 kHz         | 128 | -20 | 0  | —     | 18500 | 20000 | suspicious | gradualRolloff          | none     |
       | little treble                              | 128 | -70 | 40 | 12050 | 24000 | 20000 | suspicious | lowHighFrequencyContent | none     |
-      | first row                                  | 24  | -20 | 40 | 19950 | 24000 | 20000 | real       |                         | 24       |
+      | first row                                  | 48  | -20 | 40 | 19950 | 24000 | 20000 | real       |                         | 48       |
+      | just below the first row: not judged       | 40  | -20 | 40 | 16650 | 24000 | none  | real       |                         | 40       |
       | below the first row: not judged            | 16  | -20 | 40 | 12050 | 24000 | none  | real       |                         | 16       |
       | between rows uses the lower row            | 140 | -20 | 40 | 17050 | 24000 | 20000 | fake       |                         | none     |
       | above the last row uses the last row       | 300 | -20 | 40 | 19950 | 24000 | 20000 | real       |                         | 300      |
@@ -204,7 +211,7 @@ Feature: Opus files (detection v8)
     Given the default DetectionParams of the code
     Then they are equal to specs/detection/detection-params.v8.toml
     And their sections and values other than lossy.cutoffs.opus are equal to those of specs/detection/detection-params.v7.toml
-    And lossy.cutoffs.opus has 8 rows, for 24, 32, 48, 64, 96, 128, 160 and 192 kbps, each with cutoff_hz 20000
+    And lossy.cutoffs.opus has 6 rows, for 48, 64, 96, 128, 160 and 192 kbps, each with cutoff_hz 20000
     And every TrackAnalysis computed with them carries algorithmVersion 8
 
   @RF-15 @RF-04
@@ -223,9 +230,9 @@ Feature: Opus files (detection v8)
 
     Examples:
       | change                                                    | what                                     |
-      | the opus rows for 24 and 32 kbps swapped                  | lossy.cutoffs.opus: bitrate_kbps increases |
+      | the opus rows for 48 and 64 kbps swapped                  | lossy.cutoffs.opus: bitrate_kbps increases |
       | the cutoff_hz of the opus row for 192 kbps set to 19000.0 | lossy.cutoffs.opus: cutoff_hz does not decrease |
-      | the cutoff_hz of the opus row for 24 kbps set to 0.0      | lossy.cutoffs.opus: cutoff_hz > 0         |
+      | the cutoff_hz of the opus row for 48 kbps set to 0.0      | lossy.cutoffs.opus: cutoff_hz > 0         |
 
   # --- Corrupt and unsupported files (RNF-04; lossy-source.md section 2.4.4) ----------
 

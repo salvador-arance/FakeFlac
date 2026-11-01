@@ -191,10 +191,10 @@ Feature: Source bitrate of lossy files (detection v5)
   @RF-15
   Scenario: The defaults hold the v5 lossy values
     Changed for detection v8 (lossy-source.md section 12.9 (c)): the defaults
-    also have the 8 Opus rows of detection-params.v8.toml (opus.feature).
+    also have the 6 Opus rows of detection-params.v8.toml (opus.feature).
     Given the default DetectionParams of the code
     Then lossy.suspicious_shortfall_hz is 1000, lossy.fake_shortfall_hz is 2500 and lossy.fake_min_step_db is 10
-    And lossy.cutoffs has the 14 mp3 rows and the 7 aac rows of specs/detection/detection-params.v5.toml, and 8 opus rows
+    And lossy.cutoffs has the 14 mp3 rows and the 7 aac rows of specs/detection/detection-params.v5.toml, and 6 opus rows
 
   @RF-15
   Scenario Outline: Invalid [lossy] sections are rejected

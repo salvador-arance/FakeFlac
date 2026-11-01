@@ -83,11 +83,12 @@ fake_min_step_db = 10.0               # a Fake needs a clear cutoff step (same v
 # mp3 and aac are INDICATIVE, NOT MEASURED HERE:
 #   mp3: LAME 3.99-3.100 default low-pass per CBR bitrate (as documented for LAME; not verified in this repo).
 #   aac: a conservative value across common AAC-LC encoders (Apple, FDK, ffmpeg native, streaming sites).
-# opus (v8, lossy-source.md section 12.3) is MEASURED before G1 (lossy-source.md section 12.8, 2026-11-01): libopus
-#   1.6.1's full band ends at the top CELT band edge, 20 kHz; native decodes of 69 corpus sources report fc 20050 or
-#   20150 Hz in 69 of 69 at every bitrate from 16 to 320 kbps, and 0 of 828 honest encodes at 24-320 kbps are Fake
-#   or Suspicious with these rows. Full band measured from 16 kbps; the first row stays at 24 kbps as a margin for
-#   older libopus versions (lossy-source.md Q30), so files declared below 24 kbps are not judged by the shortfall rules.
+# opus (v8, lossy-source.md section 12.3) is MEASURED before G1 (lossy-source.md section 12.8, 2026-11-01) and its
+#   first row DECIDED at G1 (Q30): libopus 1.6.1's full band ends at the top CELT band edge, 20 kHz, at every bitrate
+#   from 16 to 320 kbps (69 corpus sources: fc 20050 or 20150 Hz in 69 of 69 after ffmpeg's native decoder, F1).
+#   With the product decoder (rusty-opus 1.0.2, whose f32 output is limited to [-1, 1], section 2.4.3; F8), 6 Fake and
+#   5 Suspicious of 552 honest encodes at 48-320 kbps, and 11 Fake of 138 at 24-32 kbps, so the table starts at
+#   48 kbps: files declared below 48 kbps are not judged by the shortfall rules (Real unless L2 fires).
 mp3 = [
   { bitrate_kbps = 32,  cutoff_hz = 5500.0 },
   { bitrate_kbps = 40,  cutoff_hz = 7000.0 },
@@ -114,8 +115,6 @@ aac = [
   { bitrate_kbps = 320, cutoff_hz = 19500.0 },
 ]
 opus = [
-  { bitrate_kbps = 24,  cutoff_hz = 20000.0 },
-  { bitrate_kbps = 32,  cutoff_hz = 20000.0 },
   { bitrate_kbps = 48,  cutoff_hz = 20000.0 },
   { bitrate_kbps = 64,  cutoff_hz = 20000.0 },
   { bitrate_kbps = 96,  cutoff_hz = 20000.0 },

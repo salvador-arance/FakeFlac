@@ -245,8 +245,8 @@ Feature: Calibration and acceptance for lossy files
     Changed for detection v8 (lossy.md C16): before, this config was refused
     with "Opus output is not supported yet".
     cbr128_opus256 is a gated O4 cascade (lossy-source.md section 12.7); the
-    O4 cascades end at 256 kbps because libopus hides a band-limited source's
-    edge at 160 kbps or less (section 12.6).
+    O4 cascades end at 256 kbps because at 160 kbps or less a band-limited
+    source's edge shows only where the decoded signal clips (section 12.6).
     Given the lossy entry "cbr128_opus256" of specs/calibration/calibration.v4.toml and the source "Compras/Ñandú – Ácido, Vol. 1 (2024)/01 – Intro ’A’.flac" with full track default
     When the config is loaded and the ffmpeg calls are built
     Then the config is accepted

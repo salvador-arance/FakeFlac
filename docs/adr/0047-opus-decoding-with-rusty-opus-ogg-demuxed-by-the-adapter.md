@@ -101,9 +101,9 @@ The owner accepted the defaults of the three questions in #102:
 2. Only channel mapping family 0 (mono and stereo) is decoded. Other families are `Error(unsupportedFormat)`, and only `.opus` is scanned.
 3. `EXTRACTION_VERSION` stays 2.
 
-## Amendment: measurements before G1 of the Opus spec PR (2026-11-01, proposed, decided at that G1, question Q42)
+## Amendment: measurements before G1 of the Opus spec PR (2026-11-01, accepted at G1 of #103, questions Q30, Q37 and Q42)
 
-A throwaway probe (not committed) encoded the fixture recipes with `rusty-opus` 1.0.2 on the development machine (AVX2) and compared them with `RUSTY_OPUS_ISA=scalar`, `sse2` and `avx`. Full figures: `specs/detection/lossy-source.md` section 12.8.
+This amendment was proposed in the Opus spec PR (#103) and accepted at its G1 (decisions at the end of this section). A throwaway probe (not committed) encoded the fixture recipes with `rusty-opus` 1.0.2 on the development machine (AVX2) and compared them with `RUSTY_OPUS_ISA=scalar`, `sse2` and `avx`. Full figures: `specs/detection/lossy-source.md` section 12.8.
 
 - **Not byte-identical across SIMD levels.** Encodes at one ISA level are byte-identical run to run. The default AVX2 path gives other bytes than the scalar, SSE2 and AVX paths for mono fixtures, both VBR and CBR (11 of 18 recipes). Stereo VBR 160, the spike's case, was identical. The two decodes differ at about 62 dB SNR, because the encoder made different coding decisions, not because of rounding. `fc`, `D` and `H` are the same.
 - **Point 3 is amended.** Its last reason now reads: every encoded fixture keeps its **truth** at every SIMD level, meaning:
@@ -113,6 +113,15 @@ A throwaway probe (not committed) encoded the fixture recipes with `rusty-opus` 
 
   Its bytes may differ. A test checks this by encoding in a child process with `RUSTY_OPUS_ISA=scalar` (`lossy-fixtures.md` section 1.3). No test compares fixture bytes with a stored hash. The reasons for a real encoder still hold: the truth is what the scenarios assert, and a CI runner without AVX2 would take the scalar or SSE path.
 - **Pre-skip.** `rusty-opus` 1.0.2 has no public lookahead getter. Its encoder delay, measured by cross-correlating the decode with the input, is **120 samples** (2.5 ms) in mono and in stereo; libopus's is 312. The Ogg writer in test support therefore writes pre-skip 120 as a constant, and the test stage checks that each fixture decodes aligned with its input. The adapter is unaffected: it applies whatever pre-skip the file's `OpusHead` records.
+- **The decoder clamps its output.** `rusty-opus` 1.0.2 limits its `f32` output to [-1, 1] on all three of its output paths (CELT, the CELT sub-frame path and the SILK/hybrid mix); libopus's float decode does not. Loud masters exceed full scale after an Opus round trip: 54 of the 69 corpus sources measured did so at 128 kbps. The clamp's distortion changes the band spectra of those tracks. The first figures of the spec PR were measured with ffmpeg's native, unclamped decoder, and the G1 review re-measured them with the `rusty-opus` decode:
+  - Honest 24 and 32 kbps encodes are `Fake` in about 8 % of files (11 of 138).
+  - Honest encodes from 48 kbps up are `Fake` in 6 of 552.
+  - MP3 128 → Opus 256 is `Fake` in 93 % of files.
+- **G1 decisions (owner, 2026-11-01, #103):**
+  - The clamp is accepted as product behaviour. The spec states it (`lossy-source.md` section 2.4.3), and its figures are the ones measured with the `rusty-opus` decode.
+  - The Opus table starts at 48 kbps (Q30), so lower bitrates are not judged by the shortfall rules.
+  - Acceptance O3 allows `Fake` ≤ 2 % (Q37).
+  - An unclamped float output, through an upstream request or a separate CELT path, is not pursued now. If it is wanted later, it needs a new ADR and a new `EXTRACTION_VERSION`, because it changes the decoded samples.
 
 ## Notes from implementation
 

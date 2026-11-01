@@ -130,7 +130,8 @@ decode_args = ["-c:a", "flac", "-sample_fmt", "s32", "-bits_per_raw_sample", "24
 # --- Opus stages (v4; detection v8, lossy-source.md section 12). Lossy stages only: no lossless transcode, so the
 # lossless tables do not change. libopus 1.6.1 keeps its full band (20 kHz) at these bitrates (measured before G1:
 # lossy-source.md 12.3 and 12.8 F1). opus256 is the last stage of the gated O4 cascades: at 160 kbps or less libopus
-# hides a band-limited source's edge by band folding, from 192 kbps it keeps it (lossy-source.md 12.6, 12.8 F4).
+# hides a band-limited source's edge by band folding unless the decoder's output limit clips the decoded signal,
+# from 192 kbps it keeps it (lossy-source.md 12.6, 12.8 F4, F8).
 
 [[generate.settings]]
 id = "opus64"
@@ -251,20 +252,20 @@ id = "cbr320_opus128"                 # O3 (gated): a negative cascade, an Opus 
 stages = ["cbr320", "opus128"]
 
 [[generate.lossy]]
-id = "cbr128_opus256"                 # O4 (gated): an Opus 256 made from an MP3 128 (measured: 65 of 69 Fake)
+id = "cbr128_opus256"                 # O4 (gated): an Opus 256 made from an MP3 128 (measured, product decoder: 64 of 69 Fake)
 stages = ["cbr128", "opus256"]
 
 [[generate.lossy]]
-id = "aac128_opus256"                 # O4 (gated): an Opus 256 made from an AAC 128 (measured: 61 Fake, 2 Suspicious of 69)
+id = "aac128_opus256"                 # O4 (gated): an Opus 256 made from an AAC 128 (measured, product decoder: 62 Fake, 6 Suspicious of 69)
 stages = ["aac128", "opus256"]
 
 [[generate.lossy]]
 id = "cbr192_opus256"                 # O5 (reported): truth fake by the bitrate rule (192 < 256), edge about 18.75 kHz,
-stages = ["cbr192", "opus256"]        # mostly Suspicious by design (measured: 2 Fake, 50 Suspicious, 17 Real of 69)
+stages = ["cbr192", "opus256"]        # mostly Suspicious by design (measured, product decoder: 2 Fake, 57 Suspicious, 10 Real of 69)
 
 [[generate.lossy]]
-id = "cbr128_opus160"                 # O5 (reported): an Opus 160 made from an MP3 128; documents the band-folding
-stages = ["cbr128", "opus160"]        # limitation (measured: 15 Fake, 54 Real of 69; lossy-source.md 12.6)
+id = "cbr128_opus160"                 # O5 (reported): an Opus 160 made from an MP3 128; at 160 kbps the edge shows only where
+stages = ["cbr128", "opus160"]        # the decoded signal clips (measured, product decoder: 44 Fake, 3 Suspicious, 22 Real of 69; 12.6)
 
 # --- Label resolution (lossy.md section 1.5) -------------------------------------------------------------
 [labels.upstream_by_rate]             # upstream=by-rate: decoded sample rate -> upstream codec and source bound
