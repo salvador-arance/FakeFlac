@@ -28,6 +28,8 @@ specta-typescript = "0.0.12"
 tauri-plugin-dialog = "2.7.3"
 
 [dev-dependencies]
+# Same exact package approved for Opus fixtures in ADR-0047.
+rusty-opus = "=1.0.2"
 flacenc = "0.5.1"
 hound = "3.5.1"
 rand = "0.10.3"
