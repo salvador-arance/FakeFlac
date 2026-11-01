@@ -9,7 +9,7 @@ RF-15 (high, H2): for MP3, M4A and Opus, estimate the real source bitrate and fl
 
 The lossless rules (detection v4, `specs/detection/rules.md`, ADR-0039) cannot be reused as they are: every honest MP3 has a low-pass by design, so rule V4 would call it `Fake`. The question for a lossy file is not "is there a lossy cutoff" but "is the cutoff where an honest encode at this bitrate would put it".
 
-Owner input for the evaluation (docs/agents/progress.md, 2026-10-18; aggregates only, ADR-0022): about 170 streaming-site MP3 320 rips whose sample rate tells the upstream stream (44.1 kHz from AAC 128, 48 kHz from Opus), labels that are upper bounds, 14 honest AAC 128 `.m4a` files, and one album with a full chain from one master (FLAC → AAC 128 → MP3 320) whose FLAC version holds FP4.
+Owner input for the evaluation (docs/agents/archive/progress-v0.1.md, 2026-10-18; aggregates only, ADR-0022): about 170 streaming-site MP3 320 rips whose sample rate tells the upstream stream (44.1 kHz from AAC 128, 48 kHz from Opus), labels that are upper bounds, 14 honest AAC 128 `.m4a` files, and one album with a full chain from one master (FLAC → AAC 128 → MP3 320) whose FLAC version holds FP4.
 
 ## Decision
 

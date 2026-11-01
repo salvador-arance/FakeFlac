@@ -19,7 +19,7 @@ Rules (linted by `scripts/lint-arch.mjs`): see `dependencies.md`. Every atom/mol
 src/lib/{tokens, components/{atoms,molecules,organisms,templates}, pages, stores, api, i18n}
 ```
 
-The examples in the table are what exists today. The folder tree, the column chooser and a settings page of the UI style below are decided but not built yet: the left panel is `FolderDropZone` plus `AlbumSummaryList`. State lives in `stores/analysis.svelte.ts` (runes); messages in `i18n/` (English is the default and the only locale the UI uses today; an `es` catalogue exists, with missing keys falling back to English, but nothing switches to it until RF-13 is specified).
+The examples in the table are what exists today. The folder tree, the column chooser and a settings page of the UI style below are decided but not built yet: the left panel is `FolderDropZone` plus `AlbumSummaryList`. State lives in `stores/analysis.svelte.ts` (runes); messages in `i18n/` (English is the default and the only locale the UI uses today; an `es` catalogue exists, with missing keys falling back to English, but nothing switches to it until RF-13 is implemented; its approved spec is `specs/ui/language-settings.md`).
 
 The spectrogram canvas palette lives in `src/lib/tokens/spectrogram.ts`, a TS token rather than CSS, because the canvas needs numeric colours; the `tokens.css` rule (no literal colours outside the tokens) applies to it too.
 

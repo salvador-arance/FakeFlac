@@ -1,6 +1,6 @@
 # ADR-0049: Persist the language preference in backend-managed app configuration JSON
 
-- Status: proposed
+- Status: accepted (specification PR #107 merged at G1, 2026-11-01)
 - Date: 2026-11-01
 
 ## Context and rationale
@@ -32,4 +32,4 @@ Keep this small application preference adapter in `src-tauri`. JSON storage uses
 
 The app gains one small configuration file, independent from music and result-cache storage. Failed reads and writes have explicit, testable recovery behavior. Observed unsupported future schemas are protected, subject to the stated cross-process limitation. The first supported Windows preference selects the initial language when no file exists; English remains the fallback. Both catalogues must be complete for the specified application UI. Installer and Windows-owned dialog language remain governed by existing release and dialog specifications.
 
-The owner approved Q1-Q4, including this persistence behavior and its concurrency limitation, in chat on 2026-11-01 ("de acuerdo"). This ADR remains proposed pending human merge of the specification PR; no feature is implemented here.
+The owner approved Q1-Q4, including this persistence behavior and its concurrency limitation, in chat on 2026-11-01 ("de acuerdo"). The owner merged the specification PR (#107) on 2026-11-01, which accepts this ADR. The feature itself is not implemented yet (`/feature RF-13`).
