@@ -144,7 +144,7 @@ fn rf15_lossy_rows_are_labelled() {
     assert_eq!(labels.get(opus, "not_evaluated"), "");
 }
 
-// Scenario: A cold run decodes every lossy file once, except Opus (@RP-11 @RF-15)
+// Scenario: A cold run decodes every lossy file once, Opus included (@RP-11 @RF-15)
 #[test]
 fn rf15_a_cold_run_decodes_every_lossy_file_once_opus_included() {
     let sample = Sample::new_lossy("lossy-cold-run");

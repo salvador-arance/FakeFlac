@@ -265,7 +265,7 @@ fn legacy_line(path: &str) -> (String, serde_json::Value) {
     (line.to_string(), key)
 }
 
-// Scenario: A cold run decodes every lossy file once, except Opus (@RP-11 @RF-15), lossy.md section 5 (C7):
+// Scenario: A cold run decodes every lossy file once, Opus included (@RP-11 @RF-15), lossy.md section 5 (C7):
 // a cache line without `stream` is a FLAC or WAV entry, its codec from the extension (any letter case)
 // and no other stream value.
 #[test]
