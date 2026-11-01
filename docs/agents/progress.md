@@ -2,6 +2,27 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-01 - Opus corpus acceptance completed; O1-O5 pass
+
+**Done**
+- The owner asked the agent to execute the acceptance steps using the existing configured roots, authorizing the calibration outputs outside the repository while keeping corpus inputs read-only.
+- Reproduced the startup issue in Windows PowerShell 5.1: default ANSI JSON reading corrupts the corpus path; explicit UTF-8 resolves it. Documented the command in the workflow.
+- Ran v4 acceptance with v7 baseline and v8 params: run `20261101T143541Z`, exit 0, 18,360 new transcodes, 57,325 cache hits, zero generation failures. O1-O5 pass; O6 n/a (no actual Opus corpus files). Verified equal verdicts/reasons/cutoffs/estimates for non-Opus rows locally.
+- O3 maximum Fake rate 0.7% (gate <=2%); O4 MP3/AAC cascades caught 92.2%/99.2%, Fake 90.9%/95.0%. O5 counts are recorded in `docs/agents/opus-acceptance-2026-11-01.md`, using only aggregate summary data.
+- O8 report on the prepared synthetic 360 s stereo Opus: median/max 630/630 ms per track, zero errors. O7 and hosted CI at `6510921` are green, including supply-chain and Windows build.
+- The generic T2/T3 targets retain their reference failures (5/8) identically in v7 and v8; they are not resolved by this feature. No detection parameter was changed.
+- `just privacy-check --base main` passes: 54 changed files checked, zero matches.
+
+**Pending**
+- Owner G2 review of draft PR #105 and its acceptance results; human merge only.
+- Real-world Opus material remains unmeasured; generated encodes and synthetic timing are explicitly identified as such.
+- Earlier follow-ups, including the unchanged generic T2/T3 acceptance targets, remain separate.
+
+**Blockers / questions for the human**
+- No new Opus acceptance blocker. No input lists or detection parameters were edited.
+
+**Next step:** review #105 at G2 with the completed acceptance evidence.
+
 ## 2026-11-01 - Opus draft PR #105 opened
 
 **Done**
