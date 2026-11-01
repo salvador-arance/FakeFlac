@@ -131,8 +131,8 @@ Feature: Opus files (detection v8)
   @RF-14
   Scenario: A packet split across pages is reassembled
     opus_128_fb_split holds the packets of opus_128_fb in pages whose bodies are
-    closed before they would pass 1000 bytes, whatever the packet boundaries
-    (lossy-fixtures.md section 1.4), so most pages end inside a packet.
+    closed before they would pass 255 bytes, whatever the packet boundaries
+    (lossy-fixtures.md section 1.4), so every packet longer than 255 bytes continues on another page.
     Given the Opus fixtures "opus_128_fb" and "opus_128_fb_split"
     When both are analysed
     Then their TrackAnalysis are equal except for the path and the size

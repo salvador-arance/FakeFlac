@@ -104,7 +104,7 @@ pub struct RowMeta {
     pub chain_id: String,
     pub chain_key: String,
     pub split_unit: String,
-    /// `opus decoder pending` for Opus tracks.
+    /// Extraction-level reason for a row that could not be evaluated.
     pub not_evaluated: String,
     /// The lossless source of a generated lossy row (for the source-limited test).
     pub source: Option<Arc<Extracted>>,

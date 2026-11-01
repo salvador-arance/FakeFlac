@@ -28,7 +28,7 @@ const SPLITS: [SplitSel; 3] = [SplitSel::All, SplitSel::Tune, SplitSel::Holdout]
 /// The verdict of one lossy row under one params file (lossy.md sections 4.5 and 6.4).
 #[derive(Debug, Clone, PartialEq)]
 pub struct LossyRowEval {
-    /// `false` for an Opus track and for every row under params without `[lossy]`.
+    /// `false` for rows whose codec has no table in these parameters.
     pub evaluated: bool,
     pub verdict: Verdict,
     pub reasons: Vec<SuspicionReason>,
@@ -81,6 +81,20 @@ pub fn evaluate_lossy_row(
         return LossyRowEval::not_evaluated();
     };
     if !meta.not_evaluated.is_empty() {
+        return LossyRowEval::not_evaluated();
+    }
+    // C14: excluding an Opus row for a params file without Opus rows precedes
+    // extraction errors. Prefer the decoded codec; use the extension only when
+    // extraction could not identify one.
+    let codec = match row.extracted.as_ref() {
+        Extracted::Probe(p) => p.stream.codec,
+        Extracted::Error(_) => None,
+    };
+    let is_opus = codec.map_or_else(
+        || crate::extract::is_opus(&row.path),
+        |codec| codec == fakeflac_core::AudioCodec::Opus,
+    );
+    if is_opus && lossy.cutoffs.opus.is_none() {
         return LossyRowEval::not_evaluated();
     }
     let probe = match row.extracted.as_ref() {

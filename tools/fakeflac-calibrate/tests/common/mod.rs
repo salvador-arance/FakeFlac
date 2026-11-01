@@ -25,6 +25,8 @@ use std::sync::{Arc, Mutex, OnceLock};
 // included by path, they depend only on `rand` and `rand_chacha`. No encoder runs, no ffmpeg.
 #[path = "../../../../crates/fakeflac-audio/tests/common/lossy.rs"]
 pub mod lossy;
+#[path = "../../../../crates/fakeflac-audio/tests/common/opus.rs"]
+pub mod opus;
 
 // ---------------------------------------------------------------------------------------------
 // Paths
@@ -894,7 +896,7 @@ impl Sample {
         place_lossy("m4a_aac_128_lp16k", &c.join(TRACK_13));
         let opus = c.join(TRACK_14);
         std::fs::create_dir_all(opus.parent().unwrap()).unwrap();
-        std::fs::write(opus, b"OggS not decoded: the Opus decoder is pending").unwrap();
+        std::fs::copy(opus::fixture("opus_160_src16k"), opus).unwrap();
         place_lossy("mp3_320_lp17k", &c.join(TRACK_15));
     }
 

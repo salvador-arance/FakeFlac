@@ -2,6 +2,86 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-01 - Opus corpus acceptance completed; O1-O5 pass
+
+**Done**
+- The owner asked the agent to execute the acceptance steps using the existing configured roots, authorizing the calibration outputs outside the repository while keeping corpus inputs read-only.
+- Reproduced the startup issue in Windows PowerShell 5.1: default ANSI JSON reading corrupts the corpus path; explicit UTF-8 resolves it. Documented the command in the workflow.
+- Ran v4 acceptance with v7 baseline and v8 params: run `20261101T143541Z`, exit 0, 18,360 new transcodes, 57,325 cache hits, zero generation failures. O1-O5 pass; O6 n/a (no actual Opus corpus files). Verified equal verdicts/reasons/cutoffs/estimates for non-Opus rows locally.
+- O3 maximum Fake rate 0.7% (gate <=2%); O4 MP3/AAC cascades caught 92.2%/99.2%, Fake 90.9%/95.0%. O5 counts are recorded in `docs/agents/opus-acceptance-2026-11-01.md`, using only aggregate summary data.
+- O8 report on the prepared synthetic 360 s stereo Opus: median/max 630/630 ms per track, zero errors. O7 and hosted CI at `6510921` are green, including supply-chain and Windows build.
+- The generic T2/T3 targets retain their reference failures (5/8) identically in v7 and v8; they are not resolved by this feature. No detection parameter was changed.
+- `just privacy-check --base main` passes: 54 changed files checked, zero matches.
+
+**Pending**
+- Owner G2 review of draft PR #105 and its acceptance results; human merge only.
+- Real-world Opus material remains unmeasured; generated encodes and synthetic timing are explicitly identified as such.
+- Earlier follow-ups, including the unchanged generic T2/T3 acceptance targets, remain separate.
+
+**Blockers / questions for the human**
+- No new Opus acceptance blocker. No input lists or detection parameters were edited.
+
+**Next step:** review #105 at G2 with the completed acceptance evidence.
+
+## 2026-11-01 - Opus draft PR #105 opened
+
+**Done**
+- The owner authorized publication. Pushed `codex/feat-RF-14-opus` and opened draft PR #105: https://github.com/salvador-arance/FakeFlac/pull/105.
+- Its description includes the approved scope, local green `just check` / `just ci`, independent review, installer sizes and the full quiet performance report. Manual corpus acceptance is explicitly pending; no merge was performed.
+
+**Pending**
+- Hosted CI, including the supply-chain job unavailable locally.
+- Manual corpus acceptance O1-O6 and the owner's O8 folder, as detailed below. G2 remains with the human.
+
+**Blockers / questions for the human**
+- No remaining code/test blocker. Running acceptance through the agent still needs an explicit exception for writes to external `FAKEFLAC_CALIBRATION`.
+
+**Next step:** inspect the hosted CI results of #105 before proceeding with the manual acceptance gates.
+
+## 2026-11-01 - Opus implemented; local CI, review and installers verified
+
+**Done**
+- The owner approved the fixture correction and return to tests in chat. `aaca164` applies the G1 recipe: 255-byte split pages guarantee continued packets.
+- Fresh test iterations `9e84ae7`, `7a925c7` and `b7b9ae9` fix concurrent fixture publication and stale calibration/native assertions, and add C14/C15/C17 regressions. The native VBR check uses the independent packet-byte/duration formula, the approved ±1 kbps tolerance and real estimate = actual declared bitrate.
+- `d159d7f` and `07f7a1b` complete the Opus checkpoint `83bb40b`: calibration folders include Opus, params without Opus rows exclude even failed Opus extraction, and configuration v4 loads. Production never changed protected tests or specs.
+- `just check` and final `just ci` are green, including 18 audio Opus tests, 757 frontend tests, all native Tauri tests, Clippy and generated bindings. `just build` succeeds: NSIS 2,854,359 bytes, MSI 4,628,480 bytes, both under 20 MB.
+- Independent full review and the final native-test review found no blocking findings. The quiet `just perf` report passes: T1 off/cold 172/197 ms, T2 off/cold 557/606 ms (all less than 8 % above baseline). This resolves the conditional performance note from the earlier contended run.
+- Supplementary release timing: a generated 360 s stereo libopus file (3.9 MB), median/max 612/612 ms per track, zero errors. It does not replace the owner's O8 folder.
+- README, architecture, ADR-0047 implementation notes, traceability and lessons updated. Reviewable PR body with the complete quiet timing report: ignored local `target/opus-pr.md`.
+
+**Pending**
+- Owner authorization to open the prepared draft PR from `codex/feat-RF-14-opus`; no branch push or PR has been made yet. G2 stays with the human.
+- Manual corpus acceptance O1-O6 and the owner's O8 folder. Do not claim those gates passed: the agent's repository-only write rule prevents running `just accept` against external `FAKEFLAC_CALIBRATION` without an explicit exception.
+- Cargo deny/audit are not installed locally; the hosted supply-chain job must pass after publication.
+- Earlier optional/manual follow-ups remain unchanged.
+
+**Blockers / questions for the human**
+- No remaining code/test blocker. Approve opening the draft PR; corpus acceptance remains explicitly pending.
+
+**Next step:** after authorization, push `codex/feat-RF-14-opus` and open the draft PR using `target/opus-pr.md`.
+
+## 2026-11-01 - Opus implementation checkpoint; G1 needed for fixture corrections
+
+**Done**
+- #102, #103 and #104 are merged; `just prune-branches` removed the merged Codex setup branch.
+- Started `/feature RF-14` / RF-15 on `codex/feat-RF-14-opus`. Baseline `just check` passed (752 frontend tests).
+- Approved pinned dependency: `4bfe545`; the same package is available to Tauri/calibration fixture tests through dev-dependencies (`d09884d`), with no additional package.
+- Test stage `54b5558`: independent Opus writer, fixture preconditions, scalar/deterministic subprocesses, per-channel decoder seam, rules, scan, native events, UI and calibration tests. Exact protected files are listed in the commit. Independent fixture preconditions and exhaustive non-Opus v7/v8 regression pass.
+- Implementation checkpoint `83bb40b` (incomplete): streaming Ogg validation/packet indexing, 48 kHz decode shared by analysis and spectrogram, pre-skip/end trim/gain, v8 defaults, Opus estimates and calibration support. Focused core suites pass; audio Opus suite: 16 pass, 2 fixture failures. Compilation and test-target Clippy passed.
+
+**Pending**
+- G1: correct the split-fixture recipe in `lossy-fixtures.md` 1.4/2.2 and `opus.feature`: the approved 1000-byte cap can fit three whole 320-byte packets, producing no continued packet. Proposed cap: 255 bytes; packets longer than 255 bytes necessarily span pages. Reviewable proposed spec diff: local ignored `target/opus-g1-proposal.patch` (not applied).
+- After G1, return to the test stage with a fresh test-author: update the split writer/continuation preconditions, synchronise same-process fixture creation (the current PID-based temporary name races), and align `lossy_rows.rs` with approved C14 (v5-v7 leave Opus unevaluated; the old test still expects `unsupportedFormat`). Never edit protected tests in the implement stage.
+- Resume implementation with a fresh implementer: finish `tools/fakeflac-calibrate/src/lists.rs` `Formats::Lossy` filtering and its folder-empty message, then fix any remaining production failures.
+- Full `just check` exits 1 at `rf14_broken_opus_streams` (17 audio Opus tests pass, 1 fails at the missing continuation page). The temporary-file race was reproduced in the earlier focused run. `guard-tests` is green; no spec or protected test changed after `54b5558`. `just check-app`, `just ci`, fresh `just perf`, installer size check, independent review and PR are pending. No PR opened; do not treat this checkpoint as completed.
+- Corpus acceptance O1-O6 and timing O8 are pending. `just accept` writes to external `FAKEFLAC_CALIBRATION`; reconcile that with the repository-only write rule before running it. O8 requires the owner's Opus folder.
+- Earlier optional/manual follow-ups remain unchanged.
+
+**Blockers / questions for the human**
+- Approve the 255-byte split-fixture recipe at G1 and the return to test stage for the two fixture defects and the C14 test correction. Production work stopped; no protected test or spec was changed during implementation.
+
+**Next step:** G1 on the split-fixture correction, then a fresh test-author iteration.
+
 ## 2026-11-01 - Portable Codex hook commands (#104)
 
 **Done**

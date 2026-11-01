@@ -6,7 +6,7 @@ Desktop app for Windows that tells you whether your audio files are what they cl
 - **Fake bitrate:** an MP3 at 320 kbps that actually came from a 128 or 192 kbps source, and the same check for M4A.
 - A verdict per track (real / suspicious / fake), the estimated cutoff frequency, the estimated real bitrate and a spectrogram that backs the verdict.
 
-Supported formats: **WAV, FLAC, MP3, M4A**; Opus is planned (it waits for its decoder). Everything is processed locally; nothing is sent to the Internet. Files are never modified.
+Supported formats: **WAV, FLAC, MP3, M4A and Opus** (Ogg Opus in `.opus` files, mono/stereo). Everything is processed locally; nothing is sent to the Internet. Files are never modified.
 
 > **Status: pre-alpha.** Milestones H0 (harness) and H1 (MVP, WAV and FLAC) are built: the lossless detection rules (v4), folder analysis with progress and cancellation, the main screen, results table and spectrogram, and the calibration tool. H2 is under way: MP3 and M4A decoding and source-bitrate detection for lossy files (detection v5) are merged, and Opus waits for its decoder. Detection v6 (clears a known kind of lossless false positive) and v7 (flags 48 kHz streaming rips as suspicious) are merged, and so are the result cache in SQLite (re-analysing an unchanged folder reuses stored results) and the release pipeline. No release has been published yet. See [`docs/agents/progress.md`](docs/agents/progress.md).
 

@@ -139,9 +139,14 @@ fn rf16_the_default_params_are_accepted_and_have_a_streaming_section() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn rf16_the_defaults_are_the_v7_file() {
+fn rf16_the_defaults_keep_the_v7_streaming_section() {
     let v7 = accepted_file(V7);
-    assert_eq!(DetectionParams::default(), v7);
+    let defaults = DetectionParams::default();
+    assert_eq!(defaults.algorithm_version, 8);
+    assert_eq!(
+        defaults.lossy.as_ref().unwrap().streaming,
+        v7.lossy.as_ref().unwrap().streaming
+    );
     // "their sections other than [lossy.streaming] are equal to those of v6"
     let mut without = v7.clone();
     without.algorithm_version = 6;

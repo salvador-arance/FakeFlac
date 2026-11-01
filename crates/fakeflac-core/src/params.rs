@@ -1,4 +1,4 @@
-//! `DetectionParams` (S4, ADR-0011). Mirrors `specs/detection/detection-params.v7.toml`;
+//! `DetectionParams` (S4, ADR-0011). Mirrors `specs/detection/detection-params.v8.toml`;
 //! a test checks that `Default` equals that file. Values are data, never constants in the algorithm.
 
 use serde::{Deserialize, Serialize};
@@ -207,11 +207,11 @@ pub struct SpectrogramParams {
 }
 
 impl Default for DetectionParams {
-    /// DetectionParams v7: the values of `specs/detection/detection-params.v7.toml`
+    /// DetectionParams v8: the values of `specs/detection/detection-params.v8.toml`
     /// (a test checks the equality).
     fn default() -> Self {
         DetectionParams {
-            algorithm_version: 7,
+            algorithm_version: 8,
             input: InputParams {
                 min_duration_s: 5.0,
                 edge_skip_percent: 5.0,
@@ -348,7 +348,15 @@ impl Default for DetectionParams {
                             cutoff_hz: 19500.0,
                         },
                     ],
-                    opus: None,
+                    opus: Some(
+                        [48, 64, 96, 128, 160, 192]
+                            .into_iter()
+                            .map(|bitrate_kbps| CutoffRow {
+                                bitrate_kbps,
+                                cutoff_hz: 20000.0,
+                            })
+                            .collect(),
+                    ),
                 },
                 streaming: Some(StreamingParams {
                     sample_rates_hz: vec![48_000],

@@ -140,12 +140,13 @@ fn rf15_lossy_rows_are_labelled() {
     assert_eq!(labels.get(fake, "source_bitrate_kbps"), "128");
 
     let opus = corpus_row(&labels, TRACK_14).expect("row of the Opus file");
-    assert_eq!(labels.get(opus, "not_evaluated"), "opus decoder pending");
+    assert_eq!(labels.get(opus, "codec"), "opus");
+    assert_eq!(labels.get(opus, "not_evaluated"), "");
 }
 
-// Scenario: A cold run decodes every lossy file once, except Opus (@RP-11 @RF-15)
+// Scenario: A cold run decodes every lossy file once, Opus included (@RP-11 @RF-15)
 #[test]
-fn rf15_a_cold_run_decodes_every_lossy_file_once_except_opus() {
+fn rf15_a_cold_run_decodes_every_lossy_file_once_opus_included() {
     let sample = Sample::new_lossy("lossy-cold-run");
     assert!(
         files_under(&sample.features_dir()).is_empty(),
@@ -153,7 +154,7 @@ fn rf15_a_cold_run_decodes_every_lossy_file_once_except_opus() {
     );
     let first = sample.accept_lossy();
     assert_ok(&first);
-    assert_eq!(decoded(&first), 54);
+    assert_eq!(decoded(&first), 55);
     let second = sample.accept_lossy();
     assert_ok(&second);
     assert_eq!(decoded(&second), 0);
@@ -775,4 +776,44 @@ fn rf15_an_uncached_labelled_track_is_not_an_entry_not_generated() {
         !report_text(&o, "summary.md").contains("entries not generated"),
         "no such warning"
     );
+}
+
+// @RF-14 @RF-15 @RP-11 calibration-lossy.feature: Opus rows are evaluated by a params file with Opus rows.
+#[test]
+fn rf14_opus_rows_are_evaluated_with_v8_only() {
+    let sample = Sample::new_lossy("opus-v5-v8");
+    let v8 = repo_root().join("specs/detection/detection-params.v8.toml");
+    let o = sample.accept(&[v5_params(), v8]);
+    assert_ok(&o);
+    assert_eq!(o.evaluations[0].lossy_not_evaluated, 1);
+    assert_eq!(o.evaluations[1].lossy_not_evaluated, 0);
+    let lossy = o.evaluations[1].lossy.as_ref().unwrap();
+    let m = lossy.matrix[&SplitSel::All];
+    assert_eq!(m.real_row, lossy_counts(11, 0, 0, 2));
+    assert_eq!(m.fake_row, lossy_counts(0, 8, 1, 0));
+    assert_eq!(m.weak_row, LossyCounts::default());
+    for group in ["confirmed_fake opus", "confirmed_fake 48000"] {
+        let row = lossy.groups.iter().find(|r| r.group == group).unwrap();
+        assert_eq!(row.counts.fake, 1);
+        assert_eq!(row.counts.total(), 1);
+    }
+    let changes = lossy.changes.as_ref().unwrap();
+    assert_eq!(changes.counts.values().sum::<u32>(), 21);
+    for ((from, to), n) in &changes.counts {
+        if from != to {
+            assert_eq!(*n, 0);
+        }
+    }
+    let csv = tracks(&o);
+    let row = csv
+        .rows
+        .iter()
+        .find(|r| {
+            csv.get(r, "path") == TRACK_14
+                && csv.get(r, "params_file") == "detection-params.v8.toml"
+        })
+        .unwrap();
+    assert_eq!(csv.get(row, "codec"), "opus");
+    assert_eq!(csv.get(row, "c_exp_hz"), "20000.00");
+    assert_eq!(csv.get(row, "estimate_kbps"), "");
 }

@@ -386,7 +386,7 @@ fn exporting_reads_no_audio_file() {
     let records = read_records(&dest);
     assert_eq!(records.len(), 2);
     // The defaults carry algorithm_version 7 since detection v7 (RF-16).
-    check_record(&records[1], &recorded, 7);
+    check_record(&records[1], &recorded, 8);
     assert_eq!(records[1][col("file")], "lp16k.wav");
 }
 

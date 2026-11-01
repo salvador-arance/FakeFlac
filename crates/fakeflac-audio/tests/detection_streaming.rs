@@ -37,7 +37,7 @@ fn params_file(name: &str) -> DetectionParams {
 
 /// DetectionParams v7: the defaults (lossy-source.md section 11.4).
 fn v7() -> DetectionParams {
-    DetectionParams::default()
+    params_file("detection-params.v7.toml")
 }
 
 fn v6() -> DetectionParams {

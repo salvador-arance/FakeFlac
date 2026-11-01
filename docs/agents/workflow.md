@@ -45,7 +45,7 @@ requirement RF-xx
 
 ## Local, personal settings
 
-`.claude/settings.local.json` (not versioned) holds `FAKEFLAC_CORPUS`, the deny rule for the user's music library and personal preferences. No personal path or secret goes in versioned files.
+`.claude/settings.local.json` (not versioned) holds `FAKEFLAC_CORPUS`, the deny rule for the user's music library and personal preferences. No personal path or secret goes in versioned files. When loading this JSON from Windows PowerShell 5.1, use `Get-Content -Raw -Encoding UTF8`; the default ANSI decoding can corrupt non-ASCII paths.
 
 ## Hooks
 

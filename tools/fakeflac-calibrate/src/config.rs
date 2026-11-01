@@ -203,13 +203,9 @@ impl Config {
             }
             if let Some(last) = stages.last() {
                 let ext = last.ext.to_ascii_lowercase();
-                if ext == "opus" {
+                if ext != "opus" && ext != "mp3" && ext != "m4a" {
                     errors.push(format!(
-                        "lossy entry {id}: Opus output is not supported yet"
-                    ));
-                } else if ext != "mp3" && ext != "m4a" {
-                    errors.push(format!(
-                        "lossy entry {id}: the last stage's ext must be mp3 or m4a"
+                        "lossy entry {id}: the last stage's ext must be mp3, m4a or opus"
                     ));
                 }
             }
@@ -251,9 +247,9 @@ impl Config {
 
     fn validate(&self) -> Result<(), ToolError> {
         let mut errors: Vec<String> = Vec::new();
-        if !(1..=3).contains(&self.config_version) {
+        if !(1..=4).contains(&self.config_version) {
             errors.push(format!(
-                "config_version {} is not supported (expected 1, 2 or 3)",
+                "config_version {} is not supported (expected 1, 2, 3 or 4)",
                 self.config_version
             ));
         }

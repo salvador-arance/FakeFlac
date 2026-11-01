@@ -55,7 +55,7 @@ fn rp11_grid_search_proposes_new_parameters_from_tune_data() {
     assert_eq!(result.proposal.as_deref(), Some(proposal.as_path()));
     let text = read(&proposal);
 
-    // It parses to v2 with algorithm_version 8 (the next free version, evaluation.md section 7)
+    // It parses to v2 with algorithm_version 9 (the next free version, evaluation.md section 7)
     // and gap_fake_db 4.0.
     let mut expected: DetectionParams = toml::from_str(&read(&v2_params())).unwrap();
     expected.algorithm_version = next_free_version();

@@ -439,3 +439,19 @@ describe('ResultsTable: lossy columns (specs/ui/lossy-formats.md)', () => {
     })
   })
 })
+
+// @RF-14 @RF-06 opus.feature: Opus rows in the table.
+it('shows Opus declared bitrate and a null source estimate for fake Opus', () => {
+  setup([
+    lossy(0, 'C:/Opus/opus_128_fb.opus', { format: 'opus', codec: 'opus', sampleRate: 48000, declaredBitrateKbps: 128, bitrateMode: null, estimatedSourceBitrateKbps: 128, cutoffHz: 20000, verdict: 'real' }),
+    lossy(1, 'C:/Opus/opus_160_src16k.opus', { format: 'opus', codec: 'opus', sampleRate: 48000, declaredBitrateKbps: 160, bitrateMode: null, estimatedSourceBitrateKbps: null, cutoffHz: 16000, verdict: 'fake' }),
+  ]);
+  const [a,b] = dataRows();
+  expect(cells(a)[3].textContent?.trim()).toBe('OPUS');
+  expect(cells(a)[4].textContent?.trim()).toBe('48000');
+  expect(cells(a)[BITRATE].textContent?.trim()).toBe('128 kbps');
+  expect(cells(a)[REAL].textContent?.trim()).toBe('128 kbps');
+  expect(cells(b)[BITRATE].textContent?.trim()).toBe('160 kbps');
+  expect(cells(b)[REAL].textContent?.trim()).toBe('—');
+  expect(cells(b)[7].textContent?.trim()).toBe('16.0 kHz');
+});

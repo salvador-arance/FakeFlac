@@ -209,9 +209,9 @@ fn rf15_a_trusted_lossy_file_is_an_honest_negative_not_a_source() {
     );
 }
 
-// Scenario: A folder line with formats=lossy includes MP3 and M4A files only (@RP-11 @RF-15)
+// Scenario: A folder line with formats=lossy includes MP3, M4A and Opus files (@RP-11 @RF-15 @RF-14)
 #[test]
-fn rf15_a_folder_line_with_formats_lossy_includes_mp3_and_m4a_only() {
+fn rf15_a_folder_line_with_formats_lossy_includes_mp3_m4a_and_opus() {
     let sample = Sample::new_lossy("lossy-folder-formats");
     let mut confirmed = sample.lossy_confirmed_lines();
     confirmed.splice(3..6, ["Pérdidas\\Vídeo | real formats=lossy".to_string()]);
@@ -219,15 +219,11 @@ fn rf15_a_folder_line_with_formats_lossy_includes_mp3_and_m4a_only() {
     let o = sample.accept_lossy();
     assert_ok(&o);
     let labels = labels(&o, &sample);
-    for path in [TRACK_12, TRACK_13] {
+    for path in [TRACK_12, TRACK_13, TRACK_14] {
         let row = corpus_row(&labels, path).unwrap_or_else(|| panic!("no row for {path}"));
         assert_eq!(labels.get(row, "truth"), "real", "{path}");
         assert_eq!(labels.get(row, "origin"), "confirmed_real", "{path}");
     }
-    assert!(
-        corpus_row(&labels, TRACK_14).is_none(),
-        "the Opus file is never enumerated under a folder"
-    );
 }
 
 // Scenario: A real label on a lossless file is excluded after extraction (@RP-11 @RF-15)
@@ -511,14 +507,41 @@ fn rf15_invalid_lossy_entry_no_stages() {
     );
 }
 
-// Scenario Outline: Invalid lossy entries in the config (@RP-11 @RF-15), row "Opus output"
+// @RF-14 @RF-15 @RP-11 Scenario: Opus can be the last stage of a lossy entry
 #[test]
-fn rf15_invalid_lossy_entry_opus_output() {
-    invalid_lossy_entry(
-        "lossy-cfg-opus",
-        "[[generate.lossy]]\nid = \"z\"\nstages = [\"opus128\"]",
-        "lossy entry z: Opus output is not supported yet",
-    );
+fn rf14_opus_can_be_the_last_stage_of_a_lossy_entry() {
+    let text = read(&repo_root().join("specs/calibration/calibration.v4.toml"));
+    let config = Config::parse(&text).expect("Opus output is accepted");
+    let stages = config
+        .generate
+        .lossy
+        .iter()
+        .find(|e| e.id == "cbr128_opus256")
+        .unwrap();
+    assert_eq!(stages.stages, vec!["cbr128", "opus256"]);
+    let stages = config.stages_of(stages);
+    let generated = Path::new("generated");
+    let calls = lossy_args(Path::new(TRACK_1), None, &stages, generated, "id");
+    assert_eq!(calls.len(), 2);
+    let second = strings(&[
+        "-nostdin",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        &generated.join("id.s1.mp3").to_string_lossy(),
+        "-map",
+        "0:a:0",
+        "-map_metadata",
+        "-1",
+        "-c:a",
+        "libopus",
+        "-b:a",
+        "256k",
+        "-y",
+        &generated.join("id.opus").to_string_lossy(),
+    ]);
+    assert_eq!(calls[1], second);
 }
 
 // Scenario Outline: Invalid lossy entries in the config (@RP-11 @RF-15), row "defined twice"
@@ -683,7 +706,7 @@ fn rf15_confirmed_error_weak_with_a_value() {
     );
 }
 
-// Scenario: A folder line with formats=lossy includes MP3 and M4A files only (@RP-11 @RF-15): the default
+// Scenario: A folder line with formats=lossy includes MP3, M4A and Opus files (@RP-11 @RF-15 @RF-14): the default
 // `formats` of a `real` folder line is `lossy` (lossy.md sections 1.1 and 1.2)
 #[test]
 fn rf15_a_real_folder_line_defaults_to_lossy_files() {
@@ -700,17 +723,19 @@ fn rf15_a_real_folder_line_defaults_to_lossy_files() {
     let o = sample.accept_lossy();
     assert_ok(&o);
     let labels = labels(&o, &sample);
-    for path in [TRACK_12, TRACK_13] {
+    for path in [TRACK_12, TRACK_13, TRACK_14] {
         let row = corpus_row(&labels, path).unwrap_or_else(|| panic!("no row for {path}"));
         assert_eq!(labels.get(row, "origin"), "confirmed_real", "{path}");
     }
-    for path in ["Pérdidas/Vídeo/11 – Pista.flac", TRACK_14] {
-        assert!(corpus_row(&labels, path).is_none(), "{path} is not taken");
-    }
+    assert!(
+        corpus_row(&labels, "Pérdidas/Vídeo/11 – Pista.flac").is_none(),
+        "the default lossy filter excludes FLAC"
+    );
 }
 
-// A track in both a real and a fake line (lossy.md section 1.3): the error is on the later line, once.
-// Here the fake file line comes first.
+// @RF-14 @RF-15 Scenario: A folder line with formats=lossy includes MP3, M4A and Opus files.
+// Conflicting MP3 and Opus labels each report the later line (lossy.md section 1.3).
+// Here the fake file lines come first.
 #[test]
 fn rf15_a_track_in_a_fake_line_and_a_later_real_line_is_listed_twice() {
     let sample = Sample::new_lossy("lossy-fake-then-real");
@@ -721,11 +746,15 @@ fn rf15_a_track_in_a_fake_line_and_a_later_real_line_is_listed_twice() {
     assert_eq!(o.exit_code, 2, "stderr: {}", o.stderr);
     assert_eq!(
         stderr_lines(&o),
-        vec!["confirmed.txt:8: already listed at line 4"]
+        vec![
+            "confirmed.txt:8: already listed at line 4",
+            "confirmed.txt:8: already listed at line 6"
+        ]
     );
 }
 
-// Same, with the real folder line first: the error is on the later (fake) line.
+// @RF-14 @RF-15 Same scenario and conflict checks, with the real folder line first:
+// each error is on the later fake line, for MP3 and for Opus.
 #[test]
 fn rf15_a_track_in_a_real_line_and_a_later_fake_line_is_listed_twice() {
     let sample = Sample::new_lossy("lossy-real-then-fake");
@@ -738,7 +767,10 @@ fn rf15_a_track_in_a_real_line_and_a_later_fake_line_is_listed_twice() {
     assert_eq!(o.exit_code, 2, "stderr: {}", o.stderr);
     assert_eq!(
         stderr_lines(&o),
-        vec!["confirmed.txt:5: already listed at line 4"]
+        vec![
+            "confirmed.txt:5: already listed at line 4",
+            "confirmed.txt:7: already listed at line 4"
+        ]
     );
 }
 
@@ -1090,4 +1122,81 @@ fn rf15_upstream_by_rate_fractional_source_bound_is_invalid() {
 #[test]
 fn rf15_upstream_by_rate_huge_source_bound_is_invalid() {
     bad_bound("lossy-cfg-rate-bound-huge", "5000000000");
+}
+
+// @RF-14 @RF-15 @RP-11 Scenario: Opus can be the last stage of a lossy entry.
+// C17: v4 keeps v3's lossless generation unchanged and adds direct Opus acceptance entries.
+#[test]
+fn rf14_v4_preserves_lossless_settings_and_adds_opus_entries() {
+    let load = |version| {
+        Config::parse(&read(
+            &repo_root().join(format!("specs/calibration/calibration.v{version}.toml")),
+        ))
+        .unwrap_or_else(|e| panic!("calibration v{version}: {e:?}"))
+    };
+    let (v3, v4) = (load(3), load(4));
+    assert_eq!(v4.config_version, 4);
+    let lossless = |config: &Config| config.lossless_settings().cloned().collect::<Vec<_>>();
+    assert_eq!(lossless(&v4), lossless(&v3));
+    for id in ["opus64", "opus96", "opus160", "opus256"] {
+        let setting = v4.generate.settings.iter().find(|s| s.id == id).unwrap();
+        assert!(!setting.lossless_transcode, "{id}");
+        assert_eq!(setting.ext, "opus");
+    }
+    for id in [
+        "opus64",
+        "opus96",
+        "opus128",
+        "opus160",
+        "cbr128_opus256",
+        "aac128_opus256",
+        "cbr192_opus256",
+        "cbr128_opus160",
+        "cbr320_opus128",
+    ] {
+        let entry = v4.generate.lossy.iter().find(|e| e.id == id).unwrap();
+        assert_eq!(v4.stages_of(entry).last().unwrap().ext, "opus", "{id}");
+    }
+}
+
+// @RF-14 @RF-15 @RP-11 Scenario: A folder line with formats=lossy includes MP3, M4A and Opus files.
+// C15 also defines formats=all and the exact no-lossy-audio message.
+#[test]
+fn rf14_all_folder_labels_include_opus_alongside_lossless_audio() {
+    let sample = Sample::new_lossy("opus-formats-all");
+    let lossless = "Pérdidas/Vídeo/11 – Pista.flac";
+    place("full_band", Container::Flac, &sample.corpus.join(lossless));
+    let mut trusted = sample.lossy_trusted_lines();
+    trusted.push("Pérdidas\\Vídeo | tienda formats=all".into());
+    sample.write_trusted(&trusted);
+    let mut confirmed = sample.lossy_confirmed_lines();
+    confirmed.drain(3..6);
+    sample.write_confirmed(&confirmed);
+    let o = sample.accept_lossy();
+    assert_ok(&o);
+    let labels = labels(&o, &sample);
+    for path in [TRACK_12, TRACK_13, TRACK_14, lossless] {
+        let row = corpus_row(&labels, path).unwrap_or_else(|| panic!("missing {path}"));
+        assert_eq!(labels.get(row, "origin"), "trusted", "{path}");
+        assert_eq!(labels.get(row, "class"), "primary", "{path}");
+    }
+}
+
+// @RF-14 @RF-15 @RP-11 Scenario: A folder line with formats=lossy includes MP3, M4A and Opus files.
+#[test]
+fn rf14_a_lossy_folder_without_supported_lossy_audio_names_all_three_formats() {
+    let sample = Sample::new_lossy("opus-empty-lossy-folder");
+    let mut confirmed = sample.lossy_confirmed_lines();
+    confirmed.push("Colección\\Álbum Ü | real formats=lossy".into());
+    sample.write_confirmed(&confirmed);
+    let o = sample.accept_lossy();
+    assert_eq!(o.exit_code, 2);
+    assert_eq!(
+        stderr_lines(&o),
+        vec!["confirmed.txt:8: no MP3, M4A or Opus files under this folder"]
+    );
+    assert!(
+        files_under(&sample.features_dir()).is_empty(),
+        "input errors precede extraction"
+    );
 }

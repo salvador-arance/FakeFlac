@@ -630,3 +630,5 @@ fn write_flac(path: &Path, samples: &[i32], sr: u32, bits: u16) {
     stream.write(&mut sink).unwrap();
     std::fs::write(path, sink.as_slice()).unwrap();
 }
+
+pub mod opus;

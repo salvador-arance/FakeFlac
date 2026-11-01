@@ -24,14 +24,23 @@ fn lossy(p: &DetectionParams) -> &LossyParams {
 #[test]
 fn rf15_the_defaults_hold_the_v5_lossy_values() {
     let p = DetectionParams::default();
-    assert_eq!(p.algorithm_version, 7);
+    assert_eq!(p.algorithm_version, 8);
     let l = lossy(&p);
     assert_eq!(l.suspicious_shortfall_hz, 1000.0);
     assert_eq!(l.fake_shortfall_hz, 2500.0);
     assert_eq!(l.fake_min_step_db, 10.0);
     assert_eq!(l.cutoffs.mp3.len(), 14);
     assert_eq!(l.cutoffs.aac.len(), 7);
-    assert_eq!(l.cutoffs.opus, None);
+    assert_eq!(
+        l.cutoffs.opus.as_ref().expect("Opus rows in v8"),
+        &vec![48, 64, 96, 128, 160, 192]
+            .into_iter()
+            .map(|bitrate_kbps| CutoffRow {
+                bitrate_kbps,
+                cutoff_hz: 20000.0
+            })
+            .collect::<Vec<_>>()
+    );
 }
 
 // @RF-15 Scenario: The defaults hold the v5 lossy values (the table rows of lossy-source.md section 6)

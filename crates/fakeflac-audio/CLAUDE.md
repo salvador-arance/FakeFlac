@@ -4,6 +4,6 @@ Decoding, windowed FFT and spectrum analysis (`docs/architecture/backend.md`, pi
 - Every parameter (window kind, overlap, FFT size, thresholds, cutoff→bitrate tables) comes from `DetectionParams`, never from a constant.
 - The stages after the FFT (band spectra, cutoff step, gap step, rules) are pure functions over arrays and are tested with synthetic signals.
 - Mean spectrum: average in power, convert to dB at the end. Median spectrum: median of per-frame dB. Normalize by the window's noise power.
-- Decoders: `symphonia` for WAV/FLAC/MP3/M4A; Opus is a separate decoder (ADR-030).
+- Decoders: `symphonia` for WAV/FLAC/MP3/M4A; Opus uses `rusty-opus` `=1.0.2` and the adapter's own Ogg reader (ADR-0047), at 48 kHz with pre-skip, end trim and output gain.
 - `pub const EXTRACTION_VERSION`: must be bumped whenever an adapter change alters the AudioProbe produced for the same file and parameters, or whenever `symphonia` is upgraded (codec/decoder changes can alter spectra) (ADR-0036, OQ-3).
 - Read-only access to audio files.

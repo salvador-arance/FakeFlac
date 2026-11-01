@@ -1,6 +1,6 @@
 # Backend design (Rust)
 
-> Pipeline: file → technical metadata → N sampled windows → decode → windowed real FFT → band spectra (power mean and per-frame median) → cutoff step and gap step (+ full-band guard from v3, ADR-0038, with the v4 lossy-step condition, ADR-0039) → rules (`DetectionParams`) → `TrackAnalysis`. Formats: WAV, FLAC (H1); MP3, M4A (H2, done); Opus (H2, pending its decoder). All thresholds, the FFT window and the cutoff→bitrate tables are versioned data.
+> Pipeline: file → technical metadata → N sampled windows → decode → windowed real FFT → band spectra (power mean and per-frame median) → cutoff step and gap step (+ full-band guard from v3, ADR-0038, with the v4 lossy-step condition, ADR-0039) → rules (`DetectionParams`) → `TrackAnalysis`. Formats: WAV, FLAC (H1); MP3, M4A (H2, done); Opus (H2, detection v8, ADR-0047). All thresholds, the FFT window and the cutoff→bitrate tables are versioned data.
 
 ## 1. Analysis pipeline
 
@@ -12,7 +12,7 @@ path → metadata (fs) → select N windows → decode the whole stream (f32 mon
      → apply rules (DetectionParams) → TrackAnalysis
 ```
 
-The full-band guard (detection v3, ADR-0038, with the lossy-step condition of detection v4, ADR-0039; `specs/detection/rules.md`) is part of the default. Detection v7 (ADR-0043, RF-16) is the default: `DetectionParams::default()` equals `detection-params.v7.toml` (v6, ADR-0042, which added the optional `[edge]` section on the step rule to v5, ADR-0041, which added the optional `[lossy]` section; plus the optional `[lossy.streaming]` section of rule L6a, which turns a lossy MP3 or AAC file that would be `Real` into `Suspicious(streamingSampleRate)` when its sample rate is 48 kHz and its cutoff lies at Opus's 20 kHz band edge). Params files without `[full_band]` (such as v2), without `full_band.max_lossy_step_db` (such as v3), without `[lossy]` (v2 to v4) or without `[lossy.streaming]` (v5, v6) still load and reproduce their verdicts; lossy files analysed with params without `[lossy]` are `Error(unsupportedFormat)`.
+The full-band guard (detection v3, ADR-0038, with the lossy-step condition of detection v4, ADR-0039; `specs/detection/rules.md`) is part of the default. Detection v8 (ADR-0047, RF-14/RF-15) is the default: `DetectionParams::default()` equals `detection-params.v8.toml` (v6, ADR-0042, which added the optional `[edge]` section on the step rule to v5, ADR-0041, which added the optional `[lossy]` section; plus the optional `[lossy.streaming]` section of rule L6a, which turns a lossy MP3 or AAC file that would be `Real` into `Suspicious(streamingSampleRate)` when its sample rate is 48 kHz and its cutoff lies at Opus's 20 kHz band edge; v8 adds six Opus cutoff rows from 48 to 192 kbps, all at 20000 Hz). Params files without `[full_band]` (such as v2), without `full_band.max_lossy_step_db` (such as v3), without `[lossy]` (v2 to v4) or without `[lossy.streaming]` (v5, v6) still load and reproduce their verdicts; lossy files analysed with params without `[lossy]` are `Error(unsupportedFormat)`.
 
 - Stages after the FFT are pure functions over arrays; tested with synthetic signals (low-passed noise at 16/19/20 kHz, full band, silence).
 - Mono for analysis (mean of channels). The spectrogram also uses mono by default.
@@ -86,15 +86,15 @@ Selection protocol (phase 5, planned recipe `just bench-windows`, not written ye
 | FLAC | Lossless | `symphonia` | H1 | |
 | MP3 | Lossy | `symphonia` (MPEG) | H2 | Also read the Xing/LAME header (encoder, lowpass, bitrate) |
 | M4A | Lossy (AAC); may hold ALAC (lossless) | `symphonia` (isomp4 + AAC) | H2 | Codec inside the container is detected; ALAC is treated as lossless |
-| Opus | Lossy | `rusty-opus`, pure Rust (ADR-0047) | H2 | symphonia does not decode Opus; the ADR-0030 spike chose `rusty-opus`; the adapter reads the Ogg layer; pending its spec PR |
+| Opus | Lossy | `rusty-opus`, pure Rust (ADR-0047) | H2 | symphonia does not decode Opus; the ADR-0030 spike chose `rusty-opus`; the adapter reads the Ogg layer; mapping family 0 (mono/stereo), 48 kHz float decode |
 
-All formats go through the same `SpectrumAnalyzer` port: the adapter picks a decoder by format and returns `f32` samples; the rest of the pipeline is common (ADR-0031). H2 decoding of MP3 and M4A (symphonia features `mp3`, `aac`, `isomp4`, `alac`) and the stream information the adapter reports (codec, declared bitrate, bitrate mode, LAME tag): ADR-0040 and `specs/detection/lossy-source.md` section 2. Opus: the ADR-0030 spike chose `rusty-opus` and an Ogg reader in the adapter (ADR-0047); the format stays pending until its spec PR moves `specs/pending/opus.feature` to `specs/features/`.
+All formats go through the same `SpectrumAnalyzer` port: the adapter picks a decoder by format and returns `f32` samples; the rest of the pipeline is common (ADR-0031). H2 decoding of MP3 and M4A (symphonia features `mp3`, `aac`, `isomp4`, `alac`) and the stream information the adapter reports (codec, declared bitrate, bitrate mode, LAME tag): ADR-0040 and `specs/detection/lossy-source.md` section 2. Opus uses `rusty-opus` `=1.0.2` and an Ogg reader in the adapter (ADR-0047). The reader validates pages, CRC, packet boundaries, headers and granule positions before decoding. Sequential 48 kHz float decoding applies pre-skip, end trim and output gain before the mono mix; the decoder limits its output to [−1, 1]. Only `.opus` and channel mapping family 0 are supported; `.ogg`/`.oga` remain unscanned. The same decode path supplies analysis and spectrograms. `EXTRACTION_VERSION` stays 2 because existing formats are unchanged. See `specs/features/opus.feature` and `specs/detection/lossy-source.md` sections 2.4 and 12.
 
 ## 9. Provenance of lossy files (RF-15)
 
 **Question:** was this 320 kbps MP3 encoded from a good source or from something with a lower bitrate?
 
-**Implemented** as detection v5 (the default): `specs/detection/lossy-source.md`, `specs/detection/detection-params.v5.toml` (`[lossy]`), ADR-0041; calibration in `specs/calibration/lossy.md`. The H2 part below is what v5 implements, except the per-frame bitrate, padding and sfb21 signals, which v5 leaves as candidates.
+**Implemented** since detection v5 (the default is v8): `specs/detection/lossy-source.md`, `specs/detection/detection-params.v5.toml` (`[lossy]`), ADR-0041; calibration in `specs/calibration/lossy.md`. The H2 part below is what v5 implements, except the per-frame bitrate, padding and sfb21 signals, which v5 leaves as candidates.
 
 **Main signal (H2): spectral cutoff vs declared bitrate.** Encoders apply a bitrate-dependent low-pass (indicative: ≈ 16 kHz at 128 kbps, ≈ 19 kHz at 192, ≈ 20 kHz at 256, ≈ 20.5 kHz at 320 in LAME; AAC and Opus have other tables). A 320 kbps file whose content stops at 16 kHz betrays a ≈ 128 kbps origin. A **cutoff → source-bitrate table per codec and encoder** is kept versioned in `DetectionParams` and calibrated with the R3 corpus.
 
@@ -103,3 +103,5 @@ All formats go through the same `SpectrumAnalyzer` port: the adapter picks a dec
 **Robust signal (H3): double-compression fingerprint** in the MDCT domain (quantisation structure, frame alignment). Detects cases the cutoff cannot see (e.g. a 128 kbps source re-encoded to 320 with a high low-pass).
 
 **Known limits (shown in the help):** a source with little treble, an encoder without low-pass, or an AAC → MP3 chain can produce false negatives; a genuine source with little treble can produce false positives (R1). These cases become "suspicious" with the reason shown.
+
+Detection v8 adds Opus cutoffs without changing the lossless, MP3 or AAC rules. A real Opus track reports its declared bitrate as the source estimate; every other Opus verdict reports no estimate. Opus never triggers `streamingSampleRate`. Band folding at lower bitrates and clipping of loud material limit detection; the measured limitations and corpus acceptance gates O1–O8 are in `specs/detection/lossy-source.md` sections 12.6–12.8.

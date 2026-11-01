@@ -94,7 +94,7 @@ pub struct Declared {
     pub duration_ms: Option<u64>,
 }
 
-pub struct MonoStream {
+struct SymphoniaStream {
     pub info: StreamInfo,
     pub declared: Declared,
     /// Frames fewer than `info.total_frames` the decoder may legitimately return. MP3 lengths
@@ -106,7 +106,7 @@ pub struct MonoStream {
     track_id: u32,
 }
 
-impl MonoStream {
+impl SymphoniaStream {
     pub fn open(path: &Path) -> Result<Self, TrackError> {
         let extension = path
             .extension()
@@ -194,7 +194,7 @@ impl MonoStream {
         let decoder = symphonia::default::get_codecs()
             .make_audio_decoder(&codec, &AudioDecoderOptions::default())
             .map_err(|e| TrackError::UnsupportedFormat(e.to_string()))?;
-        Ok(MonoStream {
+        Ok(SymphoniaStream {
             info: StreamInfo {
                 sample_rate,
                 channels,
@@ -251,6 +251,59 @@ impl MonoStream {
             }
         }
         Ok(offset)
+    }
+}
+
+/// Shared streaming source for analysis and the display spectrogram.
+pub struct MonoStream {
+    pub info: StreamInfo,
+    pub declared: Declared,
+    inner: Source,
+}
+enum Source {
+    Symphonia(SymphoniaStream),
+    Opus(crate::opus::OpusStream),
+}
+impl MonoStream {
+    pub fn open(path: &Path) -> Result<Self, TrackError> {
+        if path
+            .extension()
+            .and_then(|s| s.to_str())
+            .is_some_and(|s| s.eq_ignore_ascii_case("opus"))
+        {
+            let opus = crate::opus::OpusStream::open(path)?;
+            Ok(Self {
+                info: StreamInfo {
+                    sample_rate: 48_000,
+                    channels: opus.channels,
+                    bit_depth: None,
+                    total_frames: Some(opus.length),
+                },
+                declared: Declared {
+                    codec: Some(AudioCodec::Opus),
+                    declared_bitrate_kbps: opus.bitrate,
+                    duration_ms: Some(opus.length * 1000 / 48_000),
+                    ..Declared::default()
+                },
+                inner: Source::Opus(opus),
+            })
+        } else {
+            let symphonia = SymphoniaStream::open(path)?;
+            Ok(Self {
+                info: symphonia.info,
+                declared: symphonia.declared.clone(),
+                inner: Source::Symphonia(symphonia),
+            })
+        }
+    }
+    pub fn for_each_chunk(&mut self, sink: impl FnMut(u64, &[f32])) -> Result<u64, TrackError> {
+        match &mut self.inner {
+            Source::Opus(stream) => stream.for_each_chunk(sink),
+            Source::Symphonia(stream) => {
+                stream.info = self.info;
+                stream.for_each_chunk(sink)
+            }
+        }
     }
 }
 

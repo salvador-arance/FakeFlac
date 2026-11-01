@@ -196,7 +196,7 @@ fn rf15_the_default_params_give_the_same_analysis_as_the_v5_file() {
     // [lossy.streaming]: on this 44.1 kHz fixture the analysis is the same but for the
     // algorithmVersion it carries (detection-lossy.feature, header).
     let mut by_default = analyze_with("mp3_320_lp17k", &DetectionParams::default());
-    assert_eq!(by_default.algorithm_version, 7);
+    assert_eq!(by_default.algorithm_version, 8);
     by_default.algorithm_version = 5;
     assert_eq!(by_default, analyze_with("mp3_320_lp17k", &v5()));
 }

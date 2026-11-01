@@ -551,14 +551,12 @@ fn parse_list(
     Parsed { items, errors }
 }
 
-/// Whether a folder entry with these `formats=` includes a file of this format. Opus files are never
-/// enumerated under folders.
+/// Whether a folder entry with these `formats=` includes a file of this format.
 fn selects(formats: Formats, format: AudioFormat) -> bool {
     match (formats, format) {
-        (_, AudioFormat::Opus) => false,
         (Formats::All, _) => true,
         (Formats::Lossless, f) => matches!(f, AudioFormat::Flac | AudioFormat::Wav),
-        (Formats::Lossy, f) => matches!(f, AudioFormat::Mp3 | AudioFormat::M4a),
+        (Formats::Lossy, f) => is_lossy_format(f),
     }
 }
 
@@ -754,7 +752,7 @@ fn entry_problem(
             return Some(
                 match formats {
                     Formats::Lossless => "no FLAC or WAV files under this folder",
-                    Formats::Lossy => "no MP3 or M4A files under this folder",
+                    Formats::Lossy => "no MP3, M4A or Opus files under this folder",
                     Formats::All => "no supported audio files under this folder",
                 }
                 .to_string(),
