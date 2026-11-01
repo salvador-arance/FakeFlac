@@ -1,7 +1,7 @@
 ---
 id: SPEC-CALIBRATION
 requirements: [RP-11, RF-03, RF-04, RF-15, RNF-04, RNF-05, RNF-09]
-status: proposed
+status: approved
 adr: ADR-0036
 config: specs/calibration/calibration.v2.toml (v1 kept and loadable)
 ---

@@ -1,7 +1,7 @@
 ---
 id: SPEC-PERFORMANCE
 requirements: [RNF-01, RNF-04, RNF-05, RNF-09]
-status: proposed
+status: approved
 ---
 
 # Performance budget: what is timed, on what, and where the gate runs (RNF-01)

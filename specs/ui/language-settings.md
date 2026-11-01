@@ -1,7 +1,7 @@
 ---
 id: SPEC-UI-LANGUAGE-SETTINGS
 requirements: [RF-13, RF-08, RNF-04, RNF-08, RNF-09, RNF-10]
-status: proposed
+status: approved
 ---
 
 # Spanish, English and the language Settings panel
@@ -149,9 +149,9 @@ tooltips and accessible names retain their complete translation.
   active. Record clipping/overflow findings and fix them before review. Native dialogs follow
   Windows language as documented. No audio corpus or measurable delay is needed for these checks.
 
-## 6. Proposed changes to earlier specifications and tests
+## 6. Changes to earlier specifications and tests (approved at G1, #107)
 
-This RF-13 proposal supersedes the temporary English-only/fallback rules in `main-screen.md`,
+This RF-13 spec supersedes the temporary English-only/fallback rules in `main-screen.md`,
 `components.md`, `album-summary.md`, `export-csv.md`, `sort-filter.md`, `result-cache.md` and
 `lossy-formats.md` only for the translations and singular forms listed in `translations.md`.
 The existing English words are retained except grammatical singular counts (`1 track`,

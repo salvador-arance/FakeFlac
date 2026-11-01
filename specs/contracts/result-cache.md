@@ -1,7 +1,7 @@
 ---
 id: SPEC-RESULT-CACHE
 requirements: [RF-11, RNF-01, RNF-04, RNF-05, RNF-09]
-status: proposed
+status: approved
 ---
 
 # Result cache (RF-11)

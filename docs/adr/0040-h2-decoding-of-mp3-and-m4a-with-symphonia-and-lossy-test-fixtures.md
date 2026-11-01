@@ -1,6 +1,6 @@
 # ADR-0040: H2 decoding of MP3 and M4A with symphonia (features `mp3`, `aac`, `isomp4`, `alac`); stream information read by the adapter; lossy test files written by bitstream writers in test support
 
-- Status: accepted
+- Status: accepted; amended by ADR-0047
 - Date: 2026-10-19
 
 ## Context and rationale
@@ -18,7 +18,7 @@ Forces:
 1. **symphonia features** (amends the symphonia row of ADR-0033). `crates/fakeflac-audio` enables, on the same `symphonia` 0.6.1 with `default-features = false`, the features `mp3` (MPEG Layer III only; `mp1` and `mp2` stay off), `aac` (AAC-LC), `isomp4` (the MP4 container) and `alac`. ALAC is needed because an M4A may hold ALAC, which is lossless and must be analysed like FLAC (backend.md section 8). The new crates are symphonia's own sub-crates for these formats (expected: `symphonia-bundle-mp3`, `symphonia-codec-aac`, `symphonia-format-isomp4`, `symphonia-codec-alac`), from the same project and under MPL-2.0, which `deny.toml` already allows. No other crate is added. The implementer confirms the feature and crate names against 0.6.1 and records them, with the installer size, in "Notes from implementation" below.
 2. **Stream information is read by the adapter itself.** The Xing/Info/VBRI frame and its LAME extension are parsed from the bytes of the first MP3 frame; the M4A codec and object type come from the sample entry and its AudioSpecificConfig; the declared bitrate is computed as `lossy-source.md` section 2 defines. No tag library (`lofty`, `id3`) is added: the fields are a few bytes, and ID3 or iTunes metadata are not needed in H2. The calibration tool already parses the LAME encoder field the same way (`tools/fakeflac-calibrate/src/ffmpeg.rs`).
 3. **Not decoded:** HE-AAC (object types 5 and 29) and MP3 layers I/II are `unsupportedFormat` (lossy-source.md Q10).
-4. **Opus stays pending.** The scanner keeps skipping `.opus`; its scenarios are written in `specs/pending/opus.feature`, a folder that neither `just trace` nor the test stage reads, so no test is derived from them. After the ADR-0030 spike picks the decoder, a later spec PR moves the file to `specs/features/`.
+4. **Opus stays pending** (superseded: ADR-0047 and #103 added Opus with detection v8). The scanner keeps skipping `.opus`; its scenarios are written in `specs/pending/opus.feature`, a folder that neither `just trace` nor the test stage reads, so no test is derived from them. After the ADR-0030 spike picks the decoder, a later spec PR moves the file to `specs/features/`.
 5. **Lossy test files are written by bitstream writers in test support** (`specs/detection/lossy-fixtures.md`): an MP3 frame writer and an MP4/AAC/ALAC writer that write the **coded spectrum** directly (noise up to a chosen edge, chosen bitrates and tag fields), from a seed, inside the tests. They use only existing dev-dependencies (`rand`, `rand_chacha`). Like the lossless fixtures, they live in `crates/fakeflac-audio/tests/common/` and other crates include the module by path (ADR-0036, "Consequences").
 6. **`EXTRACTION_VERSION` stays 2** (`specs/calibration/lossy.md`, C7): the symphonia version does not change, and enabling more formats does not change how FLAC and WAV are decoded.
 

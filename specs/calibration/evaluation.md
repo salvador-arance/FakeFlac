@@ -1,7 +1,7 @@
 ---
 id: SPEC-CALIBRATION-EVALUATION
 requirements: [RP-11, RF-04]
-status: proposed
+status: approved
 ---
 
 # Evaluation output, parameter comparison and grid search

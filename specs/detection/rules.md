@@ -1,7 +1,7 @@
 ---
 id: SPEC-DETECTION-LOSSLESS
 requirements: [RF-03, RF-04, RF-14]
-status: proposed
+status: approved
 algorithm_version: 6
 params: specs/detection/detection-params.v6.toml
 supersedes: algorithm_version 5 and 4 (detection-params.v5.toml and detection-params.v4.toml, same lossless rules, kept and still loadable, section 4); algorithm_version 3 (detection-params.v3.toml, kept and still loadable, section 4); algorithm_version 2 (detection-params.v2.toml, kept and still loadable, section 4); algorithm_version 1 (detection-params.v1.toml, kept as a record)

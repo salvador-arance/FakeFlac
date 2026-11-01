@@ -1,7 +1,7 @@
 ---
 id: SPEC-UI-EXPORT-CSV
 requirements: [RF-09]
-status: proposed
+status: approved
 ---
 
 # Export CSV in the main screen (H2)

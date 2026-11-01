@@ -1,7 +1,7 @@
 ---
 id: SPEC-UI-LOSSY-H2
 requirements: [RF-06, RF-14, RF-15, RF-16, RNF-08]
-status: proposed
+status: approved
 ---
 
 # Lossy formats in the main screen (H2)

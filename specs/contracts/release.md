@@ -1,7 +1,7 @@
 ---
 id: SPEC-RELEASE
 requirements: [RNF-11, RNF-06, RNF-07, RNF-09]
-status: proposed
+status: approved
 ---
 
 # Release: versions, installers, size gate, checksums and the draft release (RNF-11, RNF-06)

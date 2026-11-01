@@ -1,7 +1,7 @@
 ---
 id: SPEC-CALIBRATION-LOSSY
 requirements: [RP-11, RF-14, RF-15, RF-16, RNF-04, RNF-09]
-status: proposed
+status: approved
 config: specs/calibration/calibration.v2.toml
 ---
 

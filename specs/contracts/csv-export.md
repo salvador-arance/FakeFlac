@@ -1,7 +1,7 @@
 ---
 id: SPEC-CSV-EXPORT
 requirements: [RF-09, RF-16, RNF-04, RNF-05, RNF-09]
-status: proposed
+status: approved
 csv_format_version: 1
 ---
 

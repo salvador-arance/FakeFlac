@@ -1,7 +1,7 @@
 ---
 id: SPEC-UI-RESULT-CACHE
 requirements: [RF-11, RNF-08]
-status: proposed
+status: approved
 ---
 
 # Result cache in the main screen (H2)

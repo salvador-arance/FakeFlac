@@ -1,7 +1,7 @@
 ---
 id: SPEC-CALIBRATION-INPUTS
 requirements: [RP-11, RNF-09]
-status: proposed
+status: approved
 ---
 
 # Calibration inputs: corpus layout, `trusted.txt`, `confirmed.txt`, `labels.csv`, split
