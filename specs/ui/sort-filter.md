@@ -1,7 +1,7 @@
 ---
 id: SPEC-UI-SORT-FILTER
 requirements: [RF-08, RNF-04, RNF-08, RNF-09]
-status: proposed
+status: approved
 ---
 
 # Sort and filter the results table (H2)

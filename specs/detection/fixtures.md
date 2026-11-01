@@ -1,7 +1,7 @@
 ---
 id: SPEC-FIXTURES
 requirements: [RF-03, RF-04, RF-14]
-status: proposed
+status: approved
 ---
 
 # Synthetic test signals (ADR-0022)

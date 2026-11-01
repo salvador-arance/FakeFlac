@@ -1,12 +1,12 @@
 ---
 id: SPEC-UI-TRANSLATIONS
 requirements: [RF-13, RNF-08, RNF-09, RNF-10]
-status: proposed
+status: approved
 ---
 
 # Complete English and Spanish catalogue (RF-13)
 
-G1 proposal; the behavior and acceptance checks are in `language-settings.md`. Each row is
+Approved at G1 (#107); the behavior and acceptance checks are in `language-settings.md`. Each row is
 an explicit catalogue entry in both languages, including identical technical text. Braces
 identify interpolation parameters, substituted literally once per occurrence (never parsed
 as markup). Names and paths supplied as parameters are displayed as text with their original

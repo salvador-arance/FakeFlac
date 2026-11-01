@@ -1,7 +1,7 @@
 ---
 id: SPEC-CALIBRATION-SAMPLE-CORPUS
 requirements: [RP-11, RNF-04, RNF-05, RNF-09]
-status: proposed
+status: approved
 ---
 
 # Sample corpus for CI (OQ-4)

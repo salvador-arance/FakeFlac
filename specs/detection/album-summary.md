@@ -1,7 +1,7 @@
 ---
 id: SPEC-RF-10-album-summary
 requirement: RF-10
-status: proposed
+status: approved
 version: 1
 ---
 

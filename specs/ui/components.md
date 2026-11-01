@@ -1,7 +1,7 @@
 ---
 id: SPEC-UI-COMPONENTS-H1
 requirements: [RF-01, RF-05, RF-06, RF-07, RNF-08, RNF-10]
-status: proposed
+status: approved
 ---
 
 # Components for H1 (atomic design, ADR-0014)

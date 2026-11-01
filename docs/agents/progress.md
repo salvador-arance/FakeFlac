@@ -9,10 +9,11 @@
 - ADR-0049 set to `accepted` in the ADR and in `docs/adr/README.md`. `overview.md`, `data-model.md`, `frontend.md` and the RF-13 traceability row no longer say "pending G1"; they say approved, not implemented.
 - README status rewritten: v0.1.0 pre-release published on 2026-10-31; Opus (detection v8), sort/filter, CSV export, album summaries, the cache and the perf harness listed as merged; RF-13 named as next.
 - At the owner's request, split this log: the 48 blocks before the v0.1.0 release moved unchanged to `docs/agents/archive/progress-v0.1.md`; this file keeps the active cycle (v0.1.0 release, Opus RF-14, harness RP-10, RF-13) and links the archive in a footer. ADR-0041's reference to the 2026-10-18 block points to the archive.
-- Checked: relative Markdown links (none broken in tracked files), `just trace`, `just agents-check` (no drift), `backend.md` (current). Branch `docs/rf-13-spec-handoff`, not committed.
+- At the owner's request ("si en algún sitio pone que algo está pendiente pero no lo está, actualízalo"), status-only wording in `specs/` was updated in the same PR, with no behaviour, scenario or test change: `RF-13.md` `status: specified`; the 26 merged contract/UI/detection/calibration specs `status: proposed` → `approved`; RF-13 "proposal"/"G1 pending" wording in `commands.md`, `settings.md`, `translations.md`, `language-settings.md`; `ui/album-summary.md` no longer says RF-08 is not built (#76); `lossy-source.md` Q9 ("Opus is pending") marked superseded by #103.
+- ADR-0030, ADR-0033 and ADR-0040 now say "amended by ADR-0047" (file and index); ADR-0040 point 4 and ADR-0047's first consequence note that Opus landed (#103, #105).
+- Checked: relative Markdown links (none broken in tracked files), `just trace`, `just agents-check` (no drift), `backend.md` (current). Still genuinely pending and left as is: `just fixtures`, the `just bench-windows` window-selection recipe, the future `fakeflac-cli`, RF-12 and the draft RNF/RP requirements. Branch `docs/rf-13-spec-handoff`, PR #108.
 
 **Pending**
-- Spec text still worded as before merge, left untouched because `specs/` changes go through G1: `requirements/RF-13.md` front matter `status: draft` (other specified RFs say `specified`) and "contract version 8, proposed"; `contracts/commands.md` "Version 8 proposal (RF-13, G1 pending)"; `contracts/settings.md` and `ui/translations.md` "This is a G1 proposal". Owner to decide whether to fix them in a small `spec/` PR or in the RF-13 feature PR.
 - `/feature RF-13` with an independent test stage. Fresh-session harness lifecycle acceptance from #106 remains a manual follow-up.
 
 **Blockers / questions for the human**

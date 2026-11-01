@@ -1,12 +1,12 @@
 ---
 id: SPEC-CONTRACT-SETTINGS
 requirements: [RF-13, RNF-04, RNF-05, RNF-09]
-status: proposed
+status: approved
 ---
 
 # Language settings (RF-13, contract version 8)
 
-This is a G1 proposal. The owner selected Spanish/English with a persistent preference in
+Approved at G1 (#107, merged 2026-11-01); not implemented yet. The owner selected Spanish/English with a persistent preference in
 chat on 2026-11-01. The Settings object is limited to language. Historical proposals for
 sampling controls, editable DetectionParams and cache controls require a separate spec.
 Architecture decision: ADR-0049. UI: `../ui/language-settings.md`.
@@ -149,6 +149,6 @@ to the Tauri adapter (no core I/O; no new dependency approved by this spec). The
 may gain the two codes solely to keep existing error conversion/generated bindings coherent.
 
 `../ui/language-settings.md` section 6 lists the approved changes to existing UI expectations
-for the future test stage. No production code or executable test is changed in this spec PR.
+for the RF-13 test stage. The spec PR (#107) changed no production code or executable test.
 Gherkin: `../features/language-settings.feature`. No delay or performance threshold is
 introduced: acceptance observes completed saves and UI render cycles, never sleeps.

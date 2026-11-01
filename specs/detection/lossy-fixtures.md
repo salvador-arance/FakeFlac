@@ -1,7 +1,7 @@
 ---
 id: SPEC-FIXTURES-LOSSY
 requirements: [RF-14, RF-15, RF-16]
-status: proposed
+status: approved
 adr: [ADR-0040, ADR-0047]
 ---
 

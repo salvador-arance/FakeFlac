@@ -82,7 +82,7 @@ Encoder check (for test files): the encoders of `rusty-opus`, `opus-rs` and `opu
 
 ## Consequences
 
-- `.opus` files can be analysed once the spec PR moves `specs/pending/opus.feature` to `specs/features/`. That PR also:
+- `.opus` files can be analysed once the spec PR moves `specs/pending/opus.feature` to `specs/features/` (done in #103; implemented in #105). That PR also:
   - adds the Opus rows of `[lossy.cutoffs]`, which means a new params version and `algorithm_version`;
   - fills in the values marked `<to be specified>`.
 

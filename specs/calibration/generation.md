@@ -1,7 +1,7 @@
 ---
 id: SPEC-CALIBRATION-GENERATION
 requirements: [RP-11, RNF-04, RNF-05]
-status: proposed
+status: approved
 ---
 
 # Transcode generation and the features cache

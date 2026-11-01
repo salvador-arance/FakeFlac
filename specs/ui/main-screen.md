@@ -1,7 +1,7 @@
 ---
 id: SPEC-UI-MAIN-SCREEN
 requirements: [RF-01, RF-05, RF-06, RF-07, RNF-08, RNF-10]
-status: proposed
+status: approved
 ---
 
 # Main screen (H1)
