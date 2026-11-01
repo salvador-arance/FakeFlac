@@ -247,9 +247,9 @@ impl Config {
 
     fn validate(&self) -> Result<(), ToolError> {
         let mut errors: Vec<String> = Vec::new();
-        if !(1..=3).contains(&self.config_version) {
+        if !(1..=4).contains(&self.config_version) {
             errors.push(format!(
-                "config_version {} is not supported (expected 1, 2 or 3)",
+                "config_version {} is not supported (expected 1, 2, 3 or 4)",
                 self.config_version
             ));
         }
