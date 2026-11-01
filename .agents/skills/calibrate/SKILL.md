@@ -4,7 +4,7 @@ description: Runs the calibration grid search on the local corpus and shows the 
 ---
 # /calibrate [--grid FILE]
 
-Spec: `specs/calibration/calibration.md` section 5, `specs/calibration/evaluation.md` section 7, ADR-0036. The tool is `tools/fakeflac-calibrate`. It needs `FAKEFLAC_CORPUS` and `FAKEFLAC_CALIBRATION` (set by the human in `.Codex/settings.local.json`, key `env`; never set them yourself) and ffmpeg for new transcodes.
+Spec: `specs/calibration/calibration.md` section 5, `specs/calibration/evaluation.md` section 7, ADR-0036. The tool is `tools/fakeflac-calibrate`. It needs `FAKEFLAC_CORPUS` and `FAKEFLAC_CALIBRATION` (set by the human in `.claude/settings.local.json`, key `env`; never set them yourself) and ffmpeg for new transcodes.
 
 1. Run `just calibrate` (add `--grid FILE` if the user gave one; the default grid is `specs/calibration/calibrate-grid.v1.toml`).
    - Exit 1 (internal error, a bug in the tool): show the error output, say it is a bug, and stop. Do not retry, do not touch the repository or `FAKEFLAC_CALIBRATION`, and offer to report it. Nothing new was written except cache lines.
@@ -14,3 +14,5 @@ Spec: `specs/calibration/calibration.md` section 5, `specs/calibration/evaluatio
 3. Give the proposal's location as `FAKEFLAC_CALIBRATION/reports/<run>/detection-params.vN.toml`. If the output says "no change proposed", say so: the baseline is at least as good, and no file was written. The headline figures of a proposal are the `holdout` ones.
 4. **Never** copy the proposal into `specs/`, never commit it and never open a PR. A proposal enters the repository only through a separate spec PR (gate G1), written from `summary.md` by the human's decision.
 5. Check that `git status` shows no change in the repository caused by the run. If it does, report it.
+
+<!-- Generated from .claude/skills/calibrate/SKILL.md; run just agents-sync. Do not edit. -->

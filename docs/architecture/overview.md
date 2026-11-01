@@ -59,5 +59,7 @@ Minimal capabilities (folder dialog, read of the chosen path, write only of the 
 
 ## Related
 
+- Local harness consolidation: [ADR-0048](../adr/0048-claude-canonical-harness-codex-generated-adapter.md), [contract](../../specs/contracts/agent-harness.md). Claude remains canonical; Codex compatibility is generated.
+
 - [dependencies.md](dependencies.md) · [backend.md](backend.md) · [data-model.md](data-model.md) · [frontend.md](frontend.md) · [glossary.md](glossary.md)
 - Full original design (Spanish): `docs/planning/fakeflac-phases-1-3.es.md`.

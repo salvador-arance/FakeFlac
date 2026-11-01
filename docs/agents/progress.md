@@ -2,6 +2,30 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-01 - Claude canonical harness; generated Codex compatibility
+
+**Done**
+- Reverted the earlier optimization edits at the owner's request; Claude model defaults and workflow remain unchanged.
+- The owner clarified the sole objective: maintain Claude configuration once and make Codex follow the existing workflow.
+- The owner approved the contract, scenarios and ADR-0048 at G1 in chat ("apruebo todo"). ADR-0048 is accepted; traceability and architecture are linked.
+- Implemented `scripts/sync-agents.mjs` and `just agents-sync` / `just agents-check`. It owns 25 derived files: six scoped instruction files, five skills, five roles, eight thin hook entry points and the hook registrations. `check-fast` and therefore existing CI reject drift. Personal settings and unowned files are preserved; no dependency was added.
+- The owner approved explicit Codex models and requested a PR. `.claude/codex-models.json` is the sole maintained assignment source: Astra/high for specs and review, Sol/high for tests and Rust, Sol/medium for Svelte. The generator emits supported TOML fields, validates full role coverage/schema and fails before writes on invalid configuration. The host refreshed all five role/model bindings; the final model review ran as Astra/high.
+- `.codex/hooks/dispatch.mjs` translates native shell/patch payloads to canonical hooks, checks every patch source/move destination and formats surviving paths. Claude hooks, skills, role instructions and model defaults are unchanged. Copied `.Codex/stage` references disappear because generated skills now preserve the canonical `.claude/stage` path.
+- Two fresh test-author iterations produced 34 passing generator/adapter tests. Independent review found and then cleared reserved-adapter and unowned-output collisions. Reverting each fix in isolated `target/` copies makes its covering regression fail. Five generated agent files parse with the existing Rust TOML parser.
+- Generated hook commands were exercised from the root and `src/` in Git Bash and PowerShell (the PowerShell runner explicitly forwards `$LASTEXITCODE`); allowed docs and blocked protected edits agree. This is a shell smoke test, not evidence of a live host's hook runner.
+- Final `just check` and `just ci` passed, including 757 frontend tests, all 71 focused harness/model tests, native Tauri checks, generated bindings, traceability and protected-test checks. Spec/ADR commit: `e806520`; independent tests: `12dc2a9`; implementation: `7c0e244`. `agents-check` reports no drift. The existing untracked `pnpm-lock.yaml` was untouched.
+- Pushed `salvador-arance/chore-optimize-agent-usage` and opened PR #106: https://github.com/salvador-arance/FakeFlac/pull/106. The owner explicitly requested publication. The description records the model table, G1 approvals, independent review and remaining manual host checks. Human merge only.
+
+**Pending**
+- Hosted CI and human G2 review of PR #106.
+- Fresh-session lifecycle hook enforcement remains unverified. Claude tool metadata, permission settings and native Codex transcript enforcement are explicitly not claimed to be portable runtime controls. Role/model discovery has been observed in the host.
+- Opus PR #105 is already merged in the branch's baseline `d4998f3`; its earlier pending G2 note is historical.
+
+**Blockers / questions for the human**
+- No remaining automated-review blocker. Full live-host acceptance requires fresh local sessions; no host permissions or personal configuration were changed.
+
+**Next step:** inspect hosted CI and review PR #106 at G2; verify fresh-session lifecycle hooks before claiming complete runtime parity.
+
 ## 2026-11-01 - Opus corpus acceptance completed; O1-O5 pass
 
 **Done**

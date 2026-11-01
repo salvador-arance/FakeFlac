@@ -49,4 +49,14 @@ requirement RF-xx
 
 ## Hooks
 
+### Single source of truth (ADR-0048)
+
+Maintain instructions in root/scoped `CLAUDE.md` files and roles, skills and hooks under `.claude/`. Run `just agents-sync` after changing them. It derives sibling `AGENTS.md` files, `.agents/skills/`, `.codex/agents/`, hook entry points and `.codex/hooks.json`; never edit these outputs by hand. `just agents-check` is read-only and runs in `check-fast` to catch drift locally and in CI. The `.claude/stage` file is shared by both harnesses. Claude models, workflow, checks and gates remain unchanged.
+
+Codex model and reasoning-effort assignments are maintained only in `.claude/codex-models.json` and emitted into the generated TOML files. The owner-approved defaults are Astra/high for specs and review, Sol/high for tests and Rust, and Sol/medium for Svelte. An incomplete or invalid assignment fails before any output changes. Editing Claude's `model` aliases does not implicitly substitute an OpenAI model; the explicit provider assignments remain in this canonical source directory.
+
+The Codex dispatcher translates native payloads and invokes the canonical Claude hooks; it contains no duplicate policy. Claude model/tool metadata is recorded in generated comments, not interpreted as Codex configuration or enforcement. Claude permissions are not translated into automatic Codex approvals. Native Codex transcript-based context limits and host permissions still require separate live-host verification. Contract and acceptance: `specs/contracts/agent-harness.md`.
+
+Provider format references: [OpenAI hooks](https://learn.chatgpt.com/docs/hooks), [custom agents](https://learn.chatgpt.com/docs/agent-configuration/subagents) and [scoped instructions](https://learn.chatgpt.com/docs/agent-configuration/agents-md).
+
 `SessionStart` context · `PreToolUse` guards (`guard-protected`, `guard-bash`, `guard-agents`) · `PostToolUse` format · `Stop`/`SubagentStop` `just check-fast` (skipped in stages `spec` and `test`). Codex hook commands resolve their scripts from `git rev-parse --show-toplevel`, so they work across checkouts and when the session starts in a subdirectory (no machine-specific paths). Hooks have their own tests: `node --test ".claude/hooks/*.test.mjs"`. `guard-bash` matches the command text, so a commit message or `echo` that quotes a blocked command (for example `gh release create`) is blocked too: reword it or use `git commit -F <file>`.
