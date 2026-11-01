@@ -83,6 +83,20 @@ pub fn evaluate_lossy_row(
     if !meta.not_evaluated.is_empty() {
         return LossyRowEval::not_evaluated();
     }
+    // C14: excluding an Opus row for a params file without Opus rows precedes
+    // extraction errors. Prefer the decoded codec; use the extension only when
+    // extraction could not identify one.
+    let codec = match row.extracted.as_ref() {
+        Extracted::Probe(p) => p.stream.codec,
+        Extracted::Error(_) => None,
+    };
+    let is_opus = codec.map_or_else(
+        || crate::extract::is_opus(&row.path),
+        |codec| codec == fakeflac_core::AudioCodec::Opus,
+    );
+    if is_opus && lossy.cutoffs.opus.is_none() {
+        return LossyRowEval::not_evaluated();
+    }
     let probe = match row.extracted.as_ref() {
         Extracted::Error(e) => return LossyRowEval::error(e.clone()),
         Extracted::Probe(p) => p,
@@ -92,9 +106,6 @@ pub fn evaluate_lossy_row(
             "the stream has no codec".to_string(),
         ));
     };
-    if stream.codec == fakeflac_core::AudioCodec::Opus && lossy.cutoffs.opus.is_none() {
-        return LossyRowEval::not_evaluated();
-    }
     // L0, then L1b: the guards of `analyze_track`, from the same function of the core.
     if let Some(e) = track_guard(
         Some(stream.codec),
