@@ -2,6 +2,21 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-01 - Opus draft PR #105 opened
+
+**Done**
+- The owner authorized publication. Pushed `codex/feat-RF-14-opus` and opened draft PR #105: https://github.com/salvador-arance/FakeFlac/pull/105.
+- Its description includes the approved scope, local green `just check` / `just ci`, independent review, installer sizes and the full quiet performance report. Manual corpus acceptance is explicitly pending; no merge was performed.
+
+**Pending**
+- Hosted CI, including the supply-chain job unavailable locally.
+- Manual corpus acceptance O1-O6 and the owner's O8 folder, as detailed below. G2 remains with the human.
+
+**Blockers / questions for the human**
+- No remaining code/test blocker. Running acceptance through the agent still needs an explicit exception for writes to external `FAKEFLAC_CALIBRATION`.
+
+**Next step:** inspect the hosted CI results of #105 before proceeding with the manual acceptance gates.
+
 ## 2026-11-01 - Opus implemented; local CI, review and installers verified
 
 **Done**
