@@ -17,6 +17,7 @@ storybook-static/
 .claude/settings.local.json
 .claude/stage
 .claude/worktrees/
+.codex/config.toml
 
 # Planning notes stay local. The tracked historical plan (fakeflac-phases-1-3.es.md) is
 # still versioned: .gitignore never untracks a file that is already in the repository.

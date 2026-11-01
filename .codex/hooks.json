@@ -1,0 +1,76 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node 'c:\\Workspaces\\FakeFlac\\.codex\\hooks\\guard-protected.mjs'"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node 'c:\\Workspaces\\FakeFlac\\.codex\\hooks\\guard-bash.mjs'"
+          }
+        ]
+      },
+      {
+        "matcher": "SendMessage",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node 'c:\\Workspaces\\FakeFlac\\.codex\\hooks\\guard-agents.mjs'"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node 'c:\\Workspaces\\FakeFlac\\.codex\\hooks\\format.mjs'"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node 'c:\\Workspaces\\FakeFlac\\.codex\\hooks\\session-context.mjs'"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node 'c:\\Workspaces\\FakeFlac\\.codex\\hooks\\stop-check.mjs'",
+            "timeout": 300
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node 'c:\\Workspaces\\FakeFlac\\.codex\\hooks\\stop-check.mjs'",
+            "timeout": 300
+          }
+        ]
+      }
+    ]
+  }
+}
