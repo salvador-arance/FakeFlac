@@ -122,7 +122,7 @@ describe('@RF-06 @RF-10 widths owned by AnalysisPage', () => {
     await mountPage(); await openFolder()
     await userEvent.click(screen.getByText('日本語.flac'))
     await userEvent.click(within(screen.getAllByRole('columnheader')[0]).getByRole('button'))
-    await userEvent.type(screen.getByRole('textbox', { name: 'Search by name' }), '日本語')
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Search by name' }), '日本語')
     expect(width(file())).toBe(230)
     await switchToSpanish()
     expect(width(screen.getByRole('separator', { name: 'Cambiar ancho de la columna Archivo' }))).toBe(230)
