@@ -98,12 +98,12 @@ passed from this report alone.
 | Windows 11 x64 | MSI | Passed (owner report) | Same OS and candidate as above |
 
 Owner report (2026-11-02): install, launch, analysis and uninstall succeeded for NSIS and
-MSI on Windows 11. The folder used was the owner's personal music folder (not
-recorded here). Not itemised in the report and therefore not recorded as observed:
-the corrupt-file, Unicode-name and empty-folder cases of P3, the installer SHA-256 and
-the WebView2 version. Windows 10 is outside the amended closure matrix.
+MSI on Windows 11. The audio used was the synthetic fixture pack
+(`rnf-07-fixtures`: a valid WAV, a corrupt FLAC, a valid WAV with a Unicode name and an
+empty folder), with the whole result reported as OK and not itemised per case. Not
+recorded: the installer SHA-256 and the WebView2 version. Windows 10 is outside the amended closure matrix.
 
-RNF-07 stays pending until the itemised P3 outcomes and the P4 evidence (installer SHA-256, WebView2 version) are recorded for both rows. It can be recorded as verified only after P1 passing and both matrix rows passing with P4 evidence. A failed row leaves it pending.
+RNF-07 stays pending until the P4 evidence (installer SHA-256, WebView2 version) is recorded for both rows. It can be recorded as verified only after P1 passing and both matrix rows passing with P4 evidence. A failed row leaves it pending.
 
 ## G1 decision
 
