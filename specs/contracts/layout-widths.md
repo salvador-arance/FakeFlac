@@ -6,7 +6,7 @@ status: approved
 
 # Local layout width preferences
 
-Companion to `../ui/resizable-widths.md`; approved at G1 in #113 on 2026-11-02; implementation pending. Backend command
+Companion to `../ui/resizable-widths.md`; approved at G1 in #113 on 2026-11-02; implemented in #115. Backend command
 contract version 8, generated bindings and RF-13's language-only `Settings`
 remain unchanged. This extends the existing frontend local-storage pattern
 used for `fakeflac.layout.detailHeight`; it does not migrate or edit that key.

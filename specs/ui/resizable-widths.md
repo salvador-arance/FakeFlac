@@ -7,7 +7,7 @@ status: approved
 # Resizable Albums panel and result columns
 
 The owner requested mouse-drag resizing of the Albums panel and table columns
-on 2026-11-02. This extension of RF-06/RF-10 was approved by the owner in chat and merged at G1 in #113 on 2026-11-02. Implementation is pending.
+on 2026-11-02. This extension of RF-06/RF-10 was approved by the owner in chat and merged at G1 in #113 on 2026-11-02. Implemented and merged in #115 (2026-11-02).
 Scenarios: `../features/resizable-widths.feature`. Local preference contract:
 `../contracts/layout-widths.md`. No backend command/event/DTO or contract-version
 change is proposed; `Settings` remains language-only.

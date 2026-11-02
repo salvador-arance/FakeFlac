@@ -6,7 +6,7 @@ status: approved
 
 # Complete English and Spanish catalogue (RF-13)
 
-Approved extension (#113; implementation pending): `resizable-widths.md` section 4 defines four
+Approved extension (#113; implemented in #115): `resizable-widths.md` section 4 defines four
 additional layout-resize keys. That table supplements this
 catalogue; the existing entries below retain their approved values.
 

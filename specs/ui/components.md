@@ -6,7 +6,7 @@ status: approved
 
 # Components for H1 (atomic design, ADR-0014)
 
-Approved extension (#113; implementation pending): `resizable-widths.md` defines vertical resize
+Approved extension (#113; implemented in #115): `resizable-widths.md` defines vertical resize
 handles and the additional props/events for `Splitter`, `ColumnHeader`,
 `ResultsTable`, `MainLayout` and `AnalysisPage`. The existing contracts below are extended by the width behavior approved
 at G1 on 2026-11-02.

@@ -2,6 +2,21 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-02 - H2 complete; release 0.2.0 prepared
+
+**Done**
+- All H2 requirements are specified and built; RNF-07 (Windows 11 x64 matrix, #117) and RNF-08 (#116) are recorded as verified. Windows 10 stays a stated target, unverified by owner decision. RF-12 is H3; RNF-02, RNF-03 and RNF-10 remain `draft`.
+- Branch `chore/release-0.2.0`: `just set-version 0.2.0` (package.json, package-lock.json, tauri.conf.json, Cargo.toml, Cargo.lock); `just ci` passed. Docs brought up to date in the same PR: README status, "implementation pending" wording after #115 in the resize specs/contracts and traceability.
+
+**Pending**
+- Human G2: merge the release PR. Then the human follows `specs/contracts/release.md` section 6 (release-check, tag on the merge commit, push the tag). CI leaves a draft release; check it (M2-M6) and publish it (M7). Agents never tag or publish.
+- Record the two installer sizes from the `package` log (M2, RNF-06).
+
+**Blockers / questions for the human**
+- None.
+
+**Next step:** merge the release PR, tag v0.2.0 and check the draft.
+
 ## 2026-11-02 - RNF-08 verdict label contrast correction implemented
 
 **Done**
