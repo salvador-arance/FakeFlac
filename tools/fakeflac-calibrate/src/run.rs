@@ -18,14 +18,19 @@ use fakeflac_core::{DetectionParams, Verdict};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-const DEFAULT_PARAMS: &str = "specs/detection/detection-params.v2.toml";
-const DEFAULT_CONFIG: &str = "specs/calibration/calibration.v2.toml";
-const DEFAULT_GRID: &str = "specs/calibration/calibrate-grid.v1.toml";
+/// The default `--params` (and the baseline of a grid without `baseline`), relative to the repository
+/// root (calibration.md section 2, OQ-18): the params file the app ships, equal by content to
+/// `DetectionParams::default()`.
+pub const DEFAULT_PARAMS: &str = "specs/detection/detection-params.v8.toml";
+/// The default `--config`, relative to the repository root.
+pub const DEFAULT_CONFIG: &str = "specs/calibration/calibration.v2.toml";
+/// The default `--grid`, relative to the repository root.
+pub const DEFAULT_GRID: &str = "specs/calibration/calibrate-grid.v3.toml";
 
 /// `accept [--params FILE]… [--config FILE] [--no-generate]`
 #[derive(Debug, Clone)]
 pub struct AcceptArgs {
-    /// Empty means `specs/detection/detection-params.v2.toml`. The first file is the baseline.
+    /// Empty means [`DEFAULT_PARAMS`] (read from the repository root). The first file is the baseline.
     pub params: Vec<PathBuf>,
     pub config: PathBuf,
     pub no_generate: bool,
@@ -34,6 +39,7 @@ pub struct AcceptArgs {
 /// `calibrate [--grid FILE] [--config FILE]`
 #[derive(Debug, Clone)]
 pub struct CalibrateArgs {
+    /// [`DEFAULT_GRID`] (as `parse_args` writes it) is read from the repository root.
     pub grid: PathBuf,
     pub config: PathBuf,
 }
@@ -235,6 +241,25 @@ fn file_name(path: &Path) -> String {
     path.file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| path.to_string_lossy().into_owned())
+}
+
+/// A path relative to the repository root (calibration.md section 2): the default files and a
+/// relative `baseline` of a grid file. Without a repository, relative to the current folder.
+fn from_repo_root(env: &Env, path: &Path) -> PathBuf {
+    match &env.repo_root {
+        Some(root) if path.is_relative() => root.join(path),
+        _ => path.to_path_buf(),
+    }
+}
+
+/// A command-line path is used as given, except a default file (the exact relative path that
+/// `parse_args` writes when the option is absent), which is read from the repository root.
+fn resolve_default(env: &Env, path: &Path, default: &str) -> PathBuf {
+    if path == Path::new(default) {
+        from_repo_root(env, path)
+    } else {
+        path.to_path_buf()
+    }
 }
 
 fn read_text(path: &Path) -> Result<String, ToolError> {
@@ -661,7 +686,8 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
     if job.grid.is_some() {
         detection_dir(env)?;
     }
-    let config = load_config(job.config)?;
+    let config_path = resolve_default(env, job.config, DEFAULT_CONFIG);
+    let config = load_config(&config_path)?;
     for s in &config.generate.settings {
         if !transcoder.supports(&s.encoder) {
             return Err(ToolError::input(format!(
@@ -673,7 +699,8 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
         }
     }
     let setting_ids: Vec<String> = config.lossless_settings().map(|s| s.id.clone()).collect();
-    let grid_file: Option<GridFile> = match job.grid {
+    let grid_path = job.grid.map(|p| resolve_default(env, p, DEFAULT_GRID));
+    let grid_file: Option<GridFile> = match &grid_path {
         Some(path) => {
             let text = read_text(path)?;
             let mut parsed = grid::parse_grid(&text, &setting_ids).map_err(|e| ToolError {
@@ -684,18 +711,21 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
                     .map(|l| format!("{}: {l}", file_name(path)))
                     .collect(),
             })?;
-            parsed.baseline = parsed.baseline.trim().to_string();
+            parsed.baseline = parsed.baseline.map(|b| b.trim().to_string());
             Some(parsed)
         }
         None => None,
     };
     let param_paths: Vec<PathBuf> = match &grid_file {
-        Some(g) => vec![PathBuf::from(&g.baseline)],
-        None if job.params.is_empty() => vec![PathBuf::from(DEFAULT_PARAMS)],
+        Some(GridFile {
+            baseline: Some(b), ..
+        }) => vec![from_repo_root(env, Path::new(b))],
+        Some(_) => vec![from_repo_root(env, Path::new(DEFAULT_PARAMS))],
+        None if job.params.is_empty() => vec![from_repo_root(env, Path::new(DEFAULT_PARAMS))],
         None => job.params.to_vec(),
     };
     let loaded = load_params(&param_paths)?;
-    if let (Some(g), Some(path), Some(base)) = (&grid_file, job.grid, loaded.first()) {
+    if let (Some(g), Some(path), Some(base)) = (&grid_file, &grid_path, loaded.first()) {
         if base.params.full_band.is_none() {
             let errors: Vec<String> = g
                 .keys
@@ -805,10 +835,17 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
         let mut grid_outcome: Option<GridOutcome> = None;
         let mut search_result: Option<grid::SearchResult> = None;
         let mut proposal: Option<grid::Proposal> = None;
+        // The must_catch tune positives the baseline already misses (labelled-row indices).
+        let mut must_catch_rows: Vec<usize> = Vec::new();
         if let Some(file) = &grid_file {
             let base = &runs[0];
             let search_rows = tune_search_rows(&groups[base.group].rows, &base.evals);
             let result = grid::search(&base.params, &search_rows, file);
+            must_catch_rows = result
+                .must_catch_real_at_baseline
+                .iter()
+                .filter_map(|i| search_rows.get(*i).map(|r| r.row))
+                .collect();
             if let Some(i) = result.proposal {
                 let values = &result.points[i].values;
                 let version = next_free_version(env, base.params.algorithm_version)?;
@@ -910,6 +947,7 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
                     proposal: proposal.as_ref(),
                     confirmed_checked: confirmed.0,
                     confirmed_holdout: confirmed.1,
+                    must_catch_real_at_baseline: must_catch_rows.clone(),
                 }),
                 _ => None,
             },
@@ -1030,7 +1068,7 @@ fn pipeline(job: &Job<'_>, env: &Env, transcoder: &dyn Transcoder) -> Result<Out
 /// constraint-only rows (evaluation.md section 7).
 fn tune_search_rows<'a>(rows: &'a [LabelRow], evals: &[RowEval]) -> Vec<SearchRow<'a>> {
     let mut out = Vec::new();
-    for (row, eval) in rows.iter().zip(evals.iter()) {
+    for (index, (row, eval)) in rows.iter().zip(evals.iter()).enumerate() {
         if eval.verdict == Verdict::Error || row.undetectable {
             continue;
         }
@@ -1055,6 +1093,7 @@ fn tune_search_rows<'a>(rows: &'a [LabelRow], evals: &[RowEval]) -> Vec<SearchRo
             crate::cache::Extracted::Error(_) => None,
         };
         out.push(SearchRow {
+            row: index,
             kind,
             setting: if kind == RowKind::GeneratedPositive {
                 row.setting.as_str()
@@ -1155,6 +1194,36 @@ mod tests {
             panic!("privacy");
         };
         assert_eq!(p.base, "main");
+    }
+
+    #[test]
+    fn defaults_are_read_from_the_repository_root() {
+        let root = PathBuf::from("repo");
+        let env = Env {
+            repo_root: Some(root.clone()),
+            ..Env::default()
+        };
+        assert_eq!(
+            resolve_default(&env, Path::new(DEFAULT_GRID), DEFAULT_GRID),
+            root.join(DEFAULT_GRID)
+        );
+        // A path given on the command line is used as given.
+        assert_eq!(
+            resolve_default(&env, Path::new("mine.toml"), DEFAULT_GRID),
+            PathBuf::from("mine.toml")
+        );
+        // A relative grid baseline is read from the root; an absolute one as it is.
+        let absolute = std::env::temp_dir().join("b.toml");
+        assert_eq!(from_repo_root(&env, &absolute), absolute);
+        // Without a repository, relative to the current folder.
+        assert_eq!(
+            resolve_default(&Env::default(), Path::new(DEFAULT_PARAMS), DEFAULT_PARAMS),
+            PathBuf::from(DEFAULT_PARAMS)
+        );
+        let Ok(Command::Calibrate(c)) = parse_args(&["calibrate".to_string()]) else {
+            panic!("calibrate");
+        };
+        assert_eq!(c.grid, PathBuf::from(DEFAULT_GRID));
     }
 
     #[test]
