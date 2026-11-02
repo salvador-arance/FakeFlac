@@ -2,6 +2,25 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-02 - RP-11 implemented: calibration against the shipped detection v8
+
+**Done**
+- `feat/RP-11` (from main ef2999b) follows `/feature RP-11`:
+  - `95d2f5c` test: 15 tests in `tools/fakeflac-calibrate/tests/shipped_baseline.rs` for the 11 new `@RP-11` scenarios. No existing test changed (OQ-21 (f)).
+  - `bd876d5`: the RP-11 traceability row lists the new test file.
+  - `d316917` feat: the defaults are params v8 and grid v3, read from the repository root. `baseline` is optional; new keys `cost_exclude` and `grid_version` 3. Feasibility is non-regression, plus the "confirmed lost" rule. The report has the new lines, the baseline row and the new columns. The calibrate skill names grid v3 (`just agents-sync` run).
+- Review: no blocking findings. `just ci` is green and `just privacy-check --base origin/main` finds 0 matches.
+- Known limitation, recorded in the PR: the tool cannot tell a default path from the same path typed by hand. So an explicit `--config` or `--grid` equal to the default relative path is read from the repository root. The protected tests fix the `PathBuf` fields of the argument structs.
+
+**Pending**
+- G2: the owner reviews and merges the `feat/RP-11` PR.
+- L5 on the real corpus: `just calibrate` should show a feasible baseline and the `cost excludes` line.
+
+**Blockers / questions for the human**
+- None. Still open from the spec block below: the `cbr128` transcode v8 misses (rules.md Q10 alternatives), rules.md Q9, and no confirmed fakes in `holdout`.
+
+**Next step:** after G2, `just prune-branches`, then run L5 (`just calibrate` on the local corpus).
+
 ## 2026-11-02 - RP-11 spec: calibrate against the shipped detection (G1 approved)
 
 **Done**
