@@ -40,20 +40,37 @@
     white-space: nowrap;
   }
 
+  /* The icon keeps the saturated verdict colour; the label uses the readable tint (RNF-08 U3). */
   .verdict-cell.real {
     color: var(--verdict-real);
+  }
+
+  .verdict-cell.real .label {
+    color: var(--verdict-real-text);
   }
 
   .verdict-cell.suspicious {
     color: var(--verdict-suspicious);
   }
 
+  .verdict-cell.suspicious .label {
+    color: var(--verdict-suspicious-text);
+  }
+
   .verdict-cell.fake {
     color: var(--verdict-fake);
   }
 
+  .verdict-cell.fake .label {
+    color: var(--verdict-fake-text);
+  }
+
   .verdict-cell.error {
     color: var(--verdict-error);
+  }
+
+  .verdict-cell.error .label {
+    color: var(--verdict-error-text);
   }
 
   .label {

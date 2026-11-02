@@ -32,7 +32,9 @@ The spectrogram canvas palette lives in `src/lib/tokens/spectrogram.ts`, a TS to
 | Fake | `--verdict-fake` (red) | ✖ | Falso / Fake |
 | Error | `--verdict-error` (grey) | ⚠ | Error / Error |
 
-The verdict never depends on colour alone.
+The verdict never depends on colour alone. The icon uses the `--verdict-*` colour; the label text
+uses the lighter tint of the same family, `--verdict-*-text`, which keeps at least 4.5:1 on normal,
+hovered and selected table rows (`specs/ui/verdict-usability.md` U3).
 
 ## UI style (RNF-10, ADR-0027)
 
