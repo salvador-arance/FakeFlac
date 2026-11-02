@@ -10,12 +10,12 @@
 
 **Pending**
 - G1: owner approval/merge of this amendment.
-- RNF-07 stays unverified until the installer SHA-256 and WebView2 version are recorded for both rows.
+- None for RNF-07 once this PR is merged: recorded as verified for the Windows 11 x64 matrix.
 
 **Blockers / questions for the human**
-- Provide the installer SHA-256 and WebView2 version for both rows (or re-run once to capture them).
+- None. WebView2 Runtime 156.0.4314.58; the owner checked the installer hashes (values not recorded).
 
-**Next step:** merge this spec PR, then record the missing P4 evidence and close RNF-07.
+**Next step:** merge this spec PR, then both RNF-07 and RNF-08 are closed; Windows 10 remains unverified by choice.
 
 ## 2026-11-02 - RNF-07 and RNF-08 closure specifications approved at G1
 

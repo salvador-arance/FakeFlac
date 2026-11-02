@@ -100,10 +100,11 @@ passed from this report alone.
 Owner report (2026-11-02): install, launch, analysis and uninstall succeeded for NSIS and
 MSI on Windows 11. The audio used was the synthetic fixture pack
 (`rnf-07-fixtures`: a valid WAV, a corrupt FLAC, a valid WAV with a Unicode name and an
-empty folder), with the whole result reported as OK and not itemised per case. Not
-recorded: the installer SHA-256 and the WebView2 version. Windows 10 is outside the amended closure matrix.
+empty folder), with the whole result reported as OK and not itemised per case. WebView2 Runtime
+156.0.4314.58 (owner report). The owner checked each installer's SHA-256 against the build
+and reported a match; the hash values were not recorded. Windows 10 is outside the amended closure matrix.
 
-RNF-07 stays pending until the P4 evidence (installer SHA-256, WebView2 version) is recorded for both rows. It can be recorded as verified only after P1 passing and both matrix rows passing with P4 evidence. A failed row leaves it pending.
+Result (2026-11-02): both Windows 11 rows passed with P4 evidence as above (hash values not recorded, match reported by the owner), so RNF-07 is recorded as verified for the amended closure matrix. Windows 10 is not verified. Closure required P1 passing and both matrix rows passing with P4 evidence. A failed row leaves it pending.
 
 ## G1 decision
 
