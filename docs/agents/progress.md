@@ -2,6 +2,22 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-02 - Header fix merged; resizable layout proposed
+
+**Done**
+- The owner merged header-fix PR #112 into `main` (`8b24925`), confirmed via GitHub. The new spec branch includes that merge; its header-height correction must be preserved.
+- Branch `spec/RF-06-RF-10-resizing`: drafted the requested draggable Albums panel and all ten result-column widths as a proposed extension of RF-06/RF-10. Covers independent widths, bounds, mouse/keyboard operation, per-target reset, local layout persistence and invalid/unavailable storage recovery. The fixed-240px decision in RF-10 is explicitly proposed for amendment; no backend settings/command, production code, dependency or executable test changed.
+- `just check` passed (1,295 frontend tests). Local Edge/Segoe UI measurements and width arithmetic informed the proposed limits and constrained-header policy; these are design measurements, not validation of implemented resizing. Future rendered acceptance remains explicit.
+
+**Pending**
+- Human G1 approval/merge of the resize proposal before the test/implementation/review cycle.
+- RNF-07/08 spec PR #111 and their remaining acceptance, including verdict-text contrast, are still separate and pending. Header-fix G2 is complete.
+
+**Blockers / questions for the human**
+- G1 decisions: sidebar plus every column; remember/reset local widths; proposed bounds and independent-column/default-width rules.
+
+**Next step:** approve and merge the resizing specification at G1, then implement its protected tests and UI changes.
+
 ## 2026-11-02 - Correct translated table header overlap; clarify empty-folder acceptance
 
 **Done**
