@@ -11,13 +11,13 @@
 
 **Pending**
 - Human G2 review/merge of the feature PR.
-- RNF-08 stays unverified: owner check that the lighter Fake text still reads as red, 900 x 500 readability in English and Spanish, and the U4 bilingual walkthrough.
-- RNF-07: the four-row Windows 10/11 x NSIS/MSI matrix still needs the owner's results.
+- RNF-08: the owner reported U3 (900 x 500, English and Spanish, Fake reads as red) and U4 (both languages) passed on 2026-11-02 with a desktop build of `235b07d` in a Windows 11 VM; recorded in `specs/ui/verdict-usability.md`.
+- RNF-07: handled in a separate spec PR (Windows 11 x64 matrix).
 
 **Blockers / questions for the human**
-- None technical. Decide whether the salmon Fake label (`#ffb0ab`) is acceptable; the alternative is a darker `--color-row-selected`, which also affects the Albums selection.
+- None. The owner accepted the salmon Fake label (`#ffb0ab`) in the U3 check.
 
-**Next step:** merge the feature PR at G2, then record the U3/U4 and RNF-07 observations.
+**Next step:** merge the feature PR at G2, then close RNF-07 through its spec PR.
 
 ## 2026-11-02 - RNF-07 and RNF-08 closure specifications approved at G1
 
