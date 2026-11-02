@@ -1,13 +1,13 @@
 ---
 id: SPEC-UI-RESIZABLE-WIDTHS
 requirements: [RF-06, RF-10, RF-13, RNF-08, RNF-09]
-status: proposed
+status: approved
 ---
 
 # Resizable Albums panel and result columns
 
 The owner requested mouse-drag resizing of the Albums panel and table columns
-on 2026-11-02. This is a proposed extension of RF-06/RF-10, awaiting G1.
+on 2026-11-02. This extension of RF-06/RF-10 was approved by the owner in chat and merged at G1 in #113 on 2026-11-02. Implementation is pending.
 Scenarios: `../features/resizable-widths.feature`. Local preference contract:
 `../contracts/layout-widths.md`. No backend command/event/DTO or contract-version
 change is proposed; `Settings` remains language-only.
@@ -22,7 +22,7 @@ resets that target to its default. No column hiding, reordering, content autofit
 panel collapse or global reset control is added.
 
 The Albums panel retains its existing visibility rules and full content-area
-height. Its default width is 240 CSS px; proposed limits are 160–480 px. Reserve
+height. Its default width is 240 CSS px; approved limits are 160–480 px. Reserve
 at least 360 px for the main area and 4 px for the separator: effective maximum
 is `max(160, min(480, contentWidth - 360 - 4))`. Before the container has a
 positive measured width, use 480 as that maximum. Automatic clamping on window
@@ -43,7 +43,7 @@ The panel's hidden state has no separator or tab stop and does not erase its siz
 | `bitrate` | 110 | 110 | 800 |
 | `realBitrate` | 100 | 100 | 800 |
 
-All dimensions above are CSS pixels. Bounds are proposed design choices, not
+All dimensions above are CSS pixels. Bounds are approved design choices, not
 claims of optimal usability. Sizes/weights are named layout tokens/data under
 `src/lib/tokens/`; components do not duplicate literal dimensions.
 
@@ -127,7 +127,7 @@ preferences are owned by `AnalysisPage`; a small frontend helper reads/writes
 the local record described in `layout-widths.md`. Existing detail-height
 ownership/storage in `MainLayout` is unchanged.
 
-| Component / level | Proposed addition | States/stories |
+| Component / level | Approved addition | States/stories |
 |---|---|---|
 | `Splitter` / atom | Extend `orientation` to `horizontal \| vertical`; optional `label`, `description`, `value`, `min`, `max`, `valueText`, `onreset`, `onresizeend`, and `variant: 'panel' \| 'column'` (default panel). Existing `onresize(delta)` remains incremental. New vertical consumers supply all accessibility fields. `onresizeend()` identifies pointer completion; keyboard steps also commit; reset emits only `onreset`. Horizontal callers need no new props. | existing horizontal; vertical panel/column idle, hover, focus, dragging, lower/upper bound |
 | `ColumnHeader` / molecule | Optional `resize: { width: number; min: number; max: number; label: string; description: string; valueText: string }`, `onresize(delta)`, `onresizeend()`, `onresetwidth()`. Omitted means existing non-resizable header. Render the handle beside, never inside, the sort button. | sortable+resizable, wrapped Spanish label, resize limits, tooltip+resize |
@@ -141,8 +141,7 @@ unrelated callers and stories valid. New states receive stories before use.
 
 ## 4. Exact new translations
 
-These proposed catalogue additions extend `translations.md` after G1 and are
-subject to approval alongside this spec. The test-stage catalogue coverage must
+These catalogue additions extend `translations.md`, approved at G1 in #113. The test-stage catalogue coverage must
 include this table as an additional approved source; no implementation-stage
 edit to `translations.md` is required.
 `{column}` is the current localized `column.*` label; `{width}` is the rounded
@@ -196,15 +195,14 @@ props alone are not a reason to rewrite unrelated tests. Component story
 fixtures and focused resize cases are added in the test stage. Implementation
 must not alter protected tests. `just check` must pass before completion.
 
-## 6. Proposed amendments and G1 decisions
+## 6. Approved amendments and G1 decisions
 
-This proposal supersedes **only** the fixed-width/no-splitter part of
+This approved extension supersedes **only** the fixed-width/no-splitter part of
 `album-summary.md` section "Where it appears" and Q3, and extends the component
 rows for `Splitter`, `ColumnHeader`, `ResultsTable`, `MainLayout` and
-`AnalysisPage` in `components.md`. Panel collapse remains out of scope. Existing
-approved text remains authoritative until this proposal passes G1.
+`AnalysisPage` in `components.md`. Panel collapse remains out of scope. The width-specific amendments were approved at G1 in #113.
 
-| Decision | Recommended answer |
+| Decision | Approved answer (#113) |
 |---|---|
 | R-Q1: both the sidebar and all ten columns, with per-target double-click/Enter reset? | Yes. |
 | R-Q2: remember local layout widths across launches using the existing WebView local-storage pattern, separate from RF-13 language settings? | Yes; convenience-only recovery in the local contract. |
