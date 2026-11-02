@@ -18,9 +18,13 @@ use fakeflac_core::{DetectionParams, Verdict};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-const DEFAULT_PARAMS: &str = "specs/detection/detection-params.v2.toml";
-const DEFAULT_CONFIG: &str = "specs/calibration/calibration.v2.toml";
-const DEFAULT_GRID: &str = "specs/calibration/calibrate-grid.v1.toml";
+/// The default `--params` (and the baseline of a grid without `baseline`), relative to the repository
+/// root (calibration.md section 2, OQ-18).
+pub const DEFAULT_PARAMS: &str = "specs/detection/detection-params.v2.toml";
+/// The default `--config`, relative to the repository root.
+pub const DEFAULT_CONFIG: &str = "specs/calibration/calibration.v2.toml";
+/// The default `--grid`, relative to the repository root.
+pub const DEFAULT_GRID: &str = "specs/calibration/calibrate-grid.v1.toml";
 
 /// `accept [--params FILE]… [--config FILE] [--no-generate]`
 #[derive(Debug, Clone)]
