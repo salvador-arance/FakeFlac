@@ -4,7 +4,9 @@ Feature: Calibration and acceptance against a labelled corpus
   sample corpus of specs/calibration/sample-corpus.md (synthetic fixtures,
   fixture transcoder, no ffmpeg) in two fresh temporary folders used as
   FAKEFLAC_CORPUS and FAKEFLAC_CALIBRATION. Unless a scenario says otherwise,
-  the params file is specs/detection/detection-params.v2.toml.
+  the params file is specs/detection/detection-params.v2.toml, passed with
+  --params (the tool's default is detection-params.v8.toml, calibration.md
+  OQ-18; "Defaults" below).
   The v4 expectations on fxv0 (sfb21_gaps) rest on a step of 3 to 10 dB in the
   lossy range (fixtures.md, "Verdicts with v4": derived, and measured once
   before G1 at D 6.15 dB, fs 16050 Hz); the test stage confirms it first and
@@ -22,6 +24,10 @@ Feature: Calibration and acceptance against a labelled corpus
   Changed for detection v8 (specs/detection/lossy-source.md section 12.9 (g);
   RF-14/RF-15 Opus): with detection-params.v8.toml in the repository,
   proposals take algorithm_version 9.
+  Changed for the v8 baseline (calibration.md OQ-18 to OQ-21): default params
+  v8 and default grid calibrate-grid.v3.toml; must_catch feasibility is
+  non-regression against the baseline. No earlier scenario changes its
+  expectations: in each of them the baseline has no must_catch Real.
   Lossy rows: calibration-lossy.feature.
 
   # --- Environment -------------------------------------------------------
@@ -513,6 +519,63 @@ Feature: Calibration and acceptance against a labelled corpus
     When the grid search ranks the points
     Then the candidate point is marked infeasible
     And it is not proposed
+
+  @RP-11
+  Scenario: A must_catch positive that the baseline already misses does not block the search
+    Given a detectable must_catch tune positive that receives verdict "real" under the baseline and under a candidate point
+    And no other detectable must_catch tune positive receives verdict "real" under that point
+    And no confirmed fake receives verdict "real" under the baseline or under that point
+    When feasibility is evaluated during grid search
+    Then the baseline and the candidate point are feasible
+    And the output says "must_catch Real at baseline: 1"
+    And both have "must_catch Real" 1 and "must_catch lost" 0 in the best-points table
+    And that positive still counts as a false negative in the cost of both
+
+  @RP-11
+  Scenario: A point that loses a must_catch detection of the baseline is infeasible
+    Given a detectable must_catch tune positive that receives verdict "fake" or "suspicious" under the baseline and "real" under a candidate point
+    And on the tune rows that candidate costs less than the baseline
+    When the grid search ranks the points
+    Then the candidate point is marked infeasible
+    And it has "must_catch lost" 1 in the best-points table
+    And it is not proposed
+
+  # --- Defaults (calibration.md OQ-18) ------------------------------------
+
+  @RP-11
+  Scenario: Without --params the baseline is the params file the app ships
+    When "accept" runs on the sample corpus with no --params
+    Then the exit code is 0
+    And the report header lists exactly one params file, detection-params.v8.toml, with algorithm_version 8
+
+  @RP-11
+  Scenario: Without --grid the search reads calibrate-grid.v3.toml
+    The default grid's must_catch settings are those of the real corpus, which
+    the sample config does not have, so the run stops before preparing anything.
+    When "calibrate" runs on the sample corpus with no --grid
+    Then the exit code is 2
+    And the error output says "calibrate-grid.v3.toml"
+    And the error output says "must_catch: unknown setting 'cbr128'"
+    And nothing is written anywhere
+
+  @RP-11
+  Scenario Outline: Supported grid versions
+    Given the grid of sample-corpus.md section 5 with grid_version <version>
+    When "calibrate" runs on the sample corpus
+    Then the exit code is <code>
+
+    Examples:
+      | version | code |
+      | 1       | 0    |
+      | 2       | 0    |
+      | 3       | 0    |
+
+  @RP-11
+  Scenario: An unknown grid version is an error
+    Given the grid of sample-corpus.md section 5 with grid_version 4
+    When "calibrate" runs on the sample corpus
+    Then the exit code is 2
+    And the error output says "grid_version 4 is not supported (expected 1, 2 or 3)"
 
   @RP-11
   Scenario: A mixed-class album takes the strongest class
