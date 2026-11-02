@@ -326,6 +326,7 @@
   }
 
   .table-header {
+    flex-shrink: 0;
     position: sticky;
     top: 0;
     z-index: 10;
@@ -339,6 +340,16 @@
     align-items: center;
     height: var(--row-height);
     box-sizing: border-box;
+  }
+
+  .header-row {
+    /* Translated labels may wrap; reserve their full height above the data rows. */
+    height: auto;
+    min-height: var(--row-height);
+  }
+
+  .table-body {
+    flex-shrink: 0;
   }
 
   .data-row {
