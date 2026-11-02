@@ -45,7 +45,7 @@ describe('MainLayout: sidebar', () => {
   // @RF-10 the table and the detail panel keep the splitter between them
   it('keeps the splitter between the table and the detail', () => {
     render(MainLayout, { props: { ...slots, detail: snippet('detail'), sidebar: snippet('sidebar') } })
-    const sep = screen.getByRole('separator')
+    const sep = screen.getAllByRole('separator').find((el) => el.getAttribute('aria-orientation') === 'horizontal')!
     expect(follows(screen.getByTestId('table'), sep)).toBe(true)
     expect(follows(sep, screen.getByTestId('detail'))).toBe(true)
   })
@@ -62,7 +62,7 @@ describe('MainLayout: sidebar', () => {
   it('renders a sidebar without a detail slot', () => {
     render(MainLayout, { props: { ...slots, sidebar: snippet('sidebar') } })
     expect(screen.getByTestId('sidebar')).not.toBeNull()
-    expect(screen.queryByRole('separator')).toBeNull()
+    expect(screen.getByRole('separator', { name: 'Resize Albums panel' }).getAttribute('aria-orientation')).toBe('vertical')
   })
 })
 
