@@ -11,7 +11,7 @@ version: 8
 
 ## Commands
 
-**Version 8 (RF-13, approved at G1 in #107; not implemented yet):** `settings.md` defines the language-only
+**Version 8 (RF-13, approved at G1 in #107; implemented in #109):** `settings.md` defines the language-only
 `get_settings` / `set_settings` commands, `Language`, `Settings`, `SettingsSnapshot`,
 `SettingsLoadStatus` and the additional `AppError.code` values `SETTINGS_WRITE_FAILED` and
 `SETTINGS_READ_ONLY`. It supersedes the introductory deferral of Settings above. All version
@@ -27,8 +27,8 @@ and live translation of already displayed results and messages. ADR-0049 records
 | `get_spectrogram` | `path: string` | `Spectrogram` | `NOT_ANALYZED` is not used in H1; `INTERNAL` if the file cannot be decoded | RF-07 |
 | `export_csv` (version 4) | — (the destination comes from the native save dialog, never from the frontend) | `ExportResult \| null` (`null` if the dialog is cancelled) | `NOT_ANALYZED`, `ANALYSIS_RUNNING`, `EXPORT_FAILED`, `INTERNAL` | RF-09 |
 | `clear_cache` (version 7) | — | `void` | `ANALYSIS_RUNNING`, `CACHE_FAILED`, `INTERNAL` | RF-11 |
-| `get_settings` (version 8, not implemented yet) | — | `SettingsSnapshot` (`settings.md`) | `INTERNAL` | RF-13 |
-| `set_settings` (version 8, not implemented yet) | `settings: Settings` | `SettingsSnapshot` (`settings.md`) | `SETTINGS_WRITE_FAILED`, `SETTINGS_READ_ONLY`, `INTERNAL` | RF-13 |
+| `get_settings` (version 8) | — | `SettingsSnapshot` (`settings.md`) | `INTERNAL` | RF-13 |
+| `set_settings` (version 8) | `settings: Settings` | `SettingsSnapshot` (`settings.md`) | `SETTINGS_WRITE_FAILED`, `SETTINGS_READ_ONLY`, `INTERNAL` | RF-13 |
 
 Drag and drop uses Tauri's native drag-drop event. The frontend cannot tell a folder from a file (it has no file-system access), so it calls `start_analysis` with each dropped path in order until one does not fail with `NOT_A_FOLDER`. Dropped files are ignored in H1: if every dropped path is a file, nothing starts and no error is shown. Any other error is shown as usual.
 
@@ -140,7 +140,7 @@ type ExportResult = {     // version 4 (RF-09)
 type AppError = {
   code: 'NO_AUDIO_FOUND' | 'NOT_A_FOLDER' | 'FOLDER_UNREADABLE' | 'ANALYSIS_RUNNING' | 'NOT_ANALYZED' | 'EXPORT_FAILED'
       | 'CACHE_FAILED'                               // version 7 (RF-11): only from clear_cache
-      | 'SETTINGS_WRITE_FAILED' | 'SETTINGS_READ_ONLY' // version 8 (RF-13, not implemented yet): only from set_settings
+      | 'SETTINGS_WRITE_FAILED' | 'SETTINGS_READ_ONLY' // version 8 (RF-13): only from set_settings
       | 'INTERNAL'
   message: string
 }
