@@ -131,7 +131,11 @@ describe('ResultsTable: no matches (@RF-08)', () => {
     setup([], { noMatches: true })
     const user = userEvent.setup()
     const target = screen.getByRole('button', { name: 'Clear filters' })
-    for (let i = 0; i < 20 && document.activeElement !== target; i++) await user.tab()
+    // @RF-06: resizable-widths.md section 2 interleaves focusable handles with sort buttons.
+    // Include the grid's own tab stop and Clear filters, keeping traversal bounded to one pass.
+    const grid = within(screen.getByRole('grid'))
+    const tabStops = 1 + grid.getAllByRole('button').length + grid.queryAllByRole('separator').length
+    for (let i = 0; i < tabStops && document.activeElement !== target; i++) await user.tab()
     expect(document.activeElement).toBe(target)
   })
 

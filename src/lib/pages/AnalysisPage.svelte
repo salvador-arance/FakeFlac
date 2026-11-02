@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { readLayoutWidths, writeLayoutWidths } from '../layout-widths'
+  import type { SortColumn } from '../model'
   import { flushSync, onDestroy, onMount } from 'svelte'
   import type { Language, SettingsError, SettingsLoadStatus, Spectrogram } from '../model'
   import {
@@ -32,6 +34,22 @@
   import { isFilterActive } from '../table-view'
 
   const store = createAnalysisStore()
+  let layoutWidths = $state(readLayoutWidths())
+  function resizeColumn(column: SortColumn, width: number) {
+    layoutWidths = { ...layoutWidths, columns: { ...layoutWidths.columns, [column]: width } }
+  }
+  function saveWidths() { writeLayoutWidths(layoutWidths) }
+  function resetColumn(column: SortColumn) {
+    const columns = { ...layoutWidths.columns }
+    delete columns[column]
+    layoutWidths = { ...layoutWidths, columns }
+    saveWidths()
+  }
+  function resetSidebar() {
+    const { sidebarWidth: _removed, ...remaining } = layoutWidths
+    layoutWidths = remaining
+    saveWidths()
+  }
 
   let isDraggingOver = $state(false)
   let unlistenDragDrop: (() => void) | undefined
@@ -422,6 +440,10 @@
   </div>
 {:else}
   <MainLayout
+    sidebarWidth={layoutWidths.sidebarWidth}
+    onsidebarresize={(width) => { layoutWidths = { ...layoutWidths, sidebarWidth: width } }}
+    onsidebarresizeend={saveWidths}
+    onresetsidebar={resetSidebar}
     detail={showDetail ? detailPanel : undefined}
     sidebar={isEmpty ? undefined : albumsPanel}
     settings={settingsOpen ? settingsPanel : undefined}
@@ -460,6 +482,10 @@
         <FolderDropZone active={isDraggingOver} empty={isEmpty} />
         {#if !isEmpty}
           <ResultsTable
+            columnWidths={layoutWidths.columns}
+            oncolumnresize={resizeColumn}
+            oncolumnresizeend={saveWidths}
+            oncolumnreset={resetColumn}
             rows={store.visibleRows}
             selectedIndex={store.selectedIndex}
             sort={store.sort}

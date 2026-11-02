@@ -41,6 +41,7 @@ export type SortColumn =
   | 'realBitrate'
 
 export type SortState = { column: SortColumn; direction: 'asc' | 'desc' }
+export type LayoutWidths = { sidebarWidth?: number; columns?: Partial<Record<SortColumn, number>> }
 
 /**
  * The table's verdict filter and name search (specs/ui/sort-filter.md section 10, "Model"). UI type,

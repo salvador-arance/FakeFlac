@@ -1,9 +1,16 @@
 <script lang="ts">
+  import { t } from '../../i18n'
+  import { clampSidebarWidth } from '../../layout-widths'
+  import { SIDEBAR_DEFAULT, SIDEBAR_MIN, SIDEBAR_MAX } from '../../tokens/layout'
   import type { Snippet } from 'svelte'
   import type { Attachment } from 'svelte/attachments'
   import Splitter from '../atoms/Splitter.svelte'
 
   type Props = {
+    sidebarWidth?: number
+    onsidebarresize?: (width: number) => void
+    onsidebarresizeend?: () => void
+    onresetsidebar?: () => void
     titleBar: Snippet
     toolbar: Snippet
     table: Snippet
@@ -18,9 +25,41 @@
     settings?: Snippet
   }
 
-  let { titleBar, toolbar, table, detail, sidebar, statusBar, settings }: Props = $props()
+  let { titleBar, toolbar, table, detail, sidebar, statusBar, settings, sidebarWidth = SIDEBAR_DEFAULT, onsidebarresize, onsidebarresizeend, onresetsidebar }: Props = $props()
 
   let modal = $derived(settings !== undefined)
+
+  let contentArea: HTMLElement | undefined = $state()
+  let contentWidth = $state(0)
+  let liveSidebar = $state<number | undefined>()
+  let displayedSidebar = $derived(clampSidebarWidth(liveSidebar ?? sidebarWidth, contentWidth))
+  let sidebarMax = $derived(clampSidebarWidth(SIDEBAR_MAX, contentWidth))
+  $effect(() => {
+    const element = contentArea
+    if (!element) return
+    const measure = () => { contentWidth = element.clientWidth }
+    measure()
+    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure)
+    observer?.observe(element)
+    window.addEventListener('resize', measure)
+    return () => { observer?.disconnect(); window.removeEventListener('resize', measure) }
+  })
+  function resizeSidebar(delta: number) {
+    const next = clampSidebarWidth(displayedSidebar + delta, contentWidth)
+    if (next === displayedSidebar) return
+    liveSidebar = next
+    onsidebarresize?.(next)
+  }
+  function finishSidebar() {
+    if (liveSidebar === undefined) return
+    onsidebarresize?.(clampSidebarWidth(Math.round(displayedSidebar), contentWidth))
+    onsidebarresizeend?.()
+    liveSidebar = undefined
+  }
+  function resetSidebar() {
+    liveSidebar = undefined
+    onresetsidebar?.()
+  }
 
   // Sets the `inert` attribute itself (not only the property), so it also holds where the DOM does
   // not implement the property.
@@ -86,11 +125,15 @@
     <div class="layout-toolbar" {@attach inertWhile(modal)}>
       {@render toolbar()}
     </div>
-    <main class="layout-content" {@attach inertWhile(modal)}>
+    <main bind:this={contentArea} class="layout-content" {@attach inertWhile(modal)}>
       {#if sidebar}
-        <aside class="layout-sidebar">
+        <aside class="layout-sidebar" style:--sidebar-width="{displayedSidebar}px">
           {@render sidebar()}
         </aside>
+        <Splitter orientation="vertical" variant="panel" label={t('layout.resizeAlbums')}
+          description={t('layout.resizeHelp')} value={displayedSidebar} min={SIDEBAR_MIN} max={sidebarMax}
+          valueText={t('layout.widthPixels', { width: Math.round(displayedSidebar) })}
+          onresize={resizeSidebar} onresizeend={finishSidebar} onreset={resetSidebar} />
       {/if}
       <div class="layout-main" bind:this={content}>
         <div class="layout-table">

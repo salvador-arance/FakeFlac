@@ -40,7 +40,7 @@ describe('ResultsTable: structure', () => {
   it('is a grid with the ten columns and no data rows when empty', () => {
     setup([])
     expect(screen.getByRole('grid')).not.toBeNull()
-    expect(screen.getAllByRole('columnheader').map((h) => h.textContent?.trim())).toEqual([
+    expect(screen.getAllByRole('columnheader').map((h) => within(h).getByRole('button').textContent?.trim())).toEqual([
       'State',
       'File',
       'Folder',
@@ -319,11 +319,11 @@ describe('ResultsTable: lossy columns (specs/ui/lossy-formats.md)', () => {
   })
 
   // @RF-06 @RF-15 Scenario: The Real bitrate column explains the estimate
-  it('gives the Real bitrate header its tooltip and no other header has one', () => {
+  it('keeps the Real bitrate help alongside full-label hover text for resizable headers', () => {
     setup([])
     const headers = screen.getAllByRole('columnheader')
-    expect(headers[REAL].getAttribute('title')).toBe(REAL_BITRATE_HELP)
-    expect(headers.filter((_, i) => i !== REAL).some((h) => h.hasAttribute('title'))).toBe(false)
+    expect(headers[REAL].getAttribute('title')).toContain(REAL_BITRATE_HELP)
+    for (const header of headers) expect(header.getAttribute('title')).toContain(within(header).getByRole('button').textContent?.trim())
   })
 
   // @RF-14 @RF-06 Scenario: A lossy row has the same fields as a lossless row (table side)

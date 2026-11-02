@@ -12,12 +12,81 @@
 **Pending**
 - G1 for P-Q1 (Windows 10/11 x64 × NSIS/MSI matrix), U-Q1 (bilingual owner walkthrough), U-Q2 (4.5:1 verdict text in normal/hovered/selected rows).
 - The owner can test both Windows versions this session; all four installed-app matrix rows still need results. Historical Sandbox acceptance does not establish both OS builds.
+- Feature PR #115 (resizable layout) is merged; this branch now includes `main`, and the only conflict was this file.
 - After G1 approval and merge: independent tests and implementation for RNF-08 contrast, then visual/comprehension acceptance. No production code or executable tests changed in this proposal.
 
 **Blockers / questions for the human**
 - Neither requirement is verified yet. Human G1 approval and platform/runtime observations are outstanding.
 
 **Next step:** review and merge the combined spec PR at G1, then execute its closure checks and the focused RNF-08 correction.
+
+## 2026-11-02 - Resizable Albums panel and result columns implemented
+
+**Done**
+- Built approved #113/#114 on `feat/RF-06-RF-10-resizing`, feature PR [#115](https://github.com/salvador-arance/FakeFlac/pull/115): test commit `dba2df1`, explicit test-stage corrections `5be122c` (approved searchbox role) and `990682c` (new Tab stops); production `8356e1d`, keyboard-help clipping fix `e700098`, representative story frames `d816d65`. No spec behavior, backend, dependency or architecture decision changed.
+- Sidebar and all ten columns resize by pointer or keyboard, preserve independent widths and horizontal overflow, reset individually with double-click/Enter, and remember committed local layout preferences. Storage recovery does not affect analysis; language settings and the existing detail-height preference remain separate.
+- Frontend: 1,405 passing tests, zero type errors/warnings; Svelte autofixer clean. `just check`, `just ci`, `just build`, `just release-assets` and Storybook build passed. Independent code review and story follow-up: no blocking findings. Required story mutation checks fail for raw zero-height/unbounded examples and pass with their frames.
+- M1 on real Edge with the actual page and a synthetic API: 36 combinations of window size, language, row count and width mode pass pointer resizing, alignment, neighbor stability, persistence and long-table reveal. Native keys/double-click, rendered reload restoration, sorting, full keyboard help and modal interruption pass. Evidence in ignored `target/resizing-{qa-results,extras}.json`, screenshots and `target/story-{frames-geometry,frame-mutation}.json`; production candidate `e700098`.
+- Local `target/resizable-layout-test-pack.zip` contains source `e700098` installers (version 0.1.0; distinct from the published release), SHA256SUMS.txt, instructions and synthetic audio. NSIS: 2,879,459 bytes; MSI: 4,661,248 bytes. No agent installation or publication was performed.
+
+**Pending**
+- Human G2 review/merge of the feature PR; GitHub's checks are separate from the green local `just ci` run.
+- RNF-07/08 and PR #111 remain separate and pending, including the verdict-text contrast correction; this feature does not mark them verified.
+
+**Blockers / questions for the human**
+- No technical blocker; human G2 merge remains required.
+
+**Next step:** review and merge the resizing feature after its checks pass.
+
+## 2026-11-02 - Resizable layout approved and merged at G1
+
+**Done**
+- The owner approved R-Q1–R-Q3 in chat and merged spec PR #113 (`ad47005`). The sidebar/column resizing extension of RF-06/RF-10 is approved; its implementation remains pending.
+- Status-only handoff on `docs/resizing-spec-handoff`: approved metadata and references now reflect G1 in the UI/local-preference specs, requirement links, catalogue supplement and traceability. No behavior, scenario, production code or executable test changed.
+
+**Pending**
+- `/feature RF-06/RF-10` for resizable widths: independent test stage, Svelte implementation, review, rendered M1 and `just ci` before G2.
+- RNF-07/08 PR #111 and remaining acceptance are separate; header fix #112 is merged.
+
+**Blockers / questions for the human**
+- None for the resizing feature; its G1 is complete.
+
+**Next step:** build the approved resizable layout on a feature branch.
+
+## 2026-11-02 - Header fix merged; resizable layout proposed
+
+**Done**
+- The owner merged header-fix PR #112 into `main` (`8b24925`), confirmed via GitHub. The new spec branch includes that merge; its header-height correction must be preserved.
+- Branch `spec/RF-06-RF-10-resizing`, PR [#113](https://github.com/salvador-arance/FakeFlac/pull/113): drafted the requested draggable Albums panel and all ten result-column widths as a proposed extension of RF-06/RF-10. Covers independent widths, bounds, mouse/keyboard operation, per-target reset, local layout persistence and invalid/unavailable storage recovery. The fixed-240px decision in RF-10 is explicitly proposed for amendment; no backend settings/command, production code, dependency or executable test changed. Independent review: no blocking findings; its displayed-width baseline clarification was incorporated.
+- `just check` passed (1,295 frontend tests). Local Edge/Segoe UI measurements and width arithmetic informed the proposed limits and constrained-header policy; these are design measurements, not validation of implemented resizing. Future rendered acceptance remains explicit.
+
+**Pending**
+- Human G1 approval/merge of the resize proposal before the test/implementation/review cycle.
+- RNF-07/08 spec PR #111 and their remaining acceptance, including verdict-text contrast, are still separate and pending. Header-fix G2 is complete.
+
+**Blockers / questions for the human**
+- G1 decisions: sidebar plus every column; remember/reset local widths; proposed bounds and independent-column/default-width rules.
+
+**Next step:** approve and merge the resizing specification at G1, then implement its protected tests and UI changes.
+
+## 2026-11-02 - Correct translated table header overlap; clarify empty-folder acceptance
+
+**Done**
+- The owner reported that a post-analysis empty-folder attempt kept previous rows and that Spanish table headers overlapped the first data row. Native UI inspection reproduced the overlap and confirmed that the localized no-audio status text was visible at the bottom left. Keeping previous rows is the approved RF-09 failed-start behavior (`ui/export-csv.md` section 3); the contradictory instruction in our RNF-07 proposal and local test pack was wrong.
+- Corrected the proposed acceptance and observations separately in spec PR [#111](https://github.com/salvador-arance/FakeFlac/pull/111), commit `2f6f1b3`; the local test-pack README/ZIP now matches the approved failed-start behavior. G1 remains pending.
+- Bugfix branch `fix/results-table-header`, PR [#112](https://github.com/salvador-arance/FakeFlac/pull/112), production commit `9eb67f1`: the header reserves natural translated-label height, and the header/body flex items do not shrink. Data rows remain 22px; no analysis/error logic, protected tests, approved specs, dependencies or architecture changed. Independent review: no blocking findings.
+- Baseline `just check`, focused ResultsTable/ColumnHeader tests (110), `npm run check`, Svelte autofixer and post-change `just ci` passed. A local Edge/CDP harness renders the actual Svelte component: 12 combinations (English/Spanish, 900×500/1280×500, 0/3/1,000 rows) pass header-text containment, first-row separation, row-height and scrolling checks. All four long-table cases pass sticky-header and End/Home selection visibility. The original component from `main` fails Spanish label containment in the same harness. Evidence is ignored `target/header-{before,after}.{json,png}`; no browser dependency was added. jsdom cannot validate rendered geometry, so no source-mirroring CSS tests were introduced.
+
+- `just build` and `just release-assets` passed for production source `9eb67f1`. Local `target/rnf-07-header-fix.zip` contains rebuilt NSIS/MSI, SHA256SUMS.txt, synthetic fixtures and corrected instructions; the earlier test pack remains available separately. This candidate includes the header fix and does not include the pending verdict-contrast change.
+
+**Pending**
+- Human G2 review/merge of the header correction and installed-app confirmation of the rebuilt candidate.
+- G1 for RNF-07/08 in #111; RNF-08 verdict-text contrast correction and bilingual comprehension remain pending. The owner's general report of completed checks does not identify each OS build/installer/candidate hash, so the platform matrix is not recorded as fully verified.
+
+**Blockers / questions for the human**
+- No blocker for the header fix. Neither RNF-07 nor RNF-08 is marked verified.
+
+**Next step:** review and merge the header-fix PR at G2, then resume #111 and its remaining acceptance.
 
 ## 2026-11-02 - RF-13 merged; status wording updated
 

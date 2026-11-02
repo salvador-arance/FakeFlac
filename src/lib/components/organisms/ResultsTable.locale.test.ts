@@ -19,7 +19,7 @@ const dataRows = () =>
   screen.queryAllByRole('row').filter((row) => within(row).queryAllByRole('gridcell').length > 0)
 const cells = (row: HTMLElement) => within(row).getAllByRole('gridcell')
 const fileColumn = () => dataRows().map((row) => cells(row)[1].textContent?.trim())
-const headers = () => screen.getAllByRole('columnheader').map((h) => h.textContent?.trim())
+const headers = () => screen.getAllByRole('columnheader').map((h) => within(h).getByRole('button').textContent?.trim())
 
 function setup(rows: ResultRow[], extra: Record<string, unknown> = {}) {
   const onselect = vi.fn()
@@ -76,7 +76,7 @@ describe('ResultsTable: Spanish (@RF-13)', () => {
     setup([])
     expect(headers()).toEqual(SPANISH_HEADERS)
     const help = screen.getAllByRole('columnheader')[9]
-    expect(help.getAttribute('title')).toBe(HELP_ES)
+    expect(help.getAttribute('title')).toContain(HELP_ES)
   })
 
   it('translates verdicts, reasons, the error tooltip and full band; data unchanged', () => {
