@@ -7,7 +7,9 @@ status: approved
 # Windows platform acceptance (RNF-07)
 
 RNF-07 supports Windows 10 and Windows 11 on x64. This proposal makes the
-existing platform commitment verifiable. It adds no command, event, DTO, installer
+existing platform commitment verifiable. Amendment (owner decision, 2026-11-02): runtime
+closure is verified on Windows 11 x64 only; Windows 10 remains a stated target that this
+acceptance does not verify. It adds no command, event, DTO, installer
 format or dependency. `commands.md` remains version 8; release packaging and
 WebView2 provisioning remain those of `release.md` (D1–D4, M3, M5, M6).
 Scenarios: `../features/windows-platform.feature`.
@@ -20,7 +22,7 @@ Scenarios: `../features/windows-platform.feature`.
   packaging configuration; a successful build alone does not establish runtime
   compatibility on either client OS.
 - **P2, manual compatibility matrix:** test the same candidate's NSIS and MSI
-  separately on Windows 10 x64 and Windows 11 x64 (four rows). Start each row
+  separately on Windows 11 x64 (two rows; Windows 10 is not part of the closure matrix by owner decision). Start each row
   without an installed FakeFlac, install, launch from Start, analyse the small
   fixture folder below, close the app and uninstall. Every step must succeed.
   This reuses release M3/M5/M6; it does not require publishing a release or a tag.
@@ -92,13 +94,17 @@ passed from this report alone.
 
 | OS | Installer | Install / Start launch / P3 / uninstall | Candidate and OS evidence |
 |---|---|---|---|
-| Windows 10 x64 | NSIS | Pending | Pending |
-| Windows 10 x64 | MSI | Pending | Pending |
-| Windows 11 x64 | NSIS | Pending | Pending |
-| Windows 11 x64 | MSI | Pending | Pending |
+| Windows 11 x64 | NSIS | Passed (owner report) | 2026-11-02, Windows 11 26H2 build 26300.9711 x64, virtual machine; installers from `npm run tauri build` on production source `235b07d` (branch `feat/RNF-08`, version 0.1.0) |
+| Windows 11 x64 | MSI | Passed (owner report) | Same OS and candidate as above |
 
-RNF-07 can be recorded as verified only after P1 passing and all
-four matrix rows passing with P4 evidence. A failed row leaves it pending.
+Owner report (2026-11-02): install, launch, analysis and uninstall succeeded for NSIS and
+MSI on Windows 11. The audio used was the synthetic fixture pack
+(`rnf-07-fixtures`: a valid WAV, a corrupt FLAC, a valid WAV with a Unicode name and an
+empty folder), with the whole result reported as OK and not itemised per case. WebView2 Runtime
+156.0.4314.58 (owner report). The owner checked each installer's SHA-256 against the build
+and reported a match; the hash values were not recorded. Windows 10 is outside the amended closure matrix.
+
+Result (2026-11-02): both Windows 11 rows passed with P4 evidence as above (hash values not recorded, match reported by the owner), so RNF-07 is recorded as verified for the amended closure matrix. Windows 10 is not verified. Closure required P1 passing and both matrix rows passing with P4 evidence. A failed row leaves it pending.
 
 ## G1 decision
 
@@ -106,3 +112,5 @@ four matrix rows passing with P4 evidence. A failed row leaves it pending.
 closure criterion? Recommended: yes, reusing the released installer formats and
 the existing analysis/error behavior. Adding a CI launch smoke test is deferred;
 it would not replace either client OS run.
+
+**P-Q1 amendment (approved by the owner, 2026-11-02):** reduce the closure matrix to the two Windows 11 x64 rows (NSIS and MSI). Windows 10 is not tested; this narrows the verified claim, it does not remove Windows 10 from the supported targets.
