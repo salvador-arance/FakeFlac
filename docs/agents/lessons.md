@@ -2,6 +2,12 @@
 
 > Agent mistakes that repeat (>= 2 times) are fixed in the harness (rule, hook, lint or skill), not only in the code (RP-10). One entry per mistake: what happened, what the harness now does about it.
 
+## UI tests guessed roles and retained an obsolete Tab bound (2026-11-02, RF-06/RF-10)
+
+- **What happened:** the new resize regression queried the existing search field as `textbox`, although its approved role is `searchbox`. An older reachability test capped traversal at 20 Tabs; adding ten approved resize handles moves Clear filters to the 22nd stop. Both required implementation to stop and return to a fresh test author. A red run before implementation did not expose the old bound because the new controls did not exist yet.
+- **Harness mechanism used:** protected-test separation remained enforced. Corrections `5be122c` and `990682c` were explicit test-stage commits derived from the existing role and approved focus order; production was not changed to satisfy incorrect tests. No agent configuration change was introduced. Future test-stage review should compare roles and planned focus stops against their UI contracts, including existing tests that still pass before new controls exist.
+- **Rendered fixtures:** new Splitter/ColumnHeader stories also needed representative containing blocks; prop/ARIA values alone did not establish rendered size. Storybook build, eight real-browser geometry checks and raw-component/frame mutation comparisons verified the corrected examples.
+
 ## ADR status left as `proposed` after G1 (2026-10-18)
 
 - **What happened:** ADRs 0033–0038 were approved at G1 (their spec PRs were merged), but their status stayed `proposed` in each ADR and in `docs/adr/README.md`. Docs then said things were "pending until ADR-xxxx is accepted" when they already were. The traceability matrix also kept "UI pending" for RF-01, RF-05 and RF-06 after their UI and tests shipped in #27.

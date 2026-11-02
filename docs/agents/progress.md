@@ -2,6 +2,24 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-02 - Resizable Albums panel and result columns implemented
+
+**Done**
+- Built approved #113/#114 on `feat/RF-06-RF-10-resizing`: test commit `dba2df1`, explicit test-stage corrections `5be122c` (approved searchbox role) and `990682c` (new Tab stops); production `8356e1d`, keyboard-help clipping fix `e700098`, representative story frames `d816d65`. No spec behavior, backend, dependency or architecture decision changed.
+- Sidebar and all ten columns resize by pointer or keyboard, preserve independent widths and horizontal overflow, reset individually with double-click/Enter, and remember committed local layout preferences. Storage recovery does not affect analysis; language settings and the existing detail-height preference remain separate.
+- Frontend: 1,405 passing tests, zero type errors/warnings; Svelte autofixer clean. `just check`, `just ci`, `just build`, `just release-assets` and Storybook build passed. Independent code review and story follow-up: no blocking findings. Required story mutation checks fail for raw zero-height/unbounded examples and pass with their frames.
+- M1 on real Edge with the actual page and a synthetic API: 36 combinations of window size, language, row count and width mode pass pointer resizing, alignment, neighbor stability, persistence and long-table reveal. Native keys/double-click, rendered reload restoration, sorting, full keyboard help and modal interruption pass. Evidence in ignored `target/resizing-{qa-results,extras}.json`, screenshots and `target/story-{frames-geometry,frame-mutation}.json`; production candidate `e700098`.
+- Local `target/resizable-layout-test-pack.zip` contains source `e700098` installers (version 0.1.0; distinct from the published release), SHA256SUMS.txt, instructions and synthetic audio. NSIS: 2,879,459 bytes; MSI: 4,661,248 bytes. No agent installation or publication was performed.
+
+**Pending**
+- Human G2 review/merge of the feature PR; GitHub's checks are separate from the green local `just ci` run.
+- RNF-07/08 and PR #111 remain separate and pending, including the verdict-text contrast correction; this feature does not mark them verified.
+
+**Blockers / questions for the human**
+- No technical blocker; human G2 merge remains required.
+
+**Next step:** review and merge the resizing feature after its checks pass.
+
 ## 2026-11-02 - Resizable layout approved and merged at G1
 
 **Done**
