@@ -2,6 +2,32 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-02 - RP-11 merged; checklist L5 passed
+
+**Done**
+- The owner merged #123 (`feb4348`). `just prune-branches` deleted the four merged RP-11 branches. It kept `docs/release-0.2.0-record`, which has commits after #119 was merged.
+- L5 (calibration.md checklist) passed. Run `20261102T170123Z`: `just calibrate` with the defaults (grid v3, baseline v8), tool commit `feb4348`. Figures from `summary.md`:
+  - Grid search:
+    - The baseline has cost 154.100 and is feasible.
+    - `- cost excludes the positives of the settings [v0, aac256]` is present.
+    - `- must_catch Real at baseline: 1` (the `cbr128` transcode v8 misses).
+    - All 27 points were evaluated, with 0 skipped. Result: "no change proposed", and no file was written.
+  - Best-points table:
+    - It starts with the `baseline` row. `must_catch lost` and `confirmed lost` are 0 on every row.
+    - The 9 points that only move `full_band.*` cost exactly the baseline's 154.100. `verdict.gap_fake_db` 6.5 costs 154.500. So the `full_band` values make no difference on this corpus.
+  - Confirmed fakes checked by the feasibility constraint: 15, none `Real`, 0 in holdout.
+  - Primary figure with v8: 0/66 tracks (95 % CI 0.0–5.5 %), 0/5 albums. On holdout (headline): 0/23 tracks (95 % CI 0.0–14.3 %), 0/2 albums. Targets: T1 PASS (0), T2 FAIL (5), T3 FAIL (8).
+  - `git status` was clean after the run.
+
+**Pending**
+- Owner's choice: `docs/release-0.2.0-record` (unmerged commits after #119).
+- Still open from the RP-11 spec block: the `cbr128` transcode v8 misses (rules.md Q10 alternatives), rules.md Q9 (T2/T3 and undetectable transcodes), and no confirmed fakes in `holdout`.
+
+**Blockers / questions for the human**
+- None.
+
+**Next step:** the owner picks the next work. Options: a detection spec for the `cbr128` miss and Q9 (T2/T3 fail), or one of the draft RNFs (RNF-02, RNF-03, RNF-10).
+
 ## 2026-11-02 - RP-11 implemented: calibration against the shipped detection v8
 
 **Done**
