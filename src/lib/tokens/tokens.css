@@ -5,6 +5,7 @@
 :root {
   --sidebar-separator-width: 4px;
   --column-resize-width: 6px;
+  --header-tooltip-width: 280px;
   --resize-boundary-width: 1px;
   color-scheme: dark;
 

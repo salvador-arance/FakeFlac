@@ -18,6 +18,43 @@
 
   const tooltipId = $props.id()
 
+  // A viewport-positioned bubble escapes the table's scroll clipping. Measure only
+  // while focused, including ancestor resizes that move this header without resizing it.
+  function anchorTooltip(button: HTMLButtonElement) {
+    let stopTracking: (() => void) | undefined
+    function updatePosition() {
+      const bounds = button.getBoundingClientRect()
+      button.style.setProperty('--tooltip-top', `${bounds.bottom}px`)
+      button.style.setProperty('--tooltip-right', `${window.innerWidth - bounds.right}px`)
+    }
+    function stop() {
+      stopTracking?.()
+      stopTracking = undefined
+    }
+    function start() {
+      stop()
+      updatePosition()
+      window.addEventListener('scroll', updatePosition, true)
+      window.addEventListener('resize', updatePosition)
+      const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(updatePosition)
+      for (let element: HTMLElement | null = button; element; element = element.parentElement) {
+        observer?.observe(element)
+      }
+      stopTracking = () => {
+        window.removeEventListener('scroll', updatePosition, true)
+        window.removeEventListener('resize', updatePosition)
+        observer?.disconnect()
+      }
+    }
+    button.addEventListener('focus', start)
+    button.addEventListener('blur', stop)
+    return () => {
+      stop()
+      button.removeEventListener('focus', start)
+      button.removeEventListener('blur', stop)
+    }
+  }
+
   let ariaSort: 'none' | 'ascending' | 'descending' = $derived(
     sort === 'asc' ? 'ascending' : sort === 'desc' ? 'descending' : 'none',
   )
@@ -26,8 +63,9 @@
 <!-- The tooltip: `title` on hover; on keyboard focus a CSS bubble drawn from `data-tooltip` (a
      pseudo-element). The button's accessible description is a hidden sibling, so the header's text
      content is unchanged; being `hidden`, it takes no cell of the parent grid. -->
-<div class="column-header" class:resizable={!!resize} role="columnheader" aria-sort={ariaSort} title={resize ? (tooltip ? `${label}: ${tooltip}` : label) : tooltip}>
+<div class={['column-header', { resizable: !!resize }]} role="columnheader" aria-sort={ariaSort} title={resize ? (tooltip ? `${label}: ${tooltip}` : label) : tooltip}>
   <button
+    {@attach tooltip ? anchorTooltip : undefined}
     type="button"
     class="header-button"
     onclick={onsort}
@@ -95,16 +133,17 @@
     color: var(--color-text);
   }
 
-  /* Right-aligned: the only header with a tooltip (Real bitrate) is the last column. */
+  /* Anchor to the button, but stay inside the viewport even at a scrolled edge. */
   .header-button[data-tooltip]:focus-visible::after {
     /* Empty alt text: the tooltip is already the button's description (aria-describedby). */
     content: attr(data-tooltip) / "";
-    position: absolute;
-    top: 100%;
-    right: 0;
+    position: fixed;
+    top: var(--tooltip-top);
+    right: clamp(var(--space-1), var(--tooltip-right), calc(100vw - var(--header-tooltip-width) - var(--space-1)));
     z-index: 20;
     width: max-content;
-    max-width: 280px;
+    max-width: min(var(--header-tooltip-width), calc(100vw - 2 * var(--space-1)));
+    box-sizing: border-box;
     margin-top: var(--space-1);
     padding: var(--space-1) var(--space-2);
     background: var(--color-surface-raised);
