@@ -52,4 +52,4 @@
 ## Vitest "failed to find the runner" from a lower-case drive (2026-11-02, RF-13)
 
 - **What happened (three agents in one feature):** after `cd /c/Workspaces/FakeFlac` in Git Bash, `npm run test` or `npx vitest` failed on every file ("Vitest failed to find the runner", "no tests"); `npx svelte-check` also reported a missing `esrap`. The working directory resolved to `c:` and modules loaded twice under `c:` and `C:`. The test author, the orchestrator and the reviewer each lost time on it; the reviewer could not verify the frontend. `just check` is not affected. Separately, the test author's `python -` fallback hit the Windows Store `python.exe` stub and hung for 7 hours.
-- **Harness fix:** pending owner decision. Proposal: a line in `CLAUDE.md` (Commands) telling agents to `cd "C:/Workspaces/FakeFlac"` (upper-case drive) before running Vitest directly, or to use `just test`; and not to rely on `python` in shell commands (use `node`). Until then, orchestrator briefs carry the hint.
+- **Harness fix:** none. The owner declined the proposed `CLAUDE.md` rule on 2026-11-02; orchestrators may still pass the hint in agent briefs.

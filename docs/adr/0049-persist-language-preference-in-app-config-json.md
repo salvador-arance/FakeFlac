@@ -32,7 +32,7 @@ Keep this small application preference adapter in `src-tauri`. JSON storage uses
 
 The app gains one small configuration file, independent from music and result-cache storage. Failed reads and writes have explicit, testable recovery behavior. Observed unsupported future schemas are protected, subject to the stated cross-process limitation. The first supported Windows preference selects the initial language when no file exists; English remains the fallback. Both catalogues must be complete for the specified application UI. Installer and Windows-owned dialog language remain governed by existing release and dialog specifications.
 
-The owner approved Q1-Q4, including this persistence behavior and its concurrency limitation, in chat on 2026-11-01 ("de acuerdo"). The owner merged the specification PR (#107) on 2026-11-01, which accepts this ADR. The feature itself is not implemented yet (`/feature RF-13`).
+The owner approved Q1-Q4, including this persistence behavior and its concurrency limitation, in chat on 2026-11-01 ("de acuerdo"). The owner merged the specification PR (#107) on 2026-11-01, which accepts this ADR. The feature was implemented in #109 (merged 2026-11-02).
 
 ## Amendment (2026-11-02): Windows language source
 

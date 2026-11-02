@@ -6,7 +6,7 @@ status: approved
 
 # Language settings (RF-13, contract version 8)
 
-Approved at G1 (#107, merged 2026-11-01); not implemented yet. The owner selected Spanish/English with a persistent preference in
+Approved at G1 (#107, merged 2026-11-01); implemented in #109 (merged 2026-11-02). The owner selected Spanish/English with a persistent preference in
 chat on 2026-11-01. The Settings object is limited to language. Historical proposals for
 sampling controls, editable DetectionParams and cache controls require a separate spec.
 Architecture decision: ADR-0049. UI: `../ui/language-settings.md`.
@@ -22,8 +22,8 @@ Architecture decision: ADR-0049. UI: `../ui/language-settings.md`.
 
 The owner approved these four recommendations in chat ("de acuerdo") on 2026-11-01,
 including the Q1 change from unconditional English and the Q3 concurrency clarification.
-This records decision approval; PR #107 still requires human review and merge before
-`/feature RF-13`. No production behavior is implemented by this specification PR.
+This recorded decision approval; the owner then merged PR #107 (G1) and the feature PR #109
+(G2).
 
 ## 2. Commands and types
 
