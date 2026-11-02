@@ -19,6 +19,20 @@ export const Empty: Story = {
   },
 }
 
+// @RF-06 resizable-widths.md: independent overrides, limits and no-match headers.
+export const WidthOverrides: Story = {
+  args: { rows: makeManyRows(1000), selectedIndex: 0, sort: { column: 'file', direction: 'asc' }, columnWidths: { file: 230, folder: 310 } } as unknown as Story['args'],
+}
+export const MinimumWidths: Story = {
+  args: { rows: makeManyRows(3), selectedIndex: null, sort: { column: 'bitDepth', direction: 'asc' }, columnWidths: { state: 120, file: 100, folder: 100, format: 70, sampleRate: 80, bitDepth: 50, duration: 70, cutoff: 90, bitrate: 110, realBitrate: 100 } } as unknown as Story['args'],
+}
+export const MaximumWidths: Story = {
+  args: { rows: makeManyRows(3), selectedIndex: null, sort: { column: 'file', direction: 'asc' }, columnWidths: { file: 800, folder: 800 } } as unknown as Story['args'],
+}
+export const EmptyWithSavedWidths: Story = {
+  args: { rows: [], selectedIndex: null, sort: { column: 'file', direction: 'asc' }, columnWidths: { file: 230 }, noMatches: true } as unknown as Story['args'],
+}
+
 export const WithRows: Story = {
   args: {
     rows: makeManyRows(10),

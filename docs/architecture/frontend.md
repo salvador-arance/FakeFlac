@@ -69,3 +69,24 @@ Not in v1 (the reference has them): Silence seconds, Clipping %, Max clipping, C
 ## Table performance
 
 Row virtualisation for folders with thousands of tracks; sorting and filtering on the client over the store. Rows are inserted in batches (at most once every 100 ms) so the UI stays responsive during analysis.
+
+## Resizable layout (RF-06 / RF-10)
+
+`AnalysisPage` owns the preferred Albums width and explicit column-width overrides.
+`layout-widths.ts` normalizes the version-1 `fakeflac.layout.widths` localStorage
+record; unavailable or invalid storage falls back to usable in-memory defaults.
+This follows the existing local layout preference pattern and is independent of
+the backend's language-only settings. The existing detail-height key is unchanged.
+
+`MainLayout` clamps the displayed sidebar width to the available content area.
+`ResultsTable` computes responsive defaults independently of overrides and shares
+the same pixel tracks between headers and virtualized rows. Dragging a column
+does not squeeze its neighbors; horizontal overflow remains scrollable. Sizes and
+bounds live in `tokens/layout.ts` and CSS tokens. The vertical `Splitter` emits
+incremental pointer/keyboard changes and completion/reset events; the page saves
+only committed preferences. Double-click or Enter resets one target. Active
+gestures finish on pointer cancellation, window blur or an inert settings modal.
+
+Contracts and acceptance: `specs/ui/resizable-widths.md`,
+`specs/contracts/layout-widths.md`. Keyboard header help uses a viewport-positioned
+bubble so the table's scroll clipping does not cut its text.

@@ -15,13 +15,16 @@
 //   `$1`) and a value that itself looks like a placeholder.
 import { afterEach, describe, expect, it } from 'vitest'
 import translations from '../../../specs/ui/translations.md?raw'
+import resizeSpec from '../../../specs/ui/resizable-widths.md?raw'
 import { getLocale, setLocale, t } from './index'
 
 afterEach(() => setLocale('en'))
 
 type Row = { key: string; en: string; es: string }
 
-const ROWS: Row[] = translations
+// @RF-06 @RF-10 approved supplement: resizable-widths.md section 4.
+const catalogue = translations + '\n' + resizeSpec.split('## 4. Exact new translations')[1].split('## 5. Acceptance')[0]
+const ROWS: Row[] = catalogue
   .split(/\r?\n/)
   .map((line) => line.match(/^\|\s*`([^`]+)`\s*\|(.*)\|(.*)\|\s*$/))
   .filter((m): m is RegExpMatchArray => m !== null)
@@ -46,6 +49,10 @@ describe('the normative tables of translations.md', () => {
       'column.state',
       'albums.errorsOne',
       'status.exportedOne',
+      'layout.resizeAlbums',
+      'layout.resizeColumn',
+      'layout.resizeHelp',
+      'layout.widthPixels',
     ]) {
       expect(keys).toContain(key)
     }
