@@ -2,6 +2,25 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-02 - Correct translated table header overlap; clarify empty-folder acceptance
+
+**Done**
+- The owner reported that a post-analysis empty-folder attempt kept previous rows and that Spanish table headers overlapped the first data row. Native UI inspection reproduced the overlap and confirmed that the localized no-audio status text was visible at the bottom left. Keeping previous rows is the approved RF-09 failed-start behavior (`ui/export-csv.md` section 3); the contradictory instruction in our RNF-07 proposal and local test pack was wrong.
+- Corrected the proposed acceptance and observations separately in spec PR [#111](https://github.com/salvador-arance/FakeFlac/pull/111), commit `2f6f1b3`; the local test-pack README/ZIP now matches the approved failed-start behavior. G1 remains pending.
+- Bugfix branch `fix/results-table-header`, PR [#112](https://github.com/salvador-arance/FakeFlac/pull/112), production commit `9eb67f1`: the header reserves natural translated-label height, and the header/body flex items do not shrink. Data rows remain 22px; no analysis/error logic, protected tests, approved specs, dependencies or architecture changed. Independent review: no blocking findings.
+- Baseline `just check`, focused ResultsTable/ColumnHeader tests (110), `npm run check`, Svelte autofixer and post-change `just ci` passed. A local Edge/CDP harness renders the actual Svelte component: 12 combinations (English/Spanish, 900×500/1280×500, 0/3/1,000 rows) pass header-text containment, first-row separation, row-height and scrolling checks. All four long-table cases pass sticky-header and End/Home selection visibility. The original component from `main` fails Spanish label containment in the same harness. Evidence is ignored `target/header-{before,after}.{json,png}`; no browser dependency was added. jsdom cannot validate rendered geometry, so no source-mirroring CSS tests were introduced.
+
+- `just build` and `just release-assets` passed for production source `9eb67f1`. Local `target/rnf-07-header-fix.zip` contains rebuilt NSIS/MSI, SHA256SUMS.txt, synthetic fixtures and corrected instructions; the earlier test pack remains available separately. This candidate includes the header fix and does not include the pending verdict-contrast change.
+
+**Pending**
+- Human G2 review/merge of the header correction and installed-app confirmation of the rebuilt candidate.
+- G1 for RNF-07/08 in #111; RNF-08 verdict-text contrast correction and bilingual comprehension remain pending. The owner's general report of completed checks does not identify each OS build/installer/candidate hash, so the platform matrix is not recorded as fully verified.
+
+**Blockers / questions for the human**
+- No blocker for the header fix. Neither RNF-07 nor RNF-08 is marked verified.
+
+**Next step:** review and merge the header-fix PR at G2, then resume #111 and its remaining acceptance.
+
 ## 2026-11-02 - RF-13 merged; status wording updated
 
 **Done**
