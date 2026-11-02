@@ -30,6 +30,21 @@ Feature: Understand verdicts without documentation
       | hovered  |
       | selected |
 
+  @RF-06 @RF-13
+  Scenario Outline: Headers and data remain separate in both interface languages
+    Given a rendered table in "<language>" at a window size of 900 by 500
+    When I inspect an empty table and then a short populated table at the top
+    Then header labels remain within the header area whenever the header is shown
+    And the first data row begins below the header without overlapping text
+    When I scroll a long populated table down and then return to the top
+    Then no data text paints over the sticky header while scrolling
+    And the first data row is fully visible below the header at the top
+
+    Examples:
+      | language |
+      | en       |
+      | es       |
+
   @RF-07 @RNF-04 @RNF-09
   Scenario: Doubt and failure have explanations in the selected language
     Given each supported interface language

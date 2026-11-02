@@ -28,9 +28,15 @@ Scenarios: `../features/windows-platform.feature`.
   a deliberately corrupt supported audio file, and a valid file with a Unicode
   name. Each valid file completes with a non-error verdict (`real`, `suspicious`
   or `fake`) and no track error. The corrupt file produces an Error row and the
-  run finishes without aborting. A second run on a folder with no supported
-  audio shows the existing `NO_AUDIO_FOUND` message and no rows. Record whether
-  all four conditions pass; detection accuracy remains covered by its own specs.
+  run finishes without aborting. Next, attempt a folder with no supported audio:
+  the status bar shows the localized `NO_AUDIO_FOUND` message and keeps the
+  previous rows, selection and albums; Export CSV stays enabled for those rows.
+  This is the existing failed-start behavior in `../ui/export-csv.md` section 3,
+  `../ui/main-screen.md` (Error state) and `../ui/album-summary.md` (Error state).
+  Also try the empty folder before any successful analysis in a fresh app
+  session: the same message is shown, the table has no rows and Export CSV is
+  disabled. Record each outcome; detection accuracy remains covered by its own
+  specs.
 - **P4, evidence:** record date, OS edition/build/x64, app version and source
   commit, artifact name and SHA-256, WebView2 version, installer type and each
   result. Record failures explicitly. Never commit personal audio names or
@@ -68,6 +74,21 @@ The 2026-10-31 progress block records v0.1.0 release M3–M6 passing in Windows
 Sandbox; `docs/planning/comprobaciones-manuales.md` records those steps too.
 Neither identifies both client OS builds, so it cannot fill both OS rows.
 P2–P4 for the candidate selected for RNF-07 remain pending until recorded:
+
+On 2026-11-02 the owner reported completing the checks, but observed that the
+empty-folder attempt after an analysis retained the previous rows and did not
+show the no-supported-audio message. Retaining rows matches the approved
+failed-start behavior; the original P3 and test-pack instruction saying "no
+rows" in that situation were incorrect. A subsequent native UIA inspection and
+screenshot of the same installed candidate confirmed that the status bar does
+show "No hay archivos de audio compatibles en esta carpeta" while retaining
+the rows. Thus the reported missing message has not been reproduced; this
+observation supports the corrected empty-folder acceptance on that installation.
+The first data row overlapping Spanish column headers was reproduced in the
+native app (RNF-08 U3).
+The report does not identify a result and OS build for each installer/OS pair,
+so it does not establish a passed four-row matrix. No complete row is marked
+passed from this report alone.
 
 | OS | Installer | Install / Start launch / P3 / uninstall | Candidate and OS evidence |
 |---|---|---|---|

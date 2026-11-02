@@ -38,6 +38,14 @@ evidence. It changes no component props, events, atomic levels, command or DTO.
   label is readable at 900 × 500 in both languages. A selected or hovered row
   must not lose its label. Keep the existing verdict colour families and distinct
   icons; this proposal does not fix exact replacement hex values.
+  Regression-check the already approved table layout (`main-screen.md`,
+  `components.md`, `language-settings.md` M2) at 900 × 500 in English and Spanish: when
+  rendered, header labels stay within the header area, and at the top of a
+  populated table the first data row begins below that area without overlapping
+  text. Check an empty table, a short populated table and a table long enough to
+  scroll. While scrolling, data text must not paint over the sticky header;
+  returning to the top shows the first row fully below it. This makes the
+  existing separate header/data layout observable without prescribing CSS.
 - **U4, owner walkthrough:** using a candidate with all four states, inspect the
   table and select each row in English and Spanish. Without consulting project
   documentation, the owner explains each label using the meaning in the table
@@ -63,6 +71,11 @@ thresholds and ground-truth accuracy are outside this presentation check.
 - RF-08 M2/M3 passed on 2026-10-31, and RF-13 M1/M2 on 2026-11-02 (progress log).
   Those checks support keyboard/layout/language behavior, not the entire U3/U4
   acceptance above.
+- **Reproduced U3 layout failure (2026-11-02):** the owner's candidate screenshot
+  shows Spanish column headers overlapping the first data row; subsequent native
+  app inspection reproduced it. Its cause remains under investigation. The
+  layout regression check remains unresolved and must be repeated after a fix
+  to the already approved RF-06/RF-13 presentation.
 - **Known U3 gap:** `VerdictCell.svelte` gives the label its verdict colour.
   `ResultsTable.svelte` uses `--color-bg` normally, `--color-surface-raised` on
   hover and `--color-row-selected` on selection. Computed from current
