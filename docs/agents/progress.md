@@ -2,6 +2,34 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-02 - RP-11 spec: calibrate against the shipped detection (G1 approved)
+
+**Done**
+- Spec PR #121 merged (G1, owner). The decisions are in `specs/calibration/calibration.md`, "Calibrating against the shipped detection", OQ-18 to OQ-24:
+  - the default params are the app's (v8 today), checked by content;
+  - the new default grid `calibrate-grid.v3.toml` has no `baseline` and searches from those params;
+  - `must_catch` is non-regression against the baseline (this unblocks rules.md Q10);
+  - confirmed fakes may not be `Real` and may not lose `Fake`;
+  - grid v3 searches `full_band.*` and `gap_fake_db` 6.0–7.0 only;
+  - the new grid key `cost_exclude` takes `v0` and `aac256` out of the cost.
+- Finding: the grid v3 keys only move `Fake` ↔ `Suspicious` and never change a `Real` verdict (rules.md section 3).
+- Measured on the owner's revised corpus with v8 (probe grid, aggregate figures): every probe point was infeasible under the old absolute rule, because of 1 `cbr128` transcode that v8 misses in `tune`. Primary figure: 0/66 tracks, 0/5 albums.
+
+**Pending**
+- `/feature RP-11` for this change. Test stage: the 11 new scenarios of `calibration.feature` (OQ-21 (d)); no existing test changes (OQ-21 (f)). Implementation:
+  - defaults read from the repository root;
+  - the default-params constant;
+  - optional grid `baseline`, `cost_exclude` and `grid_version` 3;
+  - non-regression feasibility for constraints 1 and 2;
+  - the new report lines and columns;
+  - `.claude/skills/calibrate/SKILL.md` naming grid v3, then `just agents-sync`.
+- Then run L5 on the real corpus (`just calibrate`, baseline feasible, `cost excludes` line).
+
+**Blockers / questions for the human**
+- None. Left out of #121 for later specs: the `cbr128` transcode v8 misses (rules.md Q10 alternatives), rules.md Q9 (whether T2/T3 count undetectable transcodes), and the confirmed fakes all being in `tune` (no known-truth fakes in `holdout`).
+
+**Next step:** `/feature RP-11` (calibration defaults and grid v3, calibration.md OQ-18 to OQ-24).
+
 ## 2026-11-02 - Release 0.2.0 published
 
 **Done**
