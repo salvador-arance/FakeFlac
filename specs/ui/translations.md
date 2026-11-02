@@ -6,6 +6,10 @@ status: approved
 
 # Complete English and Spanish catalogue (RF-13)
 
+Proposed extension, pending G1: `resizable-widths.md` section 4 defines four
+additional layout-resize keys. If approved, that table supplements this
+catalogue; the existing entries below retain their approved values.
+
 Approved at G1 (#107); the behavior and acceptance checks are in `language-settings.md`. Each row is
 an explicit catalogue entry in both languages, including identical technical text. Braces
 identify interpolation parameters, substituted literally once per occurrence (never parsed
