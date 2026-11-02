@@ -5,7 +5,7 @@
 ## 2026-11-02 - RNF-07 and RNF-08 closure specifications proposed
 
 **Done**
-- Branch `spec/RNF-07-RNF-08`: proposed platform contract, usability spec, scenarios and traceability; both requirements remain `draft` pending G1. Independent final review: no blocking findings.
+- Branch `spec/RNF-07-RNF-08`, PR [#111](https://github.com/salvador-arance/FakeFlac/pull/111): proposed platform contract, usability spec, scenarios and traceability; both requirements remain `draft` pending G1. Independent final review: no blocking findings.
 - Confirmed an existing RNF-08 contrast gap: verdict labels inherit colours that fail the already approved 4.5:1 text requirement, especially on selected rows. The proposal requires a focused correction after G1 and an owner walkthrough in both languages.
 - `just check` (1,295 frontend tests), `just check-app`, `just build`, `just release-assets`, `just trace` and `git diff --check` passed. Local production source `216c945`, version 0.1.0: NSIS 2,877,203 bytes; MSI 4,661,248 bytes. Candidate hashes are in `specs/contracts/windows-platform.md`; ignored `target/rnf-07-test-pack.zip` contains installers, checksums and synthetic audio fixtures.
 
