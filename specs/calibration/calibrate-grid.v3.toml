@@ -1,0 +1,21 @@
+# Grid for /calibrate v3 (RP-11, ADR-0036). Spec: specs/calibration/evaluation.md section 7; calibration.md OQ-18 to OQ-24.
+# Default of --grid. No baseline key: the search starts from the default params file, the one the app ships (OQ-18).
+# Searches the full-band guard ([full_band]) and the gap threshold it guards. These keys act only through V3, so they
+# move verdicts between Fake and Suspicious and never change a Real verdict (calibration.md, "Why no point changes a
+# Real verdict"). Not verdict.step_fake_db or any parameter the lossy rules read (OQ-22). [edge] and [lossy] are copied
+# unchanged into a proposal. Only rule parameters may appear in [values]; the search reads tune rows only.
+grid_version = 3
+must_catch = ["cbr128", "cbr192"]     # hard constraints: no must_catch tune positive that the baseline catches becomes Real (OQ-19), no confirmed fake is Real, and none that is Fake at the baseline loses Fake (OQ-20)
+cost_exclude = ["v0", "aac256"]       # known limitations (evaluation.md section 7): out of the cost, still in every table (OQ-24)
+max_points = 100000
+
+[weights]                             # same weights as grid v1 (OQ-11)
+fp = 10.0
+fn = 1.0
+suspicious_negative = 0.5
+suspicious_positive = 0.1
+
+[values]                              # around v8; 3 x 3 x 3 = 27 points before invariants; each list holds v8's value
+"full_band.min_level_db" = [-80.0, -70.0, -60.0]
+"full_band.min_burst_db" = [2.0, 3.0, 4.0]
+"verdict.gap_fake_db" = [6.0, 6.5, 7.0]  # not below 6: the primary watch track W6 has G = 5.65 dB (OQ-22)
