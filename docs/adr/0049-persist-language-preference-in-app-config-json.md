@@ -1,6 +1,6 @@
 # ADR-0049: Persist the language preference in backend-managed app configuration JSON
 
-- Status: accepted (specification PR #107 merged at G1, 2026-11-01)
+- Status: accepted (specification PR #107 merged at G1, 2026-11-01); amended 2026-11-02 (Windows language source, below)
 - Date: 2026-11-01
 
 ## Context and rationale
@@ -33,3 +33,11 @@ Keep this small application preference adapter in `src-tauri`. JSON storage uses
 The app gains one small configuration file, independent from music and result-cache storage. Failed reads and writes have explicit, testable recovery behavior. Observed unsupported future schemas are protected, subject to the stated cross-process limitation. The first supported Windows preference selects the initial language when no file exists; English remains the fallback. Both catalogues must be complete for the specified application UI. Installer and Windows-owned dialog language remain governed by existing release and dialog specifications.
 
 The owner approved Q1-Q4, including this persistence behavior and its concurrency limitation, in chat on 2026-11-01 ("de acuerdo"). The owner merged the specification PR (#107) on 2026-11-01, which accepts this ADR. The feature itself is not implemented yet (`/feature RF-13`).
+
+## Amendment (2026-11-02): Windows language source
+
+The native language-list adapter reads `Windows.System.UserProfile.GlobalizationPreferences.Languages()`, the ordered list the user maintains in Windows Settings › Language, through the `windows` crate. It is a Windows-only (`cfg(windows)`) dependency of `src-tauri`, pinned to the 0.62 line that `tauri` already brings into `Cargo.lock`, with only the `System_UserProfile` and `Foundation_Collections` features. No new crate enters the supply chain; only features of an existing crate are enabled. The WinRT projection is a safe API, so the workspace's `unsafe_code = "forbid"` stays in force. A failed call is reported as an unavailable list, which falls back to English as specified. The JSON storage adapter is unchanged and still uses only `std`, `serde` and `serde_json`.
+
+Rejected: hand-written `extern "system"` bindings and `windows-sys` (both need `unsafe`, which the workspace forbids); `sys-locale` (a new third-party crate that reads UI display languages through `GetUserPreferredUILanguages` rather than the Settings preference list).
+
+The owner approved this choice in chat on 2026-11-02, during `/feature RF-13`, before implementation.

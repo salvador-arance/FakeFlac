@@ -1,16 +1,18 @@
 <script lang="ts">
-  import { onDestroy, onMount } from 'svelte'
-  import type { Spectrogram } from '../model'
+  import { flushSync, onDestroy, onMount } from 'svelte'
+  import type { Language, SettingsError, SettingsLoadStatus, Spectrogram } from '../model'
   import {
     ApiError,
     cancelAnalysis,
     clearCache,
     closeWindow,
     exportCsv,
+    getSettings,
     getSpectrogram,
     minimizeWindow,
     onDragDrop,
     pickFolder,
+    setSettings,
     startAnalysis,
     startAnalysisOfDropped,
     toggleMaximizeWindow,
@@ -19,11 +21,13 @@
   import DetailPanel from '../components/organisms/DetailPanel.svelte'
   import FolderDropZone from '../components/organisms/FolderDropZone.svelte'
   import ResultsTable from '../components/organisms/ResultsTable.svelte'
+  import SettingsPanel from '../components/organisms/SettingsPanel.svelte'
   import StatusBar from '../components/organisms/StatusBar.svelte'
   import TitleBar from '../components/organisms/TitleBar.svelte'
   import Toolbar from '../components/organisms/Toolbar.svelte'
   import MainLayout from '../components/templates/MainLayout.svelte'
-  import { t } from '../i18n'
+  import { getLocale, setLocale, t } from '../i18n'
+  import type { MessageKey, MessageParams } from '../i18n'
   import { createAnalysisStore } from '../stores/analysis.svelte'
   import { isFilterActive } from '../table-view'
 
@@ -31,11 +35,26 @@
 
   let isDraggingOver = $state(false)
   let unlistenDragDrop: (() => void) | undefined
+  let destroyed = false
+
+  // RF-13 (language-settings.md section 1): the main screen and its actions wait for the settings.
+  let settingsReady = $state(false)
+  let loadStatus = $state<SettingsLoadStatus>('default')
+  // RF-13 (section 2): the Settings modal and its save request.
+  let settingsOpen = $state(false)
+  let settingsSaving = $state(false)
+  let settingsError = $state<SettingsError | null>(null)
+  /** The element focused when Settings opened (the toolbar button); it gets the focus back. */
+  let settingsTrigger: HTMLElement | null = null
+
+  /** Folder input and toolbar actions: only on the initialized screen, never behind the modal. */
+  let acceptsInput = $derived(settingsReady && !settingsOpen)
 
   onMount(async () => {
-    unlistenDragDrop = await onDragDrop((event) => {
+    void loadSettings()
+    const unlisten = await onDragDrop((event) => {
       if (event.type === 'enter') {
-        isDraggingOver = true
+        isDraggingOver = acceptsInput
       } else if (event.type === 'leave') {
         isDraggingOver = false
       } else if (event.type === 'drop') {
@@ -43,11 +62,101 @@
         handleDrop(event.paths)
       }
     })
+    if (destroyed) unlisten()
+    else unlistenDragDrop = unlisten
   })
 
   onDestroy(() => {
+    destroyed = true
     unlistenDragDrop?.()
   })
+
+  function applyLanguage(language: Language) {
+    setLocale(language)
+    document.documentElement.lang = language
+  }
+
+  /** Invalid, unavailable and newer settings show their warning as a status-bar notice. */
+  function warningOf(status: SettingsLoadStatus): Notice | undefined {
+    if (status === 'invalid' || status === 'unavailable' || status === 'newerVersion') {
+      return { key: `settings.${status}`, settingsWarning: true }
+    }
+    return undefined
+  }
+
+  // No timeout: a hung read keeps the busy placeholder (language-settings.md section 1).
+  async function loadSettings() {
+    let language: Language = 'en'
+    let status: SettingsLoadStatus = 'unavailable'
+    try {
+      const snapshot = await getSettings()
+      language = snapshot.settings.language
+      status = snapshot.loadStatus
+    } catch {
+      // An unexpected failure is English with the unavailable warning, never an analysis error.
+    }
+    if (destroyed) return
+    applyLanguage(language)
+    loadStatus = status
+    notice = warningOf(status)
+    settingsReady = true
+  }
+
+  function openSettings() {
+    if (!acceptsInput) return
+    settingsTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    settingsError = null
+    settingsOpen = true
+  }
+
+  function closeSettings() {
+    if (settingsSaving) return
+    settingsOpen = false
+    settingsError = null
+    // The background stops being inert in this flush, so the trigger can take the focus back.
+    flushSync()
+    const trigger = settingsTrigger
+    settingsTrigger = null
+    if (trigger?.isConnected) trigger.focus()
+  }
+
+  async function saveSettings(language: Language) {
+    if (!settingsOpen || settingsSaving) return
+    if (loadStatus === 'newerVersion' || settingsError === 'readOnly') return
+    settingsSaving = true
+    settingsError = null
+    try {
+      const snapshot = await setSettings({ language })
+      if (destroyed) return
+      // One render cycle: the new language, the cleared warning and the closed panel.
+      applyLanguage(snapshot.settings.language)
+      loadStatus = snapshot.loadStatus
+      if (notice?.settingsWarning) notice = warningOf(snapshot.loadStatus)
+      settingsSaving = false
+      closeSettings()
+    } catch (err) {
+      if (destroyed) return
+      const code = err instanceof ApiError ? err.code : 'INTERNAL'
+      settingsError =
+        code === 'SETTINGS_WRITE_FAILED'
+          ? 'writeFailed'
+          : code === 'SETTINGS_READ_ONLY'
+            ? 'readOnly'
+            : 'internal'
+      settingsSaving = false
+    }
+  }
+
+  // Background key commands are suppressed while the modal is open: Ctrl+F (handled on the window
+  // by the search field) is stopped before it gets there, and the WebView find bar stays closed.
+  function onWindowKeydownCapture(event: KeyboardEvent) {
+    if (!settingsOpen) return
+    const ctrlF =
+      event.ctrlKey && (event.key === 'f' || event.key === 'F' || event.code === 'KeyF')
+    if (!ctrlF) return
+    event.preventDefault()
+    event.stopPropagation()
+  }
 
   // RF-07: spectrogram of the selected row. `spectrogramRequest` identifies the latest request;
   // a response or failure for an older one (a row no longer selected) is discarded.
@@ -111,18 +220,27 @@
     spectrogramUnavailable = result === null
   }
 
-  // RF-09: the notice of the last export, shown in the status bar until a start attempt.
-  let notice = $state<string | undefined>(undefined)
+  /**
+   * A status-bar notice kept as a catalogue key plus its data, so it re-renders in the active
+   * language (language-settings.md section 1). `settingsWarning` marks the RF-13 load warning.
+   */
+  type Notice = { key: MessageKey; params?: MessageParams; settingsWarning?: boolean }
+
+  // RF-09: the notice of the last export, shown in the status bar until a start attempt. RF-13: the
+  // settings warning stays until another notice replaces it or a Save succeeds.
+  let notice = $state<Notice | undefined>(undefined)
+  let noticeText = $derived(notice ? t(notice.key, notice.params) : undefined)
   let exporting = $state(false)
   // RF-11 (result-cache.md section 4): true while the clearCache() call is pending
   let clearing = $state(false)
 
-  type Saved = { notice: string | undefined; spectrogram: typeof spectrogram }
+  type Saved = { notice: Notice | undefined; spectrogram: typeof spectrogram }
 
   function beginRun(): Saved {
     const saved = { notice, spectrogram }
     clearSpectrogram()
-    notice = undefined
+    // RF-13: a start attempt is not a notice, so the settings warning stays.
+    if (!notice?.settingsWarning) notice = undefined
     store.begin()
     return saved
   }
@@ -144,13 +262,15 @@
         store.reset()
         return
       }
-      store.fail(t(`error.${err.code}`))
+      // RF-13: the store keeps the catalogue key; the status bar translates it on every render.
+      store.fail(`error.${err.code}`)
     } else {
-      store.fail(t('error.INTERNAL'))
+      store.fail('error.INTERNAL')
     }
   }
 
   async function handleOpenFolder() {
+    if (!acceptsInput) return
     if (store.phase === 'scanning' || store.phase === 'analysing' || clearing) return
     const path = await pickFolder()
     if (!path) return
@@ -168,6 +288,7 @@
   }
 
   async function handleDrop(paths: string[]) {
+    if (!acceptsInput) return
     if (store.phase === 'scanning' || store.phase === 'analysing' || clearing) return
     if (!paths || paths.length === 0) return
 
@@ -185,7 +306,7 @@
   }
 
   async function handleExport() {
-    if (!canExport) return
+    if (!acceptsInput || !canExport) return
     exporting = true
     try {
       const result = await exportCsv()
@@ -193,15 +314,17 @@
         const file = result.path.split(/[\\/]/).pop() ?? result.path
         notice =
           result.rows === 1
-            ? t('status.exportedOne', { file })
-            : t('status.exported', { rows: result.rows, file })
+            ? { key: 'status.exportedOne', params: { file } }
+            : { key: 'status.exported', params: { rows: result.rows, file } }
       }
     } catch (err) {
       const code = err instanceof ApiError ? err.code : 'INTERNAL'
-      notice =
-        code === 'NOT_ANALYZED' || code === 'ANALYSIS_RUNNING'
-          ? t(`error.${code}`)
-          : t('error.EXPORT_FAILED')
+      notice = {
+        key:
+          code === 'NOT_ANALYZED' || code === 'ANALYSIS_RUNNING'
+            ? `error.${code}`
+            : 'error.EXPORT_FAILED',
+      }
     } finally {
       exporting = false
     }
@@ -209,20 +332,21 @@
 
   // RF-11 (result-cache.md section 2.2): no confirmation; only the notice changes
   async function handleClearCache() {
-    if (!canClearCache) return
+    if (!acceptsInput || !canClearCache) return
     clearing = true
     try {
       await clearCache()
-      notice = t('status.cacheCleared')
+      notice = { key: 'status.cacheCleared' }
     } catch (err) {
       const code = err instanceof ApiError ? err.code : 'INTERNAL'
-      notice = code === 'ANALYSIS_RUNNING' ? t('error.ANALYSIS_RUNNING') : t('error.CACHE_FAILED')
+      notice = { key: code === 'ANALYSIS_RUNNING' ? 'error.ANALYSIS_RUNNING' : 'error.CACHE_FAILED' }
     } finally {
       clearing = false
     }
   }
 
   async function handleCancel() {
+    if (!acceptsInput) return
     await cancelAnalysis()
   }
 
@@ -268,66 +392,101 @@
   />
 {/snippet}
 
-<MainLayout detail={showDetail ? detailPanel : undefined} sidebar={isEmpty ? undefined : albumsPanel}>
-  {#snippet titleBar()}
-    <TitleBar
-      title={t('app.title')}
-      onminimize={minimizeWindow}
-      ontoggleMaximize={toggleMaximizeWindow}
-      onclose={closeWindow}
-    />
-  {/snippet}
+{#snippet settingsPanel()}
+  <SettingsPanel
+    language={getLocale()}
+    {loadStatus}
+    saving={settingsSaving}
+    error={settingsError}
+    onsave={saveSettings}
+    onclose={closeSettings}
+  />
+{/snippet}
 
-  {#snippet toolbar()}
-    <Toolbar
-      {canOpen}
-      {canCancel}
-      {canExport}
-      {canClearCache}
-      canFilter={!isEmpty}
-      verdictFilter={store.filter.verdicts}
-      query={store.filter.query}
-      {searchFocusRequest}
-      onopen={handleOpenFolder}
-      oncancel={handleCancel}
-      onexport={handleExport}
-      onclearcache={handleClearCache}
-      ontoggleverdict={(verdict) => store.toggleVerdictFilter(verdict)}
-      onquery={(text) => store.setQuery(text)}
-    />
-  {/snippet}
+{#snippet titleBarContent()}
+  <TitleBar
+    title={t('app.title')}
+    onminimize={minimizeWindow}
+    ontoggleMaximize={toggleMaximizeWindow}
+    onclose={closeWindow}
+  />
+{/snippet}
 
-  {#snippet table()}
-    <div class="table-container">
-      <FolderDropZone active={isDraggingOver} empty={isEmpty} />
-      {#if !isEmpty}
-        <ResultsTable
-          rows={store.visibleRows}
-          selectedIndex={store.selectedIndex}
-          sort={store.sort}
-          {revealRequest}
-          noMatches={store.rows.length > 0 && store.visibleRows.length === 0}
-          onselect={handleSelect}
-          onsort={(column) => store.toggleSort(column)}
-          onclearfilters={handleClearFilters}
-        />
-      {/if}
-    </div>
-  {/snippet}
+<svelte:window onkeydowncapture={onWindowKeydownCapture} />
 
-  {#snippet statusBar()}
-    <StatusBar
-      phase={store.phase}
-      summary={store.summary}
-      message={store.message}
-      shown={isFilterActive(store.filter) && store.rows.length > 0
-        ? store.visibleRows.length
-        : undefined}
-      cache={store.cache ?? undefined}
-      {notice}
-    />
-  {/snippet}
-</MainLayout>
+{#if !settingsReady}
+  <!-- RF-13: no main screen before the settings read settles; the window controls stay usable -->
+  <div class="startup">
+    {@render titleBarContent()}
+    <main class="startup-body" aria-busy="true" aria-label={t('app.title')}></main>
+  </div>
+{:else}
+  <MainLayout
+    detail={showDetail ? detailPanel : undefined}
+    sidebar={isEmpty ? undefined : albumsPanel}
+    settings={settingsOpen ? settingsPanel : undefined}
+  >
+    {#snippet titleBar()}
+      {@render titleBarContent()}
+    {/snippet}
+
+    {#snippet toolbar()}
+      <Toolbar
+        {canOpen}
+        {canCancel}
+        {canExport}
+        {canClearCache}
+        canFilter={!isEmpty}
+        canSettings={settingsReady}
+        verdictFilter={store.filter.verdicts}
+        query={store.filter.query}
+        {searchFocusRequest}
+        onopen={handleOpenFolder}
+        oncancel={handleCancel}
+        onexport={handleExport}
+        onclearcache={handleClearCache}
+        onsettings={openSettings}
+        ontoggleverdict={(verdict) => {
+          if (acceptsInput) store.toggleVerdictFilter(verdict)
+        }}
+        onquery={(text) => {
+          if (acceptsInput) store.setQuery(text)
+        }}
+      />
+    {/snippet}
+
+    {#snippet table()}
+      <div class="table-container">
+        <FolderDropZone active={isDraggingOver} empty={isEmpty} />
+        {#if !isEmpty}
+          <ResultsTable
+            rows={store.visibleRows}
+            selectedIndex={store.selectedIndex}
+            sort={store.sort}
+            {revealRequest}
+            noMatches={store.rows.length > 0 && store.visibleRows.length === 0}
+            onselect={handleSelect}
+            onsort={(column) => store.toggleSort(column)}
+            onclearfilters={handleClearFilters}
+          />
+        {/if}
+      </div>
+    {/snippet}
+
+    {#snippet statusBar()}
+      <StatusBar
+        phase={store.phase}
+        summary={store.summary}
+        message={store.message === undefined ? undefined : t(store.message)}
+        shown={isFilterActive(store.filter) && store.rows.length > 0
+          ? store.visibleRows.length
+          : undefined}
+        cache={store.cache ?? undefined}
+        notice={noticeText}
+      />
+    {/snippet}
+  </MainLayout>
+{/if}
 
 <style>
   .table-container {
@@ -335,5 +494,19 @@
     width: 100%;
     height: 100%;
     overflow: hidden;
+  }
+
+  .startup {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+    background: var(--color-bg);
+    color: var(--color-text);
+  }
+
+  .startup-body {
+    flex: 1;
   }
 </style>

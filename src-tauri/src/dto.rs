@@ -3,7 +3,7 @@
 //! Paths become strings (lossy for the rare non-UTF-8 Windows path).
 
 use fakeflac_core as core;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use specta::Type;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Type)]
@@ -200,6 +200,45 @@ pub enum AppErrorCode {
     // Contract version 7 (RF-11): `clear_cache` could not delete the cache files.
     CacheFailed,
     Internal,
+    // Contract version 8 (RF-13): only from `set_settings` (`specs/contracts/settings.md`).
+    SettingsWriteFailed,
+    SettingsReadOnly,
+}
+
+/// Contract version 8 (RF-13): an interface language. Exactly `en` or `es`; case variants and
+/// region tags are rejected by deserialization.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "lowercase")]
+pub enum Language {
+    En,
+    Es,
+}
+
+/// Contract version 8 (RF-13): the language-only application settings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Settings {
+    pub language: Language,
+}
+
+/// Contract version 8 (RF-13): how the settings of this process were loaded
+/// (`specs/contracts/settings.md` section 3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub enum SettingsLoadStatus {
+    Default,
+    Loaded,
+    Invalid,
+    Unavailable,
+    NewerVersion,
+}
+
+/// Contract version 8 (RF-13): the active settings and how they were loaded.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsSnapshot {
+    pub settings: Settings,
+    pub load_status: SettingsLoadStatus,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Type)]

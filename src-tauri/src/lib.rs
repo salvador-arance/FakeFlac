@@ -4,6 +4,7 @@
 pub mod commands;
 pub mod dto;
 pub mod run;
+pub mod settings;
 
 use fakeflac_core::AnalysisSlot;
 use std::path::Path;
@@ -20,6 +21,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             commands::get_spectrogram,
             commands::export_csv,
             commands::clear_cache,
+            commands::get_settings,
+            commands::set_settings,
         ])
         // u64/i64 fields (durations, sizes, times) stay far below 2^53: the contract says `number`.
         .dangerously_cast_bigints_to_number()
@@ -51,6 +54,14 @@ pub fn run() {
                 .ok()
                 .map(|dir| dir.join(fakeflac_store::FILE_NAME));
             app.manage(Arc::new(run::CacheConfig { file }));
+            // RF-13: `settings.json` in the app configuration folder
+            // (`%APPDATA%\io.github.fakeflac.app`). Nothing is read or created here: the first
+            // settings command loads it, and only an explicit Save writes it.
+            let config_dir = app.path().app_config_dir().ok();
+            app.manage(Arc::new(settings::SettingsState::new(
+                config_dir,
+                settings::windows_preferred_languages,
+            )));
             Ok(())
         })
         // A reload (F5, dev server) leaves no listener for the running analysis: cancel it so the

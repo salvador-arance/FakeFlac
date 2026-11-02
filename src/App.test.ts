@@ -1,8 +1,10 @@
 // App shell: the window shows the main screen (specs/ui/main-screen.md), not the H0 placeholder.
-// The API client is mocked as in AnalysisPage.test.ts.
+// The API client is mocked as in AnalysisPage.test.ts. RF-13: the main screen appears once the
+// settings read has settled (specs/ui/language-settings.md section 1).
 import { render, screen } from '@testing-library/svelte'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App.svelte'
+import { mockSettings, waitForMainScreen } from './lib/pages/tests/settingsHarness'
 
 vi.mock('./lib/api', () => {
   class ApiError extends Error {
@@ -23,19 +25,25 @@ vi.mock('./lib/api', () => {
     minimizeWindow: vi.fn(),
     toggleMaximizeWindow: vi.fn(),
     closeWindow: vi.fn(),
+    getSettings: vi.fn(),
+    setSettings: vi.fn(),
   }
 })
 
+beforeEach(() => mockSettings())
+
 describe('App', () => {
-  it('shows the main screen: Open folder, the drop hint and Ready', () => {
+  it('shows the main screen: Open folder, the drop hint and Ready', async () => {
     render(App)
+    await waitForMainScreen()
     expect(screen.getByRole('button', { name: 'Open folder' })).toBeTruthy()
     expect(screen.getByText('Drop a folder here or click Open folder')).toBeTruthy()
     expect(screen.getByRole('status').textContent).toContain('Ready')
   })
 
-  it('does not show the H0 placeholder', () => {
+  it('does not show the H0 placeholder', async () => {
     render(App)
+    await waitForMainScreen()
     expect(screen.queryByText(/Scaffold ready/)).toBeNull()
   })
 })

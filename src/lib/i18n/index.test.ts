@@ -1,5 +1,6 @@
 // i18n texts (specs/ui/main-screen.md "Texts"; docs/architecture/frontend.md "Verdict tokens").
-// English is the H1 default; Spanish is only required for the verdict texts the docs give.
+// English is the default before the settings load; RF-13 (specs/ui/translations.md) makes the
+// Spanish catalogue complete: the full tables are checked in catalogue.test.ts.
 import { afterEach, describe, expect, it } from 'vitest'
 import { getLocale, setLocale, t } from './index'
 
@@ -62,6 +63,24 @@ describe('i18n', () => {
   ])('es: %s', (key, text) => {
     setLocale('es')
     expect(getLocale()).toBe('es')
+    expect(t(key)).toBe(text)
+  })
+
+  // @RF-13 the same main-screen texts in Spanish (translations.md), no English fallback
+  it.each([
+    ['toolbar.open', 'Abrir carpeta'],
+    ['toolbar.cancel', 'Cancelar'],
+    ['empty.hint', 'Arrastra una carpeta aquí o pulsa Abrir carpeta'],
+    ['status.ready', 'Listo'],
+    ['status.scanning', 'Buscando archivos…'],
+    ['error.tooShort', 'Demasiado corto para analizar'],
+    ['error.corruptStream', 'Flujo de audio dañado'],
+    ['error.NO_AUDIO_FOUND', 'No hay archivos de audio compatibles en esta carpeta'],
+    ['error.INTERNAL', 'El análisis se ha detenido debido a un error inesperado'],
+    ['column.realBitrate', 'Tasa de bits real'],
+    ['detail.source', 'Fuente de ≈{kbps} kbps'],
+  ])('es: %s', (key, text) => {
+    setLocale('es')
     expect(t(key)).toBe(text)
   })
 

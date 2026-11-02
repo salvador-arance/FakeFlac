@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AnalysisSummary, ProgressEvent, TrackAnalysis } from '../api'
 import * as api from '../api'
 import { makeAlbum, makeSummary, makeTrack } from '../testing/fixtures'
+import { mockSettings, waitForMainScreen } from './tests/settingsHarness'
 import type { TrackOptions } from '../testing/fixtures'
 import AnalysisPage from './AnalysisPage.svelte'
 
@@ -34,6 +35,8 @@ vi.mock('../api', () => {
     minimizeWindow: vi.fn(),
     toggleMaximizeWindow: vi.fn(),
     closeWindow: vi.fn(),
+    getSettings: vi.fn(),
+    setSettings: vi.fn(),
   }
 })
 
@@ -81,6 +84,7 @@ function fakeRun() {
 async function mountPage() {
   const view = render(AnalysisPage)
   await vi.waitFor(() => expect(api.onDragDrop).toHaveBeenCalled())
+  await waitForMainScreen()
   return view
 }
 
@@ -102,6 +106,8 @@ async function openFolder(path: string | null = 'C:/Music/Album A') {
 const flush = () => vi.advanceTimersByTimeAsync(100)
 
 beforeEach(() => {
+  // RF-13: English default settings, locale reset (tests/settingsHarness.ts)
+  mockSettings()
   vi.mocked(api.pickFolder).mockReset()
   vi.mocked(api.startAnalysis).mockReset()
   vi.mocked(api.startAnalysisOfDropped).mockReset()
@@ -556,7 +562,7 @@ describe('screen state: Error', () => {
 /** Mount with fake timers already installed, then start a run through the dialog. */
 async function mountPage_fake() {
   render(AnalysisPage)
-  await vi.advanceTimersByTimeAsync(0)
+  await waitForMainScreen()
   vi.mocked(api.pickFolder).mockResolvedValue('C:/Music/Album A')
   await fireEvent.click(openButton())
   await vi.advanceTimersByTimeAsync(0)

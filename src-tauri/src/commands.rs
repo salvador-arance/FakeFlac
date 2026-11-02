@@ -1,5 +1,6 @@
 //! Tauri commands (`specs/contracts/commands.md`). Thin: each one delegates to `run` or a plugin.
 
+use crate::settings::SettingsState;
 use crate::{dto, run};
 use fakeflac_core::AnalysisSlot;
 use std::path::Path;
@@ -130,5 +131,36 @@ pub async fn clear_cache(
         .map_err(|e| dto::AppError {
             code: dto::AppErrorCode::Internal,
             message: format!("clear cache task failed: {e}"),
+        })?
+}
+
+/// RF-13: the language settings of this process, loaded on first use (`specs/contracts/settings.md`).
+#[tauri::command]
+#[specta::specta]
+pub async fn get_settings(
+    settings: State<'_, std::sync::Arc<SettingsState>>,
+) -> Result<dto::SettingsSnapshot, dto::AppError> {
+    let settings = std::sync::Arc::clone(&settings);
+    tauri::async_runtime::spawn_blocking(move || settings.get())
+        .await
+        .map_err(|e| dto::AppError {
+            code: dto::AppErrorCode::Internal,
+            message: format!("settings task failed: {e}"),
+        })
+}
+
+/// RF-13: saves the language settings; they become current only after the file was replaced.
+#[tauri::command]
+#[specta::specta]
+pub async fn set_settings(
+    state: State<'_, std::sync::Arc<SettingsState>>,
+    settings: dto::Settings,
+) -> Result<dto::SettingsSnapshot, dto::AppError> {
+    let state = std::sync::Arc::clone(&state);
+    tauri::async_runtime::spawn_blocking(move || state.set(settings))
+        .await
+        .map_err(|e| dto::AppError {
+            code: dto::AppErrorCode::Internal,
+            message: format!("settings task failed: {e}"),
         })?
 }

@@ -1,5 +1,5 @@
 // i18n texts of the result cache (specs/ui/result-cache.md section 5, RF-11). English is the
-// default; Spanish falls back to English until RF-13.
+// default; the Spanish texts come from specs/ui/translations.md (RF-13).
 import { afterEach, describe, expect, it } from 'vitest'
 import { setLocale, t } from './index'
 
@@ -25,10 +25,25 @@ describe('result cache texts (@RF-11)', () => {
     expect(t('status.fromCache' as never, { n })).toBe(text)
   })
 
-  it('es falls back to English', () => {
+  // @RF-13 translations.md sections 1, 2 and 5
+  it.each([
+    ['toolbar.clearCache', 'Borrar caché de resultados'],
+    ['status.cacheDegraded', 'Error en la caché de resultados: algunos resultados no se han guardado'],
+    ['status.cacheUnavailable', 'Caché de resultados no disponible'],
+    ['status.cacheCleared', 'Caché de resultados borrada'],
+    ['error.CACHE_FAILED', 'No se puede borrar la caché de resultados'],
+  ])('es: %s', (key, text) => {
     setLocale('es')
-    expect(t('toolbar.clearCache' as never)).toBe('Clear results cache')
-    expect(t('status.fromCache' as never, { n: 2 })).toBe('2 from cache')
-    expect(t('error.CACHE_FAILED' as never)).toBe('Cannot clear the results cache')
+    expect(t(key as never)).toBe(text)
+  })
+
+  // No singular key for status.fromCache in either language (translations.md section 5)
+  it.each([
+    [0, '0 de la caché'],
+    [1, '1 de la caché'],
+    [31, '31 de la caché'],
+  ])('es: status.fromCache with n = %i', (n, text) => {
+    setLocale('es')
+    expect(t('status.fromCache' as never, { n })).toBe(text)
   })
 })

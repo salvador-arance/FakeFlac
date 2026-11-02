@@ -11,6 +11,8 @@ export type {
   BitrateMode,
   CacheStatus,
   CutoffEstimate,
+  Language,
+  SettingsLoadStatus,
   Spectrogram,
   SuspicionReason,
   TrackAnalysis,
@@ -55,6 +57,12 @@ export type StatusSummary = Pick<
   AnalysisSummary,
   'total' | 'done' | 'real' | 'suspicious' | 'fake' | 'errors'
 >
+
+/**
+ * RF-13 (specs/ui/language-settings.md section 4, `SettingsPanel` row): the save failure shown in
+ * the Settings panel. `internal` is an unexpected failure (`settings.saveFailed`).
+ */
+export type SettingsError = 'writeFailed' | 'readOnly' | 'internal'
 
 /** RF-11 (specs/ui/result-cache.md section 4): the cache figures of the latest ended run. */
 export type CacheFigures = { fromCache: number; status: CacheStatus }

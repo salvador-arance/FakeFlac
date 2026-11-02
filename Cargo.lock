@@ -840,6 +840,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-dialog",
  "tauri-specta",
+ "windows",
 ]
 
 [[package]]

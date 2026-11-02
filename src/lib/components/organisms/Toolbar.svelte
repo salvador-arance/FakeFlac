@@ -12,6 +12,8 @@
     /** RF-11 (result-cache.md section 2.1). */
     canClearCache?: boolean
     canFilter: boolean
+    /** RF-13 (language-settings.md section 2): enabled in every initialized main-screen phase. */
+    canSettings: boolean
     verdictFilter: Verdict[]
     query: string
     searchFocusRequest?: number
@@ -19,6 +21,7 @@
     oncancel?: () => void
     onexport?: () => void
     onclearcache?: () => void
+    onsettings?: () => void
     ontoggleverdict?: (verdict: Verdict) => void
     onquery?: (text: string) => void
   }
@@ -29,6 +32,7 @@
     canExport = false,
     canClearCache = false,
     canFilter,
+    canSettings,
     verdictFilter,
     query,
     searchFocusRequest = 0,
@@ -36,12 +40,13 @@
     oncancel,
     onexport,
     onclearcache,
+    onsettings,
     ontoggleverdict,
     onquery,
   }: Props = $props()
 </script>
 
-<div class="toolbar" role="toolbar" aria-label="Main toolbar">
+<div class="toolbar" role="toolbar" aria-label={t('toolbar.label')}>
   <IconButton
     icon="folder-open"
     label={t('toolbar.open')}
@@ -73,6 +78,13 @@
   />
   <div class="separator" role="separator" aria-orientation="vertical"></div>
   <VerdictFilter selected={verdictFilter} disabled={!canFilter} ontoggle={ontoggleverdict} />
+  <IconButton
+    icon="settings"
+    label={t('toolbar.settings')}
+    disabled={!canSettings}
+    size="toolbar"
+    onclick={onsettings}
+  />
   <div class="search">
     <SearchField
       value={query}

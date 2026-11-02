@@ -12,6 +12,7 @@ import type { AnalysisSummary, ProgressEvent } from "../api";
 import * as api from "../api";
 import type { Spectrogram } from "../model";
 import { makeAlbum, makeSummary, makeTrack } from "../testing/fixtures";
+import { mockSettings, waitForMainScreen } from "./tests/settingsHarness";
 import type { TrackOptions } from "../testing/fixtures";
 import { installCanvasStub, makeSpectrogram } from "../testing/spectrogram";
 import type { CanvasStub } from "../testing/spectrogram";
@@ -37,6 +38,8 @@ vi.mock("../api", () => {
     minimizeWindow: vi.fn(),
     toggleMaximizeWindow: vi.fn(),
     closeWindow: vi.fn(),
+    getSettings: vi.fn(),
+    setSettings: vi.fn(),
   };
 });
 
@@ -80,6 +83,7 @@ async function mountWithFinishedRun(tracks: TrackOptions[]) {
   });
   render(AnalysisPage);
   await vi.waitFor(() => expect(api.onDragDrop).toHaveBeenCalled());
+  await waitForMainScreen();
   await userEvent.click(screen.getByRole("button", { name: "Open folder" }));
   await vi.waitFor(() => expect(api.startAnalysis).toHaveBeenCalled());
   onEvent({ kind: "scanned", total: tracks.length });
@@ -114,6 +118,8 @@ const LP = "C:/Music/Album A/lp16k.flac";
 const CORRUPT = "C:/Music/Album A/corrupt.flac";
 
 beforeEach(() => {
+  // RF-13: English default settings, locale reset (tests/settingsHarness.ts)
+  mockSettings();
   vi.mocked(api.getSpectrogram).mockReset();
   vi.mocked(api.cancelAnalysis).mockReset().mockResolvedValue(undefined);
   stub = installCanvasStub();

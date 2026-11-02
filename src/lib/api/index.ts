@@ -8,6 +8,8 @@ import type {
   AppErrorCode,
   ExportResult,
   ProgressEvent,
+  Settings,
+  SettingsSnapshot,
   Spectrogram,
 } from './bindings'
 
@@ -19,7 +21,11 @@ export type {
   CacheStatus,
   CutoffEstimate,
   ExportResult,
+  Language,
   ProgressEvent,
+  Settings,
+  SettingsLoadStatus,
+  SettingsSnapshot,
   Spectrogram,
   SuspicionReason,
   TrackAnalysis,
@@ -156,4 +162,34 @@ export async function exportCsv(): Promise<ExportResult | null> {
 export async function clearCache(): Promise<void> {
   const result = await commands.clearCache()
   if (result.status === 'error') throw new ApiError(toAppError(result.error))
+}
+
+/**
+ * RF-13: the settings of this process (`specs/contracts/settings.md` section 2). Storage problems
+ * are a `loadStatus`, not an error; an unexpected failure rejects with an `INTERNAL` `ApiError`.
+ */
+export async function getSettings(): Promise<SettingsSnapshot> {
+  const result = await settingsCall(() => commands.getSettings())
+  if (result.status === 'error') throw new ApiError(toAppError(result.error))
+  return result.data
+}
+
+/**
+ * RF-13: persists `settings` and resolves with the new snapshot once the file was replaced. Rejects
+ * with `ApiError` (`SETTINGS_WRITE_FAILED`, `SETTINGS_READ_ONLY`, `INTERNAL`); any unexpected
+ * rejection becomes `INTERNAL`.
+ */
+export async function setSettings(settings: Settings): Promise<SettingsSnapshot> {
+  const result = await settingsCall(() => commands.setSettings(settings))
+  if (result.status === 'error') throw new ApiError(toAppError(result.error))
+  return result.data
+}
+
+/** The generated wrapper rethrows `Error` rejections; the settings client reports them as `INTERNAL`. */
+async function settingsCall<T>(call: () => Promise<T>): Promise<T> {
+  try {
+    return await call()
+  } catch (error) {
+    throw new ApiError({ code: 'INTERNAL', message: String(error) })
+  }
 }

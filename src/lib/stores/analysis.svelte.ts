@@ -22,6 +22,10 @@ export interface AnalysisStore {
   readonly albums: AlbumUpdate[]
   readonly phase: StatusPhase
   readonly summary: StatusSummary
+  /**
+   * The error of the run, opaque to the store: the page passes a catalogue key (RF-13) and
+   * translates it when rendering, so it follows the active language.
+   */
   readonly message: string | undefined
   readonly selectedIndex: number | null
   readonly sort: SortState
@@ -39,7 +43,7 @@ export interface AnalysisStore {
   reset(): void
   /** Applies one progress event (rows are batched, at most one update per 100 ms). */
   apply(event: ProgressEvent): void
-  /** The run ended with a contract error. */
+  /** The run ended with a contract error; `message` is kept as given (the page passes a catalogue key). */
   fail(message: string): void
   select(index: number): void
   /** Selects the row with the lowest `index` among the rows of the album. */

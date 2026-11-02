@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
+  import type { Attachment } from 'svelte/attachments'
   import Splitter from '../atoms/Splitter.svelte'
 
   type Props = {
@@ -9,9 +10,25 @@
     detail?: Snippet
     sidebar?: Snippet
     statusBar: Snippet
+    /**
+     * RF-13 (language-settings.md section 4): a modal shown over everything below the title bar.
+     * While it is given, the toolbar, the content and the status bar are inert (no clicks, focus or
+     * keys); the title bar keeps its window controls usable.
+     */
+    settings?: Snippet
   }
 
-  let { titleBar, toolbar, table, detail, sidebar, statusBar }: Props = $props()
+  let { titleBar, toolbar, table, detail, sidebar, statusBar, settings }: Props = $props()
+
+  let modal = $derived(settings !== undefined)
+
+  // Sets the `inert` attribute itself (not only the property), so it also holds where the DOM does
+  // not implement the property.
+  function inertWhile(active: boolean): Attachment<HTMLElement> {
+    return (node) => {
+      node.toggleAttribute('inert', active)
+    }
+  }
 
   // main-screen.md "Layout": detail default 260 px (min 160), table min 120 px
   const DEFAULT_DETAIL_HEIGHT = 260
@@ -65,29 +82,36 @@
   <div class="layout-titlebar">
     {@render titleBar()}
   </div>
-  <div class="layout-toolbar">
-    {@render toolbar()}
-  </div>
-  <main class="layout-content">
-    {#if sidebar}
-      <aside class="layout-sidebar">
-        {@render sidebar()}
-      </aside>
-    {/if}
-    <div class="layout-main" bind:this={content}>
-      <div class="layout-table">
-        {@render table()}
-      </div>
-      {#if detail}
-        <Splitter orientation="horizontal" onresize={resize} />
-        <div class="layout-detail" style:height="{Math.round(detailHeight)}px">
-          {@render detail()}
-        </div>
-      {/if}
+  <div class="layout-body">
+    <div class="layout-toolbar" {@attach inertWhile(modal)}>
+      {@render toolbar()}
     </div>
-  </main>
-  <div class="layout-statusbar">
-    {@render statusBar()}
+    <main class="layout-content" {@attach inertWhile(modal)}>
+      {#if sidebar}
+        <aside class="layout-sidebar">
+          {@render sidebar()}
+        </aside>
+      {/if}
+      <div class="layout-main" bind:this={content}>
+        <div class="layout-table">
+          {@render table()}
+        </div>
+        {#if detail}
+          <Splitter orientation="horizontal" onresize={resize} />
+          <div class="layout-detail" style:height="{Math.round(detailHeight)}px">
+            {@render detail()}
+          </div>
+        {/if}
+      </div>
+    </main>
+    <div class="layout-statusbar" {@attach inertWhile(modal)}>
+      {@render statusBar()}
+    </div>
+    {#if settings}
+      <div class="layout-modal">
+        {@render settings()}
+      </div>
+    {/if}
   </div>
 </div>
 
@@ -104,6 +128,14 @@
 
   .layout-titlebar {
     flex-shrink: 0;
+  }
+
+  .layout-body {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    position: relative;
   }
 
   .layout-toolbar {
@@ -155,5 +187,10 @@
 
   .layout-statusbar {
     flex-shrink: 0;
+  }
+
+  .layout-modal {
+    position: absolute;
+    inset: 0;
   }
 </style>

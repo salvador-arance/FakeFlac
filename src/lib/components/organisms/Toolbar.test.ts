@@ -6,7 +6,7 @@ import type { Verdict } from '../../model'
 import Toolbar from './Toolbar.svelte'
 
 // RF-08 made these props required (specs/ui/sort-filter.md section 10); not what this file tests.
-const FILTERS = { canFilter: true, verdictFilter: [] as Verdict[], query: '' }
+const FILTERS = { canFilter: true, canSettings: false, verdictFilter: [] as Verdict[], query: '' }
 
 const open = () => screen.getByRole('button', { name: 'Open folder' }) as HTMLButtonElement
 const cancel = () => screen.getByRole('button', { name: 'Cancel' }) as HTMLButtonElement

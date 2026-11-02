@@ -8,8 +8,8 @@
 |---|---|---|---|---|
 | Tokens | Design values | — | No | verdict colours, spacing, typography, spectrogram palette |
 | Atoms | Indivisible element | tokens | No | `Icon`, `IconButton`, `ProgressBar`, `Splitter` |
-| Molecules | Small group with one function | atoms | No | `VerdictCell` (icon+text+colour), `VerdictFilter`, `SearchField`, `ColumnHeader`, `CutoffValue`, `BitrateValue`, `WindowControls` |
-| Organisms | Section with its own meaning | molecules, atoms | Via props/events | `TitleBar`, `Toolbar`, `FolderDropZone`, `AlbumSummaryList`, `ResultsTable`, `DetailPanel`, `SpectrogramView`, `StatusBar` |
+| Molecules | Small group with one function | atoms | No | `VerdictCell` (icon+text+colour), `VerdictFilter`, `SearchField`, `ColumnHeader`, `CutoffValue`, `BitrateValue`, `WindowControls`, `LanguageSelect` |
+| Organisms | Section with its own meaning | molecules, atoms | Via props/events | `TitleBar`, `Toolbar`, `FolderDropZone`, `AlbumSummaryList`, `ResultsTable`, `DetailPanel`, `SpectrogramView`, `StatusBar`, `SettingsPanel` |
 | Templates | Layout without real data | organisms | No | `MainLayout` |
 | Pages | Template + real data + store connection | templates | **Yes (only place)** | `AnalysisPage` |
 
@@ -19,7 +19,7 @@ Rules (linted by `scripts/lint-arch.mjs`): see `dependencies.md`. Every atom/mol
 src/lib/{tokens, components/{atoms,molecules,organisms,templates}, pages, stores, api, i18n}
 ```
 
-The examples in the table are what exists today. The folder tree, the column chooser and a settings page of the UI style below are decided but not built yet: the left panel is `FolderDropZone` plus `AlbumSummaryList`. State lives in `stores/analysis.svelte.ts` (runes); messages in `i18n/` (English is the default and the only locale the UI uses today; an `es` catalogue exists, with missing keys falling back to English, but nothing switches to it until RF-13 is implemented; its approved spec is `specs/ui/language-settings.md`).
+The examples in the table are what exists today. The folder tree, the column chooser and a settings page beyond language (UI style below) are decided but not built yet: the left panel is `FolderDropZone` plus `AlbumSummaryList`. State lives in `stores/analysis.svelte.ts` (runes); messages in `i18n/` (RF-13, `specs/ui/language-settings.md`): complete English and Spanish catalogues (`i18n/messages.ts`, from `specs/ui/translations.md`) and one reactive locale (`i18n/locale.svelte.ts`), so `t()` and `getLocale()` re-render every mounted text when the page applies a saved language. English is the default until the settings load. Notices and errors are kept as catalogue keys plus data, never as translated strings. The language Settings modal is `organisms/SettingsPanel` with `molecules/LanguageSelect`, shown through `MainLayout`'s `settings` slot, which makes the rest of the screen below the title bar inert.
 
 The spectrogram canvas palette lives in `src/lib/tokens/spectrogram.ts`, a TS token rather than CSS, because the canvas needs numeric colours; the `tokens.css` rule (no literal colours outside the tokens) applies to it too.
 

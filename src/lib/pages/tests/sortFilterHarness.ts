@@ -23,6 +23,7 @@ import * as api from '../../api'
 import type { TrackAnalysis, TrackError, Verdict } from '../../model'
 import { makeAlbum, makeSummary, makeTrack } from '../../testing/fixtures'
 import AnalysisPage from '../AnalysisPage.svelte'
+import { mockSettings, waitForMainScreen } from './settingsHarness'
 
 export const MUSIC = 'C:\\Music\\'
 export const ROW = 22
@@ -54,6 +55,8 @@ export type RowSpec = {
 const unlisten = vi.fn()
 
 export function resetApiMocks() {
+  // RF-13: English default settings, locale reset (settingsHarness.ts)
+  mockSettings()
   vi.mocked(api.pickFolder).mockReset()
   vi.mocked(api.startAnalysis).mockReset()
   vi.mocked(api.startAnalysisOfDropped).mockReset()
@@ -227,6 +230,7 @@ export function nTracks(
 export async function mountPage() {
   const view = render(AnalysisPage)
   await vi.waitFor(() => expect(api.onDragDrop).toHaveBeenCalled())
+  await waitForMainScreen()
   return view
 }
 

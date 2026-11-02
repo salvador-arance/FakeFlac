@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AnalysisSummary, ProgressEvent } from '../api'
 import * as api from '../api'
 import { makeAlbum, makeSummary, makeTrack } from '../testing/fixtures'
+import { mockSettings, waitForMainScreen } from './tests/settingsHarness'
 import type { TrackOptions } from '../testing/fixtures'
 import AnalysisPage from './AnalysisPage.svelte'
 
@@ -40,6 +41,8 @@ vi.mock('../api', () => {
     minimizeWindow: vi.fn(),
     toggleMaximizeWindow: vi.fn(),
     closeWindow: vi.fn(),
+    getSettings: vi.fn(),
+    setSettings: vi.fn(),
   }
 })
 
@@ -83,6 +86,7 @@ const dataRows = () =>
 async function mountPage() {
   render(AnalysisPage)
   await vi.waitFor(() => expect(api.onDragDrop).toHaveBeenCalled())
+  await waitForMainScreen()
 }
 
 async function openFolder(path = 'C:/Music/Album A') {
@@ -100,7 +104,7 @@ async function finishedWith(count: number) {
   for (let i = 0; i < count; i++) run.done(i, { path: `C:/Music/Album A/t${i}.flac` })
   run.finish(makeSummary({ total: count, done: count, real: count }))
   await vi.waitFor(() => expect(dataRows()).toHaveLength(count))
-  await vi.waitFor(() => expect(statusText()).toMatch(/^\d+ tracks/))
+  await vi.waitFor(() => expect(statusText()).toMatch(/^\d+ tracks?/))
   return run
 }
 
@@ -122,6 +126,8 @@ function pendingExport() {
 }
 
 beforeEach(() => {
+  // RF-13: English default settings, locale reset (tests/settingsHarness.ts)
+  mockSettings()
   vi.mocked(api.pickFolder).mockReset()
   vi.mocked(api.startAnalysis).mockReset()
   vi.mocked(api.startAnalysisOfDropped).mockReset()

@@ -27,6 +27,11 @@ specta = { version = "=2.0.0-rc.25", features = ["derive"] }
 specta-typescript = "0.0.12"
 tauri-plugin-dialog = "2.7.3"
 
+# ADR-0049 amendment (RF-13): the Windows user's language list (GlobalizationPreferences). The 0.62
+# line tauri already brings into Cargo.lock; only these features are enabled.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = ["System_UserProfile", "Foundation_Collections"] }
+
 [dev-dependencies]
 # Same exact package approved for Opus fixtures in ADR-0047.
 rusty-opus = "=1.0.2"

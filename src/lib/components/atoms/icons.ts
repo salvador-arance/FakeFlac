@@ -14,3 +14,4 @@ export type IconName =
   | 'sort-asc'
   | 'sort-desc'
   | 'search'
+  | 'settings'

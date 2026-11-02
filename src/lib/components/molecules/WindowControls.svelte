@@ -1,5 +1,6 @@
 <script lang="ts">
   import IconButton from '../atoms/IconButton.svelte'
+  import { t } from '../../i18n'
 
   type Props = {
     onminimize?: () => void
@@ -11,9 +12,9 @@
 </script>
 
 <div class="window-controls">
-  <IconButton icon="minimize" label="Minimize" size="small" onclick={onminimize} />
-  <IconButton icon="maximize" label="Maximize" size="small" onclick={ontoggleMaximize} />
-  <IconButton icon="close" label="Close" size="small" onclick={onclose} />
+  <IconButton icon="minimize" label={t('window.minimize')} size="small" onclick={onminimize} />
+  <IconButton icon="maximize" label={t('window.maximize')} size="small" onclick={ontoggleMaximize} />
+  <IconButton icon="close" label={t('window.close')} size="small" onclick={onclose} />
 </div>
 
 <style>

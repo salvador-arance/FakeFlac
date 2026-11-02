@@ -26,10 +26,31 @@ describe('sort and filter texts (@RF-08)', () => {
     expect(t('status.shown' as never, { n: 3 })).toBe('3 shown')
   })
 
-  // Spanish falls back to English until RF-13
-  it('es falls back to English', () => {
+  it('en: status.shownOne', () => {
+    expect(t('status.shownOne' as never)).toBe('1 shown')
+  })
+
+  // @RF-13 translations.md sections 4 and 5: explicit Spanish texts
+  it.each([
+    ['filter.label', 'Filtrar por veredicto'],
+    ['filter.fake', 'Mostrar pistas falsas'],
+    ['filter.suspicious', 'Mostrar pistas sospechosas'],
+    ['filter.real', 'Mostrar pistas reales'],
+    ['filter.error', 'Mostrar pistas con errores'],
+    ['search.label', 'Buscar por nombre'],
+    ['search.placeholder', 'Buscar (Ctrl+F)'],
+    ['search.clear', 'Borrar búsqueda'],
+    ['table.noMatches', 'Ninguna pista coincide con los filtros'],
+    ['table.clearFilters', 'Quitar filtros'],
+  ])('es: %s', (key, text) => {
     setLocale('es')
-    for (const [key, text] of TEXTS) expect(t(key as never)).toBe(text)
-    expect(t('status.shown' as never, { n: 0 })).toBe('0 shown')
+    expect(t(key as never)).toBe(text)
+  })
+
+  it('es: status.shown and status.shownOne', () => {
+    setLocale('es')
+    expect(t('status.shown' as never, { n: 0 })).toBe('0 mostradas')
+    expect(t('status.shown' as never, { n: 3 })).toBe('3 mostradas')
+    expect(t('status.shownOne' as never)).toBe('1 mostrada')
   })
 })

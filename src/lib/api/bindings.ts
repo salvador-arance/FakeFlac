@@ -24,6 +24,10 @@ export const commands = {
 } | null, AppError>(__TAURI_INVOKE("export_csv")),
 	/**  RF-11: deletes the result cache files (`specs/contracts/result-cache.md` section 9). */
 	clearCache: () => typedError<null, AppError>(__TAURI_INVOKE("clear_cache")),
+	/**  RF-13: the language settings of this process, loaded on first use (`specs/contracts/settings.md`). */
+	getSettings: () => typedError<SettingsSnapshot, AppError>(__TAURI_INVOKE("get_settings")),
+	/**  RF-13: saves the language settings; they become current only after the file was replaced. */
+	setSettings: (settings: Settings) => typedError<SettingsSnapshot, AppError>(__TAURI_INVOKE("set_settings", { settings })),
 };
 
 /* Types */
@@ -65,7 +69,7 @@ export type AppError = {
 	message: string,
 };
 
-export type AppErrorCode = "NO_AUDIO_FOUND" | "NOT_A_FOLDER" | "FOLDER_UNREADABLE" | "ANALYSIS_RUNNING" | "NOT_ANALYZED" | "EXPORT_FAILED" | "CACHE_FAILED" | "INTERNAL";
+export type AppErrorCode = "NO_AUDIO_FOUND" | "NOT_A_FOLDER" | "FOLDER_UNREADABLE" | "ANALYSIS_RUNNING" | "NOT_ANALYZED" | "EXPORT_FAILED" | "CACHE_FAILED" | "INTERNAL" | "SETTINGS_WRITE_FAILED" | "SETTINGS_READ_ONLY";
 
 export type AudioCodec = "pcm" | "flac" | "alac" | "mp3" | "aac" | "opus";
 
@@ -94,7 +98,30 @@ export type ExportResult = {
 	rows: number,
 };
 
+/**
+ *  Contract version 8 (RF-13): an interface language. Exactly `en` or `es`; case variants and
+ *  region tags are rejected by deserialization.
+ */
+export type Language = "en" | "es";
+
 export type ProgressEvent = { kind: "scanned"; total: number } | { kind: "trackStarted"; index: number; path: string } | { kind: "trackDone"; index: number; analysis: TrackAnalysis; album: AlbumUpdate } | { kind: "finished"; summary: AnalysisSummary } | { kind: "cancelled"; summary: AnalysisSummary };
+
+/**  Contract version 8 (RF-13): the language-only application settings. */
+export type Settings = {
+	language: Language,
+};
+
+/**
+ *  Contract version 8 (RF-13): how the settings of this process were loaded
+ *  (`specs/contracts/settings.md` section 3).
+ */
+export type SettingsLoadStatus = "default" | "loaded" | "invalid" | "unavailable" | "newerVersion";
+
+/**  Contract version 8 (RF-13): the active settings and how they were loaded. */
+export type SettingsSnapshot = {
+	settings: Settings,
+	loadStatus: SettingsLoadStatus,
+};
 
 /**  RF-07. `data` is serialised as a JSON number array (`number[]` in the contract). */
 export type Spectrogram = {
