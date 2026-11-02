@@ -2,6 +2,23 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-02 - RNF-08 verdict label contrast correction implemented
+
+**Done**
+- Spec PR #111 is merged (G1 for RNF-07/RNF-08). Built the focused U3 correction on `feat/RNF-08`: protected test `7635fef` (`ResultsTable.contrast.test.ts` measures the rendered label colour on normal, hovered and selected rows in both languages; 14 cases failed before the fix), fix `285b7db`, margin/doc follow-up `235b07d`.
+- Label text now uses new lighter tokens `--verdict-{real,suspicious,fake,error}-text` (same colour families); icons keep the saturated `--verdict-*` colours. Label contrast is 4.86-9.46 on all three row states (Fake selected 5.09). No spec, existing test, dependency, props or architecture changed.
+- Independent review: no blocking findings; both improvements applied. `just check` green (83 files, 1,430 tests). `just ci` passed on `285b7db`; it was not rerun after `235b07d` (owner's instruction).
+
+**Pending**
+- Human G2 review/merge of the feature PR.
+- RNF-08 stays unverified: owner check that the lighter Fake text still reads as red, 900 x 500 readability in English and Spanish, and the U4 bilingual walkthrough.
+- RNF-07: the four-row Windows 10/11 x NSIS/MSI matrix still needs the owner's results.
+
+**Blockers / questions for the human**
+- None technical. Decide whether the salmon Fake label (`#ffb0ab`) is acceptable; the alternative is a darker `--color-row-selected`, which also affects the Albums selection.
+
+**Next step:** merge the feature PR at G2, then record the U3/U4 and RNF-07 observations.
+
 ## 2026-11-02 - RNF-07 and RNF-08 closure specifications approved at G1
 
 **Done**
