@@ -6,7 +6,7 @@ status: approved
 
 # Album summaries in the main screen (H2)
 
-Approved amendment (#113; implementation pending): `resizable-widths.md` extends RF-10 with a
+Approved amendment (#113; implemented in #115): `resizable-widths.md` extends RF-10 with a
 draggable Albums width. It supersedes only the fixed-width/no-splitter
 part of the layout below and Q3; the panel remains non-collapsible. The extension was approved at G1 on 2026-11-02; the existing implementation
 remains fixed-width until its feature is built.
