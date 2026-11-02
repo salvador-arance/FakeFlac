@@ -2,6 +2,24 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-02 - RF-13 feature: Spanish/English and persistent language
+
+**Done**
+- `/feature RF-13` on branch `feat/RF-13`: `3306c82` test (57 Rust + frontend tests across api, i18n, components, pages), `bf80463` ADR-0049 amendment, `88f8d4d` Rust (`src-tauri/src/settings.rs`, DTOs, `get_settings`/`set_settings`, bindings), `6aec431` frontend (catalogue, reactive locale, `LanguageSelect`, `SettingsPanel`, Toolbar gear, inert background, startup gating, translated components).
+- Owner approved in chat on 2026-11-02 the `windows` crate (`cfg(windows)`, 0.62 already in `Cargo.lock` through tauri, features `System_UserProfile` + `Foundation_Collections`) for `GlobalizationPreferences::Languages()`; recorded as an amendment in ADR-0049 and its index row. No new crate; `unsafe_code` stays forbidden.
+- Review: no blocking findings. `just ci` green (1295 frontend tests, `check-app` included), `just privacy-check --base main` clean. RF-13 traceability row updated.
+- Readings where the spec left room are listed in the test file headers and the PR description (for example: the settings warning survives a run start and is replaced by export/cache notices; title bar stays usable while the modal is open; corrupt BOM/duplicate-field files are invalid).
+
+**Pending**
+- G2 review and merge of the RF-13 PR. Manual checks M1–M2 (relaunch persistence, 900×500 in both languages, keyboard-only modal) by the owner.
+- After merge: status-only wording in `specs/` still says RF-13 is "not implemented" (`requirements/RF-13.md` `status: specified`, `contracts/commands.md`, `contracts/settings.md`); update in a docs PR.
+- Harness fix for the Vitest drive-letter trap (see `lessons.md`) needs an owner decision.
+
+**Blockers / questions for the human**
+- None.
+
+**Next step:** review and merge the RF-13 PR (G2), then run M1–M2 on the installed build.
+
 ## 2026-11-01 - Documentation audit after the RF-13 spec merge
 
 **Done**
