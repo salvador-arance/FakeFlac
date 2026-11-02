@@ -2,6 +2,21 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-02 - RNF-07 matrix reduced to Windows 11 x64 (proposed)
+
+**Done**
+- Branch `spec/RNF-07-windows11-matrix`: the owner chose to drop Windows 10 from the closure matrix. The contract (P2, P-Q1 amendment), feature, RNF-07 text and traceability now name two rows (Windows 11 x64, NSIS and MSI); Windows 10 stays a stated target, unverified.
+- Recorded the owner's report: Windows 11 26H2 build 26300.9711 x64 VM, both installers built by `npm run tauri build` from production source `235b07d`, install/launch/analysis/uninstall OK, on a personal music folder (not recorded).
+
+**Pending**
+- G1: owner approval/merge of this amendment.
+- RNF-07 stays unverified until the itemised P3 outcomes (corrupt file, Unicode name, empty folder before and after an analysis), installer SHA-256 and WebView2 version are recorded for both rows.
+
+**Blockers / questions for the human**
+- Were the P3 corrupt/Unicode/empty-folder cases exercised? If yes, say so and give the hash/WebView2 version (or accept "not recorded" and re-run once).
+
+**Next step:** merge this spec PR, then record the missing P3/P4 evidence and close RNF-07.
+
 ## 2026-11-02 - RNF-07 and RNF-08 closure specifications approved at G1
 
 **Done**
