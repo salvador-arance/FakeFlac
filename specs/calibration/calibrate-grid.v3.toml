@@ -1,6 +1,7 @@
 # Grid for /calibrate v3 (RP-11, ADR-0036). Spec: specs/calibration/evaluation.md section 7; calibration.md OQ-18 to OQ-21.
 # Baseline: detection v8, the parameters the app ships. Default of --grid. Searches the full-band guard ([full_band])
-# together with the two Fake thresholds it guards. [edge] and [lossy] are copied unchanged into a proposal.
+# together with the gap threshold it guards. Not verdict.step_fake_db: lossy.fake_min_step_db is tied to it and the
+# search never changes [lossy] (OQ-22). [edge] and [lossy] are copied unchanged into a proposal.
 # Only rule parameters may appear in [values]; the search reads tune rows only.
 grid_version = 3
 baseline = "specs/detection/detection-params.v8.toml"
@@ -13,8 +14,7 @@ fn = 1.0
 suspicious_negative = 0.5
 suspicious_positive = 0.1
 
-[values]                              # around v8; 3 x 3 x 3 x 3 = 81 points before invariants
+[values]                              # around v8; 3 x 3 x 3 = 27 points before invariants
 "full_band.min_level_db" = [-80.0, -70.0, -60.0]
 "full_band.min_burst_db" = [2.0, 3.0, 4.0]
 "verdict.gap_fake_db" = [5.0, 6.0, 7.0]
-"verdict.step_fake_db" = [9.0, 10.0, 11.0]

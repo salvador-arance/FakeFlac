@@ -4,8 +4,9 @@ Feature: Calibration and acceptance against a labelled corpus
   sample corpus of specs/calibration/sample-corpus.md (synthetic fixtures,
   fixture transcoder, no ffmpeg) in two fresh temporary folders used as
   FAKEFLAC_CORPUS and FAKEFLAC_CALIBRATION. Unless a scenario says otherwise,
-  the params file is specs/detection/detection-params.v2.toml, passed with
-  --params (the tool's default is detection-params.v8.toml, calibration.md
+  the params file is specs/detection/detection-params.v2.toml: "accept"
+  scenarios pass it with --params, and "calibrate" scenarios name it as the
+  grid baseline (the tool's default is detection-params.v8.toml, calibration.md
   OQ-18; "Defaults" below).
   The v4 expectations on fxv0 (sfb21_gaps) rest on a step of 3 to 10 dB in the
   lossy range (fixtures.md, "Verdicts with v4": derived, and measured once
@@ -27,7 +28,9 @@ Feature: Calibration and acceptance against a labelled corpus
   Changed for the v8 baseline (calibration.md OQ-18 to OQ-21): default params
   v8 and default grid calibrate-grid.v3.toml; must_catch feasibility is
   non-regression against the baseline. No earlier scenario changes its
-  expectations: in each of them the baseline has no must_catch Real.
+  expectations: in each of them the baseline has no must_catch Real (fx128 is
+  Fake under v2 to v8). Default files and relative grid baselines are read from
+  the repository root, so the tests do not depend on the current folder.
   Lossy rows: calibration-lossy.feature.
 
   # --- Environment -------------------------------------------------------
@@ -525,25 +528,42 @@ Feature: Calibration and acceptance against a labelled corpus
     Given a detectable must_catch tune positive that receives verdict "real" under the baseline and under a candidate point
     And no other detectable must_catch tune positive receives verdict "real" under that point
     And no confirmed fake receives verdict "real" under the baseline or under that point
-    When feasibility is evaluated during grid search
+    And the grid has at most 10 points
+    When the grid search ranks the points
     Then the baseline and the candidate point are feasible
-    And the output says "must_catch Real at baseline: 1"
-    And both have "must_catch Real" 1 and "must_catch lost" 0 in the best-points table
+    And the "Grid search" section of summary.md has the line "- must_catch Real at baseline: 1" right after the "- baseline: cost" line
+    And report.md lists that positive under "### must_catch Real at baseline"
+    And in the best-points table the baseline row and the candidate row both have "must_catch Real" 1 and "must_catch lost" 0
     And that positive still counts as a false negative in the cost of both
 
   @RP-11
-  Scenario: A point that loses a must_catch detection of the baseline is infeasible
-    Given a detectable must_catch tune positive that receives verdict "fake" or "suspicious" under the baseline and "real" under a candidate point
+  Scenario Outline: A point that loses a must_catch detection of the baseline is infeasible
+    Given a detectable must_catch tune positive that receives verdict "<baseline verdict>" under the baseline and "real" under a candidate point
     And on the tune rows that candidate costs less than the baseline
+    And the grid has at most 10 points
     When the grid search ranks the points
     Then the candidate point is marked infeasible
-    And it has "must_catch lost" 1 in the best-points table
+    And its row in the best-points table has "must_catch lost" 1
+    And the "Grid search" section of summary.md has the line "- must_catch Real at baseline: 0"
     And it is not proposed
+
+    Examples:
+      | baseline verdict |
+      | fake             |
+      | suspicious       |
 
   # --- Defaults (calibration.md OQ-18) ------------------------------------
 
+  @RP-11 @RF-04
+  Scenario: The default params are the app's
+    Given the default params file and the default grid of the tool
+    Then the default params file is specs/detection/detection-params.v8.toml
+    And it deserialises to DetectionParams::default()
+    And the baseline of the default grid is that same file
+
   @RP-11
   Scenario: Without --params the baseline is the params file the app ships
+    Given the current folder is not the repository root
     When "accept" runs on the sample corpus with no --params
     Then the exit code is 0
     And the report header lists exactly one params file, detection-params.v8.toml, with algorithm_version 8
@@ -552,6 +572,7 @@ Feature: Calibration and acceptance against a labelled corpus
   Scenario: Without --grid the search reads calibrate-grid.v3.toml
     The default grid's must_catch settings are those of the real corpus, which
     the sample config does not have, so the run stops before preparing anything.
+    Given the current folder is not the repository root
     When "calibrate" runs on the sample corpus with no --grid
     Then the exit code is 2
     And the error output says "calibrate-grid.v3.toml"
