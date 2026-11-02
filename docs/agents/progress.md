@@ -2,21 +2,21 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
-## 2026-11-02 - Release 0.2.0 draft checked
+## 2026-11-02 - Release 0.2.0 published
 
 **Done**
+- The owner published v0.2.0 on 2026-11-02 (M7), after M3-M6; README status updated.
 - The owner tagged v0.2.0; the Release workflow (run 41457533514) succeeded and left a draft with three assets.
 - M2 (RNF-06) from the `package` log and the draft's assets: `FakeFlac_0.2.0_x64-setup.exe` 2,872,090 bytes (2.87 MB) and `FakeFlac_0.2.0_x64_en-US.msi` 3,981,312 bytes, both far below the 20,000,000-byte limit; `SHA256SUMS.txt` 190 bytes.
 - M3-M6 (install, checksums and provenance, uninstall, MSI) were reported completely correct by the owner on Windows 11.
 
 **Pending**
-- Owner: read the draft notes (M7) and publish v0.2.0. Agents never publish.
-- After publication, a status-only docs PR can say v0.2.0 is released.
+- None for the release.
 
 **Blockers / questions for the human**
 - None.
 
-**Next step:** publish the draft release; then choose the next work (RNF-02, RNF-03 and RNF-10 are still `draft`; RF-12 is H3).
+**Next step:** choose the next work (RNF-02, RNF-03 and RNF-10 are still `draft`; RF-12 is H3).
 
 ## 2026-11-02 - H2 complete; release 0.2.0 prepared
 
