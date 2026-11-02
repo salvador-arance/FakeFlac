@@ -19,18 +19,21 @@
     albums.length > 0 ? t('albums.titleCount', { count: albums.length }) : t('albums.title'),
   )
 
+  /** translations.md section 4: the singular key exactly at 1, the general key otherwise. */
+  function count(key: string, n: number): string {
+    return n === 1 ? t(`${key}One`) : t(key, { n })
+  }
+
   /** "12 tracks · 11 real · 1 fake": the track part, then the non-zero counts (album-summary.md). */
   function countsText(album: AlbumUpdate): string {
     const s = album.summary
     const parts: string[] = []
     if (s.total < album.files) parts.push(t('albums.partial', { done: s.total, files: album.files }))
-    else parts.push(s.total === 1 ? t('albums.tracksOne') : t('albums.tracks', { n: s.total }))
-    if (s.real > 0) parts.push(t('albums.real', { n: s.real }))
-    if (s.suspicious > 0) parts.push(t('albums.suspicious', { n: s.suspicious }))
-    if (s.fake > 0) parts.push(t('albums.fake', { n: s.fake }))
-    if (s.errors > 0) {
-      parts.push(s.errors === 1 ? t('albums.errorsOne') : t('albums.errors', { n: s.errors }))
-    }
+    else parts.push(count('albums.tracks', s.total))
+    if (s.real > 0) parts.push(count('albums.real', s.real))
+    if (s.suspicious > 0) parts.push(count('albums.suspicious', s.suspicious))
+    if (s.fake > 0) parts.push(count('albums.fake', s.fake))
+    if (s.errors > 0) parts.push(count('albums.errors', s.errors))
     return parts.join(' · ')
   }
 

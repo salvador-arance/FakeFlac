@@ -185,42 +185,42 @@
   <div class="table-header" role="rowgroup" bind:this={headerElement}>
     <div class="row header-row" role="row">
       <ColumnHeader
-        label="State"
+        label={t('column.state')}
         sort={sort.column === 'state' ? sort.direction : null}
         onsort={() => onsort?.('state')}
       />
       <ColumnHeader
-        label="File"
+        label={t('column.file')}
         sort={sort.column === 'file' ? sort.direction : null}
         onsort={() => onsort?.('file')}
       />
       <ColumnHeader
-        label="Folder"
+        label={t('column.folder')}
         sort={sort.column === 'folder' ? sort.direction : null}
         onsort={() => onsort?.('folder')}
       />
       <ColumnHeader
-        label="Format"
+        label={t('column.format')}
         sort={sort.column === 'format' ? sort.direction : null}
         onsort={() => onsort?.('format')}
       />
       <ColumnHeader
-        label="Samplerate"
+        label={t('column.sampleRate')}
         sort={sort.column === 'sampleRate' ? sort.direction : null}
         onsort={() => onsort?.('sampleRate')}
       />
       <ColumnHeader
-        label="Bits"
+        label={t('column.bits')}
         sort={sort.column === 'bitDepth' ? sort.direction : null}
         onsort={() => onsort?.('bitDepth')}
       />
       <ColumnHeader
-        label="Duration"
+        label={t('column.duration')}
         sort={sort.column === 'duration' ? sort.direction : null}
         onsort={() => onsort?.('duration')}
       />
       <ColumnHeader
-        label="Cutoff"
+        label={t('column.cutoff')}
         sort={sort.column === 'cutoff' ? sort.direction : null}
         onsort={() => onsort?.('cutoff')}
       />

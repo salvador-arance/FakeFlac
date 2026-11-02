@@ -16,6 +16,11 @@
 
   let { phase, summary, message, notice, shown, cache }: Props = $props()
 
+  /** translations.md section 5: the singular key exactly at 1, the general key otherwise. */
+  function count(key: string, n: number): string {
+    return n === 1 ? t(`${key}One`) : t(key, { n })
+  }
+
   let statusText = $derived.by(() => {
     switch (phase) {
       case 'ready':
@@ -23,11 +28,21 @@
       case 'scanning':
         return t('status.scanning')
       case 'analysing':
-        return `${summary.done}/${summary.total} · ${summary.suspicious} suspicious · ${summary.fake} fake`
+        return [
+          `${summary.done}/${summary.total}`,
+          count('status.suspicious', summary.suspicious),
+          count('status.fake', summary.fake),
+        ].join(' · ')
       case 'finished':
-        return `${summary.total} tracks · ${summary.real} real · ${summary.suspicious} suspicious · ${summary.fake} fake · ${summary.errors} errors`
+        return [
+          count('status.tracks', summary.total),
+          count('status.real', summary.real),
+          count('status.suspicious', summary.suspicious),
+          count('status.fake', summary.fake),
+          count('status.errors', summary.errors),
+        ].join(' · ')
       case 'cancelled':
-        return `Cancelled · ${summary.done} of ${summary.total}`
+        return t('status.cancelled', { done: summary.done, total: summary.total })
       case 'error':
         return message ?? ''
       default:
@@ -47,7 +62,7 @@
   // RF-08 (sort-filter.md section 9): only while the table has run rows to count
   let shownCount = $derived(
     shown !== undefined && (phase === 'analysing' || phase === 'finished' || phase === 'cancelled')
-      ? ` · ${t('status.shown', { n: shown })}`
+      ? ` · ${count('status.shown', shown)}`
       : '',
   )
 

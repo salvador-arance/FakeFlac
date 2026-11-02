@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { t } from '../../i18n'
+
   type Props = {
     hz: number | null
     nyquistHz: number
@@ -8,7 +10,7 @@
 
   let formatted = $derived.by(() => {
     if (hz === null || hz === undefined) return ''
-    if (hz === nyquistHz) return 'Full band'
+    if (hz === nyquistHz) return t('cutoff.fullBand')
     return `${(hz / 1000).toFixed(1)} kHz`
   })
 </script>

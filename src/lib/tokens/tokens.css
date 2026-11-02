@@ -19,6 +19,11 @@
   /* accent */
   --color-accent: #e8892b;
 
+  /* modal dialogs (RF-13 Settings) and their messages */
+  --color-backdrop: rgba(0, 0, 0, 0.55);
+  --color-danger: #d9534f;
+  --dialog-width: 360px;
+
   /* verdicts (never conveyed by colour alone: always icon + text, RNF-08) */
   --verdict-real: #5fb36b;
   --verdict-suspicious: #e0b13a;
