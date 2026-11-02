@@ -2,6 +2,23 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-02 - RNF-07 and RNF-08 closure specifications proposed
+
+**Done**
+- Branch `spec/RNF-07-RNF-08`: proposed platform contract, usability spec, scenarios and traceability; both requirements remain `draft` pending G1. Independent final review: no blocking findings.
+- Confirmed an existing RNF-08 contrast gap: verdict labels inherit colours that fail the already approved 4.5:1 text requirement, especially on selected rows. The proposal requires a focused correction after G1 and an owner walkthrough in both languages.
+- `just check` (1,295 frontend tests), `just check-app`, `just build`, `just release-assets`, `just trace` and `git diff --check` passed. Local production source `216c945`, version 0.1.0: NSIS 2,877,203 bytes; MSI 4,661,248 bytes. Candidate hashes are in `specs/contracts/windows-platform.md`; ignored `target/rnf-07-test-pack.zip` contains installers, checksums and synthetic audio fixtures.
+
+**Pending**
+- G1 for P-Q1 (Windows 10/11 x64 × NSIS/MSI matrix), U-Q1 (bilingual owner walkthrough), U-Q2 (4.5:1 verdict text in normal/hovered/selected rows).
+- The owner can test both Windows versions this session; all four installed-app matrix rows still need results. Historical Sandbox acceptance does not establish both OS builds.
+- After G1 approval and merge: independent tests and implementation for RNF-08 contrast, then visual/comprehension acceptance. No production code or executable tests changed in this proposal.
+
+**Blockers / questions for the human**
+- Neither requirement is verified yet. Human G1 approval and platform/runtime observations are outstanding.
+
+**Next step:** review and merge the combined spec PR at G1, then execute its closure checks and the focused RNF-08 correction.
+
 ## 2026-11-02 - RF-13 merged; status wording updated
 
 **Done**
