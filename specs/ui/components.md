@@ -6,10 +6,10 @@ status: approved
 
 # Components for H1 (atomic design, ADR-0014)
 
-Proposed extension, pending G1: `resizable-widths.md` defines vertical resize
+Approved extension (#113; implementation pending): `resizable-widths.md` defines vertical resize
 handles and the additional props/events for `Splitter`, `ColumnHeader`,
-`ResultsTable`, `MainLayout` and `AnalysisPage`. The existing contracts below
-remain approved; the new width behavior is not approved by this cross-reference.
+`ResultsTable`, `MainLayout` and `AnalysisPage`. The existing contracts below are extended by the width behavior approved
+at G1 on 2026-11-02.
 
 > Every component listed here gets a Storybook story per state and a component test before it is used in a page (S6). Presentational components receive data through props and emit events; only `AnalysisPage` touches stores and the API client. Styling only through tokens (`src/lib/tokens/tokens.css`).
 

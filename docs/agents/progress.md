@@ -2,6 +2,21 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-02 - Resizable layout approved and merged at G1
+
+**Done**
+- The owner approved R-Q1–R-Q3 in chat and merged spec PR #113 (`ad47005`). The sidebar/column resizing extension of RF-06/RF-10 is approved; its implementation remains pending.
+- Status-only handoff on `docs/resizing-spec-handoff`: approved metadata and references now reflect G1 in the UI/local-preference specs, requirement links, catalogue supplement and traceability. No behavior, scenario, production code or executable test changed.
+
+**Pending**
+- `/feature RF-06/RF-10` for resizable widths: independent test stage, Svelte implementation, review, rendered M1 and `just ci` before G2.
+- RNF-07/08 PR #111 and remaining acceptance are separate; header fix #112 is merged.
+
+**Blockers / questions for the human**
+- None for the resizing feature; its G1 is complete.
+
+**Next step:** build the approved resizable layout on a feature branch.
+
 ## 2026-11-02 - Header fix merged; resizable layout proposed
 
 **Done**
