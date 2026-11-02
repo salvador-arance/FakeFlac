@@ -95,6 +95,23 @@ thresholds and ground-truth accuracy are outside this presentation check.
   during implementation. New coverage should check contrast for the rendered
   label in all three row states, alongside existing language/semantic coverage.
 
+## Recorded results (2026-11-02)
+
+Candidate: production source `235b07d` (branch `feat/RNF-08`, desktop build via
+`npm run tauri build` installed in a Windows 11 26H2 build 26300.9711 x64 virtual
+machine). Data: the owner's personal music folder (names not recorded).
+
+| Check | Result |
+|---|---|
+| U1/U2 automated | Existing tests pass in `just check` (83 files, 1,430 tests) |
+| U3 computed | `ResultsTable.contrast.test.ts`: label contrast 4.86-9.46 (4 verdicts x normal/hover/selected, both languages); lowest is Real on selected, 4.86 |
+| U3 manual (900 x 500, English and Spanish) | Passed per owner: labels readable, Fake reads as red, layout fine |
+| U4 owner walkthrough, English | Passed per owner |
+| U4 owner walkthrough, Spanish | Passed per owner |
+
+No confusing wording was reported. Not itemised by the owner: the exact U3 numbers
+observed on screen beyond the automated ones.
+
 Record candidate commit, date, UI harness or desktop build, language, U1/U2 test
 results, U3 measurements and U4 observations. RNF-08 is verified only after
 U1–U4 passing and `just check` green. A failure stays visible as pending.

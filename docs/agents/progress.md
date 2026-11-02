@@ -2,6 +2,23 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-02 - RNF-08 verdict label contrast correction implemented
+
+**Done**
+- Spec PR #111 is merged (G1 for RNF-07/RNF-08). Built the focused U3 correction on `feat/RNF-08`: protected test `7635fef` (`ResultsTable.contrast.test.ts` measures the rendered label colour on normal, hovered and selected rows in both languages; 14 cases failed before the fix), fix `285b7db`, margin/doc follow-up `235b07d`.
+- Label text now uses new lighter tokens `--verdict-{real,suspicious,fake,error}-text` (same colour families); icons keep the saturated `--verdict-*` colours. Label contrast is 4.86-9.46 on all three row states (Fake selected 5.09). No spec, existing test, dependency, props or architecture changed.
+- Independent review: no blocking findings; both improvements applied. `just check` green (83 files, 1,430 tests). `just ci` passed on `285b7db`; it was not rerun after `235b07d` (owner's instruction).
+
+**Pending**
+- Human G2 review/merge of the feature PR.
+- RNF-08: the owner reported U3 (900 x 500, English and Spanish, Fake reads as red) and U4 (both languages) passed on 2026-11-02 with a desktop build of `235b07d` in a Windows 11 VM; recorded in `specs/ui/verdict-usability.md`.
+- RNF-07: closed for the Windows 11 x64 matrix in merged spec PR #117.
+
+**Blockers / questions for the human**
+- None. The owner accepted the salmon Fake label (`#ffb0ab`) in the U3 check.
+
+**Next step:** merge the feature PR at G2, then RNF-07 and RNF-08 are both closed.
+
 ## 2026-11-02 - RNF-07 matrix reduced to Windows 11 x64 (proposed)
 
 **Done**

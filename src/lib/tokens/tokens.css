@@ -33,6 +33,15 @@
   --verdict-suspicious: #e0b13a;
   --verdict-fake: #d9534f;
   --verdict-error: #8a8a8a;
+  /*
+   * Verdict label text: lighter tints of the same colour families, at least 4.5:1 on
+   * --color-bg, --color-surface-raised and --color-row-selected (RNF-08 U3). The icons keep
+   * the saturated --verdict-* colours above.
+   */
+  --verdict-real-text: #85d18f;
+  --verdict-suspicious-text: #e8bf55;
+  --verdict-fake-text: #ffb0ab;
+  --verdict-error-text: #bdbdbd;
 
   /* spacing / type */
   --space-1: 4px;

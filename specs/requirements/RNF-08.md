@@ -14,4 +14,5 @@ Approved acceptance (G1, 2026-11-02): `specs/ui/verdict-usability.md` (U1–U4 a
 U-Q1/U-Q2), with scenarios in `specs/features/verdict-usability.feature`. Existing
 label/icon/translation tests provide partial evidence. The current verdict text
 fails the already approved 4.5:1 contrast criterion in some row states; correction
-and the owner comprehension walkthrough in both languages remain pending.
+implemented in `235b07d`; U1-U4 recorded as passed on 2026-11-02 (see the spec's
+recorded results).
