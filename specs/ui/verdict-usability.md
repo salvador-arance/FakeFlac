@@ -1,7 +1,7 @@
 ---
 id: SPEC-VERDICT-USABILITY
 requirements: [RNF-08, RF-06, RF-07, RF-13, RNF-04, RNF-09]
-status: proposed
+status: approved
 ---
 
 # Verdict usability acceptance (RNF-08)
@@ -96,14 +96,14 @@ thresholds and ground-truth accuracy are outside this presentation check.
   label in all three row states, alongside existing language/semantic coverage.
 
 Record candidate commit, date, UI harness or desktop build, language, U1/U2 test
-results, U3 measurements and U4 observations. RNF-08 is verified only after G1,
+results, U3 measurements and U4 observations. RNF-08 is verified only after
 U1–U4 passing and `just check` green. A failure stays visible as pending.
 
 ## G1 decisions
 
 | Decision | Recommendation |
 |---|---|
-| U-Q1: is the explicit owner walkthrough in both languages sufficient for this requirement? | Yes; do not introduce a user-study recruitment or timing requirement. |
-| U-Q2: must closure include readable verdict text in normal, hovered and selected rows, applying the already approved 4.5:1 threshold? | Yes; fix the measured contrast gap after G1 while preserving labels, distinct icons and colour families. Replacement colours or separating label/icon colours are implementation choices subject to U3. |
+| U-Q1 (approved 2026-11-02): is the explicit owner walkthrough in both languages sufficient for this requirement? | Yes; do not introduce a user-study recruitment or timing requirement. |
+| U-Q2 (approved 2026-11-02): must closure include readable verdict text in normal, hovered and selected rows, applying the already approved 4.5:1 threshold? | Yes; fix the measured contrast gap after G1 while preserving labels, distinct icons and colour families. Replacement colours or separating label/icon colours are implementation choices subject to U3. |
 
 No new dependency or architecture decision is proposed.

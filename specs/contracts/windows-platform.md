@@ -1,7 +1,7 @@
 ---
 id: SPEC-WINDOWS-PLATFORM
 requirements: [RNF-07, RNF-04, RNF-09]
-status: proposed
+status: approved
 ---
 
 # Windows platform acceptance (RNF-07)
@@ -97,12 +97,12 @@ passed from this report alone.
 | Windows 11 x64 | NSIS | Pending | Pending |
 | Windows 11 x64 | MSI | Pending | Pending |
 
-RNF-07 can be recorded as verified only after G1 approval, P1 passing and all
+RNF-07 can be recorded as verified only after P1 passing and all
 four matrix rows passing with P4 evidence. A failed row leaves it pending.
 
 ## G1 decision
 
-**P-Q1:** approve this four-row matrix and the small P3 smoke check as RNF-07's
+**P-Q1 (approved by the owner, 2026-11-02):** approve this four-row matrix and the small P3 smoke check as RNF-07's
 closure criterion? Recommended: yes, reusing the released installer formats and
 the existing analysis/error behavior. Adding a CI launch smoke test is deferred;
 it would not replace either client OS run.
