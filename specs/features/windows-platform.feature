@@ -1,9 +1,9 @@
 @RNF-07
-Feature: Windows 10 and 11 x64 compatibility
+Feature: Windows 11 x64 compatibility (closure matrix)
   Acceptance: specs/contracts/windows-platform.md (P1 to P4).
   These scenarios are manual installed-application checks, not CI runner claims.
 
-  Scenario Outline: Install, analyse and uninstall on each supported Windows OS
+  Scenario Outline: Install, analyse and uninstall on the Windows 11 closure matrix
     Given a clean "<os>" x64 test machine
     And the candidate "<installer>" installer and its SHA-256 are recorded
     When I install FakeFlac and launch it from Start
@@ -17,8 +17,6 @@ Feature: Windows 10 and 11 x64 compatibility
 
     Examples:
       | os         | installer |
-      | Windows 10 | NSIS      |
-      | Windows 10 | MSI       |
       | Windows 11 | NSIS      |
       | Windows 11 | MSI       |
 

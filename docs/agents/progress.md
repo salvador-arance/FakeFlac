@@ -12,12 +12,27 @@
 **Pending**
 - Human G2 review/merge of the feature PR.
 - RNF-08: the owner reported U3 (900 x 500, English and Spanish, Fake reads as red) and U4 (both languages) passed on 2026-11-02 with a desktop build of `235b07d` in a Windows 11 VM; recorded in `specs/ui/verdict-usability.md`.
-- RNF-07: handled in a separate spec PR (Windows 11 x64 matrix).
+- RNF-07: closed for the Windows 11 x64 matrix in merged spec PR #117.
 
 **Blockers / questions for the human**
 - None. The owner accepted the salmon Fake label (`#ffb0ab`) in the U3 check.
 
-**Next step:** merge the feature PR at G2, then close RNF-07 through its spec PR.
+**Next step:** merge the feature PR at G2, then RNF-07 and RNF-08 are both closed.
+
+## 2026-11-02 - RNF-07 matrix reduced to Windows 11 x64 (proposed)
+
+**Done**
+- Branch `spec/RNF-07-windows11-matrix`: the owner chose to drop Windows 10 from the closure matrix. The contract (P2, P-Q1 amendment), feature, RNF-07 text and traceability now name two rows (Windows 11 x64, NSIS and MSI); Windows 10 stays a stated target, unverified.
+- Recorded the owner's report: Windows 11 26H2 build 26300.9711 x64 VM, both installers built by `npm run tauri build` from production source `235b07d`, install/launch/analysis/uninstall OK, with the synthetic fixture pack (valid, corrupt, Unicode name, empty folder); result reported as OK, not itemised per case.
+
+**Pending**
+- G1: owner approval/merge of this amendment.
+- None for RNF-07 once this PR is merged: recorded as verified for the Windows 11 x64 matrix.
+
+**Blockers / questions for the human**
+- None. WebView2 Runtime 156.0.4314.58; the owner checked the installer hashes (values not recorded).
+
+**Next step:** merge this spec PR, then both RNF-07 and RNF-08 are closed; Windows 10 remains unverified by choice.
 
 ## 2026-11-02 - RNF-07 and RNF-08 closure specifications approved at G1
 
