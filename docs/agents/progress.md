@@ -11,14 +11,14 @@
 - Readings where the spec left room are listed in the test file headers and the PR description (for example: the settings warning survives a run start and is replaced by export/cache notices; title bar stays usable while the modal is open; corrupt BOM/duplicate-field files are invalid).
 
 **Pending**
-- G2 review and merge of the RF-13 PR. Manual checks M1–M2 (relaunch persistence, 900×500 in both languages, keyboard-only modal) by the owner.
+- G2 review and merge of the RF-13 PR (#109). Manual checks M1–M2 (relaunch persistence, 900×500 in both languages, keyboard-only modal) passed: the owner confirmed in chat on 2026-11-02.
 - After merge: status-only wording in `specs/` still says RF-13 is "not implemented" (`requirements/RF-13.md` `status: specified`, `contracts/commands.md`, `contracts/settings.md`); update in a docs PR.
 - Harness fix for the Vitest drive-letter trap (see `lessons.md`) needs an owner decision.
 
 **Blockers / questions for the human**
 - None.
 
-**Next step:** review and merge the RF-13 PR (G2), then run M1–M2 on the installed build.
+**Next step:** review and merge the RF-13 PR #109 (G2); then the docs PR for the RF-13 status wording.
 
 ## 2026-11-01 - Documentation audit after the RF-13 spec merge
 
