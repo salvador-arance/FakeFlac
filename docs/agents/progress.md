@@ -2,6 +2,38 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-02 - RP-11 acceptance targets: owner decisions (spec paused)
+
+**Done**
+- Diagnosed the `Real` transcodes behind the T2 and T3 failures with v8 (L5 run `20261102T170123Z`). Two cbr128 cases were re-encoded locally with the config's recipe.
+- **T2 (5 `Real`: 4 cbr128, 1 cbr192):**
+  - 2 are undetectable under the current definition: the source band ends near 11.85 kHz.
+  - 1 is a quiet solo-piano track. Above 15 kHz the source is already at the digital floor (about −91 dB mean level in 15–16, 17–19 and 19.5–21.5 kHz), and the transcode is identical there. It still counts as detectable, because the band measures are relative to a quiet reference band.
+  - 1 is a loud track whose cutoff is masked by 16-bit decode clipping. The float decode peaks at +1.8 dBFS and has nothing above 17 kHz; the s16 decode (no dither) fills 17–21.5 kHz at about −78 dB. In tracks.csv: `fs` 16050, `fe` 22050, `D` 5.49.
+  - 1 has its step at 14450 Hz, 50 Hz below `lossy_min_cutoff_hz` (`D` 8.07 < `step_low_suspicious_db`). Lowering the threshold to 14400 would catch only this one and change no negative.
+- **T3 (8 `Real`, cbr320):**
+  - 3 are undetectable.
+  - 5 are detectable, with `fs` 19350–20350 Hz, `D` 4.5–11.6 and `G` ≤ 2.3 (3 in tune, 2 in holdout). This is the same zone as the real purchased discs (rules.md, "Why v2 was replaced").
+- The owner decided the scope; each answer was the recommended option. It is a calibration spec (RP-11), not detection v9:
+  1. **Q9:** T2 and T3 exclude undetectable transcodes, like the rates do. "Undetectable" is widened to a source whose content above the setting's `lowpass_hz` is already at the digital floor, in absolute terms (the piano case). The criterion and its threshold are still to be defined and measured before G1.
+  2. **Clipping:** the clipping-masked cbr128 transcode becomes a known limitation in rules.md section 6. A clipping-aware measure is a later detection spec.
+  3. **14450 Hz step:** a known limitation. `lossy_min_cutoff_hz` stays 14500, because moving it for one track would be fitting the corpus.
+  4. **T3:** it becomes a rate bound, a maximum `Real` rate over detectable cbr320 transcodes (example: 1 %), instead of a count of 0.
+
+**Pending**
+- The spec, `/new-spec RP-11`, paused by the owner until about 2026-11-09. Its new OQs follow OQ-24. It covers:
+  - evaluation.md sections 2 and 6;
+  - the `[[targets]]` rate format, and whether the default config changes in place or gets a new version;
+  - rules.md Q9 and Q10 closed, with the two limitations added to section 6;
+  - new `@RP-11` scenarios in `calibration.feature`.
+- Before G1, measure the floor criterion on the corpus.
+- Carried over: `docs/release-0.2.0-record` (it has commits after #119).
+
+**Blockers / questions for the human**
+- None.
+
+**Next step:** `/new-spec RP-11` with the four decisions above.
+
 ## 2026-11-02 - RP-11 merged; checklist L5 passed
 
 **Done**
