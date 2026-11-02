@@ -3,6 +3,10 @@
 export type Locale = 'en' | 'es'
 
 export const EN: Record<string, string> = {
+  'layout.resizeAlbums': 'Resize Albums panel',
+  'layout.resizeColumn': 'Resize {column} column',
+  'layout.resizeHelp': 'Drag or use Left/Right to resize. Double-click or press Enter to reset.',
+  'layout.widthPixels': '{width} pixels',
   'app.title': 'FakeFlac',
   'toolbar.label': 'Main toolbar',
   'toolbar.open': 'Open folder',
@@ -125,6 +129,10 @@ export const EN: Record<string, string> = {
 }
 
 export const ES: Record<string, string> = {
+  'layout.resizeAlbums': 'Cambiar ancho del panel de \u00e1lbumes',
+  'layout.resizeColumn': 'Cambiar ancho de la columna {column}',
+  'layout.resizeHelp': 'Arrastra o usa Izquierda/Derecha para cambiar el ancho. Haz doble clic o pulsa Intro para restablecerlo.',
+  'layout.widthPixels': '{width} p\u00edxeles',
   'app.title': 'FakeFlac',
   'toolbar.label': 'Barra de herramientas principal',
   'toolbar.open': 'Abrir carpeta',

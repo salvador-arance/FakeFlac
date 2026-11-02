@@ -1,7 +1,12 @@
 <script lang="ts">
+  import Splitter from '../atoms/Splitter.svelte'
   import Icon from '../atoms/Icon.svelte'
 
   type Props = {
+    resize?: { width: number; min: number; max: number; label: string; description: string; valueText: string }
+    onresize?: (delta: number) => void
+    onresizeend?: () => void
+    onresetwidth?: () => void
     label: string
     sort?: 'asc' | 'desc' | null
     onsort?: () => void
@@ -9,7 +14,7 @@
     tooltip?: string
   }
 
-  let { label, sort = null, onsort, tooltip }: Props = $props()
+  let { label, sort = null, onsort, tooltip, resize, onresize, onresizeend, onresetwidth }: Props = $props()
 
   const tooltipId = $props.id()
 
@@ -21,11 +26,12 @@
 <!-- The tooltip: `title` on hover; on keyboard focus a CSS bubble drawn from `data-tooltip` (a
      pseudo-element). The button's accessible description is a hidden sibling, so the header's text
      content is unchanged; being `hidden`, it takes no cell of the parent grid. -->
-<div class="column-header" role="columnheader" aria-sort={ariaSort} title={tooltip}>
+<div class="column-header" class:resizable={!!resize} role="columnheader" aria-sort={ariaSort} title={resize ? (tooltip ? `${label}: ${tooltip}` : label) : tooltip}>
   <button
     type="button"
     class="header-button"
     onclick={onsort}
+    aria-label={label}
     aria-describedby={tooltip ? tooltipId : undefined}
     data-tooltip={tooltip}
   >
@@ -36,6 +42,9 @@
       <Icon name="sort-desc" size={16} />
     {/if}
   </button>
+  {#if resize}
+    <Splitter orientation="vertical" variant="column" label={resize.label} description={resize.description} value={resize.width} min={resize.min} max={resize.max} valueText={resize.valueText} {onresize} {onresizeend} onreset={onresetwidth} />
+  {/if}
 </div>
 {#if tooltip}
   <span id={tooltipId} hidden>{tooltip}</span>
@@ -48,10 +57,19 @@
     align-items: center;
     user-select: none;
     height: 100%;
+    min-width: 0;
+    width: 100%;
   }
 
+  .resizable { padding-right: var(--column-resize-width); box-sizing: border-box; }
+  .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .header-button :global(svg) { flex-shrink: 0; }
   .header-button {
     display: inline-flex;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    text-align: left;
     align-items: center;
     gap: var(--space-1);
     background: transparent;

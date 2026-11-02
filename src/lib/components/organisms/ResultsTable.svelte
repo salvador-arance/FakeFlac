@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { COLUMN_MIN, COLUMN_MAX } from '../../tokens/layout'
+  import { clampColumnWidth, defaultColumnWidths } from '../../layout-widths'
   import { untrack } from 'svelte'
   import BitrateValue from '../molecules/BitrateValue.svelte'
   import ColumnHeader from '../molecules/ColumnHeader.svelte'
@@ -9,6 +11,10 @@
   import type { ResultRow, SortColumn, SortState, TrackAnalysis } from '../../model'
 
   type Props = {
+    columnWidths?: Partial<Record<SortColumn, number>>
+    oncolumnresize?: (column: SortColumn, width: number) => void
+    oncolumnresizeend?: () => void
+    oncolumnreset?: (column: SortColumn) => void
     rows: ResultRow[]
     selectedIndex: number | null
     sort: SortState
@@ -28,6 +34,7 @@
   }
 
   let {
+    columnWidths = {}, oncolumnresize, oncolumnresizeend, oncolumnreset,
     rows,
     selectedIndex,
     sort,
@@ -43,6 +50,44 @@
   let scrollTop = $state(0)
   let gridElement: HTMLElement | undefined = $state()
   let headerElement: HTMLElement | undefined = $state()
+
+  const columns = Object.keys(COLUMN_MIN) as SortColumn[]
+  let viewportWidth = $state(0)
+  let liveWidths = $state<Partial<Record<SortColumn, number>>>({})
+  let widths = $derived({ ...defaultColumnWidths(viewportWidth), ...columnWidths, ...liveWidths })
+  let tracks = $derived(columns.map(column => `${widths[column]}px`).join(' '))
+  let totalWidth = $derived(columns.reduce((sum, column) => sum + widths[column], 0))
+  $effect(() => {
+    const element = gridElement
+    if (!element) return
+    const measure = () => { viewportWidth = element.clientWidth }
+    measure()
+    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure)
+    observer?.observe(element)
+    window.addEventListener('resize', measure)
+    return () => { observer?.disconnect(); window.removeEventListener('resize', measure) }
+  })
+  function resizeColumn(column: SortColumn, delta: number) {
+    const next = clampColumnWidth(column, widths[column] + delta)
+    if (next === widths[column]) return
+    liveWidths = { ...liveWidths, [column]: next }
+    oncolumnresize?.(column, next)
+  }
+  function finishColumn(column: SortColumn) {
+    if (liveWidths[column] === undefined) return
+    const next = clampColumnWidth(column, Math.round(liveWidths[column]))
+    oncolumnresize?.(column, next)
+    oncolumnresizeend?.()
+    const remaining = { ...liveWidths }
+    delete remaining[column]
+    liveWidths = remaining
+  }
+  function resetColumn(column: SortColumn) {
+    const remaining = { ...liveWidths }
+    delete remaining[column]
+    liveWidths = remaining
+    oncolumnreset?.(column)
+  }
 
   function getFileName(p: string): string {
     const norm = p.replace(/\\/g, '/')
@@ -180,61 +225,27 @@
   tabindex="0"
   onscroll={handleScroll}
   onkeydown={handleKeyDown}
+  style:--column-tracks={tracks}
+  style:--table-width="{totalWidth}px"
   style:--row-height="{rowHeight}px"
 >
   <div class="table-header" role="rowgroup" bind:this={headerElement}>
     <div class="row header-row" role="row">
-      <ColumnHeader
-        label={t('column.state')}
-        sort={sort.column === 'state' ? sort.direction : null}
-        onsort={() => onsort?.('state')}
-      />
-      <ColumnHeader
-        label={t('column.file')}
-        sort={sort.column === 'file' ? sort.direction : null}
-        onsort={() => onsort?.('file')}
-      />
-      <ColumnHeader
-        label={t('column.folder')}
-        sort={sort.column === 'folder' ? sort.direction : null}
-        onsort={() => onsort?.('folder')}
-      />
-      <ColumnHeader
-        label={t('column.format')}
-        sort={sort.column === 'format' ? sort.direction : null}
-        onsort={() => onsort?.('format')}
-      />
-      <ColumnHeader
-        label={t('column.sampleRate')}
-        sort={sort.column === 'sampleRate' ? sort.direction : null}
-        onsort={() => onsort?.('sampleRate')}
-      />
-      <ColumnHeader
-        label={t('column.bits')}
-        sort={sort.column === 'bitDepth' ? sort.direction : null}
-        onsort={() => onsort?.('bitDepth')}
-      />
-      <ColumnHeader
-        label={t('column.duration')}
-        sort={sort.column === 'duration' ? sort.direction : null}
-        onsort={() => onsort?.('duration')}
-      />
-      <ColumnHeader
-        label={t('column.cutoff')}
-        sort={sort.column === 'cutoff' ? sort.direction : null}
-        onsort={() => onsort?.('cutoff')}
-      />
-      <ColumnHeader
-        label={t('column.bitrate')}
-        sort={sort.column === 'bitrate' ? sort.direction : null}
-        onsort={() => onsort?.('bitrate')}
-      />
-      <ColumnHeader
-        label={t('column.realBitrate')}
-        tooltip={t('help.realBitrate')}
-        sort={sort.column === 'realBitrate' ? sort.direction : null}
-        onsort={() => onsort?.('realBitrate')}
-      />
+      {#each columns as column (column)}
+        {@const label = t(`column.${column === 'bitDepth' ? 'bits' : column}`)}
+        <ColumnHeader
+          {label}
+          tooltip={column === 'realBitrate' ? t('help.realBitrate') : undefined}
+          sort={sort.column === column ? sort.direction : null}
+          onsort={() => onsort?.(column)}
+          resize={{ width: widths[column], min: COLUMN_MIN[column], max: COLUMN_MAX,
+            label: t('layout.resizeColumn', { column: label }), description: t('layout.resizeHelp'),
+            valueText: t('layout.widthPixels', { width: Math.round(widths[column]) }) }}
+          onresize={(delta) => resizeColumn(column, delta)}
+          onresizeend={() => finishColumn(column)}
+          onresetwidth={() => resetColumn(column)}
+        />
+      {/each}
     </div>
   </div>
 
@@ -326,6 +337,8 @@
   }
 
   .table-header {
+    width: var(--table-width);
+    min-width: 100%;
     flex-shrink: 0;
     position: sticky;
     top: 0;
@@ -336,7 +349,8 @@
 
   .row {
     display: grid;
-    grid-template-columns: 120px minmax(140px, 1.5fr) minmax(140px, 2fr) 70px 80px 50px 70px 90px 110px 100px;
+    grid-template-columns: var(--column-tracks);
+    width: var(--table-width);
     align-items: center;
     height: var(--row-height);
     box-sizing: border-box;
@@ -349,6 +363,8 @@
   }
 
   .table-body {
+    width: var(--table-width);
+    min-width: 100%;
     flex-shrink: 0;
   }
 
