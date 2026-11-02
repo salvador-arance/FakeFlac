@@ -25,12 +25,16 @@ Feature: Calibration and acceptance against a labelled corpus
   Changed for detection v8 (specs/detection/lossy-source.md section 12.9 (g);
   RF-14/RF-15 Opus): with detection-params.v8.toml in the repository,
   proposals take algorithm_version 9.
-  Changed for the v8 baseline (calibration.md OQ-18 to OQ-21): default params
-  v8 and default grid calibrate-grid.v3.toml; must_catch feasibility is
-  non-regression against the baseline. No earlier scenario changes its
-  expectations: in each of them the baseline has no must_catch Real (fx128 is
-  Fake under v2 to v8). Default files and relative grid baselines are read from
-  the repository root, so the tests do not depend on the current folder.
+  Changed for the shipped baseline (calibration.md OQ-18 to OQ-24): the default
+  params are the app's (v8 today) and the default grid is calibrate-grid.v3.toml,
+  which has no baseline key and excludes v0 and aac256 from the cost;
+  must_catch feasibility is non-regression against the baseline, and a
+  confirmed fake that is Fake at the baseline must stay Fake. No earlier
+  scenario changes its expectations: in each of them the baseline has no
+  must_catch Real (fx128 is Fake under v2 to v8), the confirmed fake stays Fake
+  at every point, and every grid has a baseline and no cost_exclude. Default
+  files and relative grid baselines are read from the repository root, so the
+  tests do not depend on the current folder.
   Lossy rows: calibration-lossy.feature.
 
   # --- Environment -------------------------------------------------------
@@ -527,7 +531,7 @@ Feature: Calibration and acceptance against a labelled corpus
   Scenario: A must_catch positive that the baseline already misses does not block the search
     Given a detectable must_catch tune positive that receives verdict "real" under the baseline and under a candidate point
     And no other detectable must_catch tune positive receives verdict "real" under that point
-    And no confirmed fake receives verdict "real" under the baseline or under that point
+    And every confirmed fake receives verdict "fake" under the baseline and under that point
     And the grid has at most 10 points
     When the grid search ranks the points
     Then the baseline and the candidate point are feasible
@@ -552,21 +556,68 @@ Feature: Calibration and acceptance against a labelled corpus
       | fake             |
       | suspicious       |
 
+  @RP-11
+  Scenario: A point under which a confirmed fake loses Fake is infeasible
+    Given a confirmed fake that receives verdict "fake" under the baseline and "suspicious" under a candidate point
+    And on the tune rows that candidate costs less than the baseline
+    And the grid has at most 10 points
+    When the grid search ranks the points
+    Then the candidate point is marked infeasible
+    And its row in the best-points table has "confirmed lost" 1, and the baseline row has "confirmed lost" 0
+    And it is not proposed
+
+  # --- cost_exclude (calibration.md OQ-24) -------------------------------
+
+  @RP-11
+  Scenario: Positives of cost_exclude settings leave the cost but stay in the tables
+    Without fxweak in the cost, making its gaps Fake gains nothing, so the
+    point gap_fake_db = 4.0 no longer beats the baseline (compare "the grid of
+    sample-corpus.md section 5" without cost_exclude, which proposes it).
+    Given split.holdout_fraction is 0.0
+    And the grid of sample-corpus.md section 5 with cost_exclude ["fxweak"]
+    When "calibrate" runs on the sample corpus
+    Then the exit code is 0
+    And the "Grid search" section of summary.md has the line "- cost excludes the positives of the settings [fxweak]"
+    And the baseline cost is 0.5 and the cost of "verdict.gap_fake_db = 4.0" is 0.5
+    And the output says "no change proposed"
+    And the per-setting table of the baseline still shows fxweak with 6 Suspicious
+
+  @RP-11
+  Scenario Outline: Invalid cost_exclude settings
+    Given the grid of sample-corpus.md section 5 with cost_exclude ["<setting>"]
+    When "calibrate" runs on the sample corpus
+    Then the exit code is 2
+    And the error output says "<message>"
+    And nothing is written anywhere
+
+    Examples:
+      | setting | message                                   |
+      | fx999   | cost_exclude: unknown setting 'fx999'     |
+      | fx128   | cost_exclude: 'fx128' is also in must_catch |
+
   # --- Defaults (calibration.md OQ-18) ------------------------------------
 
   @RP-11 @RF-04
   Scenario: The default params are the app's
     Given the default params file and the default grid of the tool
-    Then the default params file is specs/detection/detection-params.v8.toml
-    And it deserialises to DetectionParams::default()
-    And the baseline of the default grid is that same file
+    Then the default params file deserialises to DetectionParams::default()
+    And the default grid has no baseline key
+    And every list in the default grid's [values] contains the default params file's value of its key
 
   @RP-11
   Scenario: Without --params the baseline is the params file the app ships
     Given the current folder is not the repository root
     When "accept" runs on the sample corpus with no --params
     Then the exit code is 0
-    And the report header lists exactly one params file, detection-params.v8.toml, with algorithm_version 8
+    And the report header lists exactly one params file, the default params file, with the algorithm_version of DetectionParams::default()
+
+  @RP-11
+  Scenario: A grid without baseline searches from the default params file
+    Given split.holdout_fraction is 0.0
+    And the grid of sample-corpus.md section 5 without its baseline key
+    When "calibrate" runs on the sample corpus
+    Then the exit code is 0
+    And the report header names the default params file as the baseline
 
   @RP-11
   Scenario: Without --grid the search reads calibrate-grid.v3.toml
