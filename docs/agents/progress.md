@@ -2,6 +2,24 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-02 - RNF-07 and RNF-08 closure specifications approved at G1
+
+**Done**
+- Branch `spec/RNF-07-RNF-08`, PR [#111](https://github.com/salvador-arance/FakeFlac/pull/111): proposed platform contract, usability spec, scenarios and traceability; the owner approved P-Q1, U-Q1 and U-Q2 in chat; specs are now `approved` and the requirements `specified` (not verified). Independent final review: no blocking findings.
+- Confirmed an existing RNF-08 contrast gap: verdict labels inherit colours that fail the already approved 4.5:1 text requirement, especially on selected rows. The proposal requires a focused correction after G1 and an owner walkthrough in both languages.
+- `just check` (1,295 frontend tests), `just check-app`, `just build`, `just release-assets`, `just trace` and `git diff --check` passed. Local production source `216c945`, version 0.1.0: NSIS 2,877,203 bytes; MSI 4,661,248 bytes. Candidate hashes are in `specs/contracts/windows-platform.md`; ignored `target/rnf-07-test-pack.zip` contains installers, checksums and synthetic audio fixtures.
+
+**Pending**
+- Human merge of #111 (G1 decisions are recorded in the specs).
+- The owner can test both Windows versions this session; all four installed-app matrix rows still need results. Historical Sandbox acceptance does not establish both OS builds.
+- Feature PR #115 (resizable layout) is merged; this branch now includes `main`, and the only conflict was this file.
+- After the merge: `/feature RNF-08` - independent tests and implementation for RNF-08 contrast, then visual/comprehension acceptance. No production code or executable tests changed in this proposal.
+
+**Blockers / questions for the human**
+- Neither requirement is verified yet. Platform/runtime observations are outstanding.
+
+**Next step:** merge #111, then execute its closure checks and the focused RNF-08 correction.
+
 ## 2026-11-02 - Resizable Albums panel and result columns implemented
 
 **Done**
