@@ -9,7 +9,6 @@
 - Status-only wording, with no behaviour, scenario or test change: "not implemented yet" for RF-13 / contract version 8 replaced with "implemented in #109" in `specs/requirements/RF-13.md` (status stays `specified`, like every built requirement), `specs/contracts/{settings,commands}.md`, `specs/traceability.md`, ADR-0049, `docs/architecture/{overview,data-model}.md`; README status lists RF-13 as merged for the next release. Branch `docs/rf-13-implemented`.
 
 **Pending**
-- Owner decision on the harness fix proposed in `docs/agents/lessons.md` (Vitest lower-case drive; no `python` in shell commands).
 - Next requirement: none chosen; remaining H2 requirements and draft RNF/RP are in `specs/requirements/`.
 
 **Blockers / questions for the human**
@@ -28,7 +27,6 @@
 **Pending**
 - G2 review and merge of the RF-13 PR (#109). Manual checks M1–M2 (relaunch persistence, 900×500 in both languages, keyboard-only modal) passed: the owner confirmed in chat on 2026-11-02.
 - After merge: status-only wording in `specs/` still says RF-13 is "not implemented" (`requirements/RF-13.md` `status: specified`, `contracts/commands.md`, `contracts/settings.md`); update in a docs PR.
-- Harness fix for the Vitest drive-letter trap (see `lessons.md`) needs an owner decision.
 
 **Blockers / questions for the human**
 - None.
