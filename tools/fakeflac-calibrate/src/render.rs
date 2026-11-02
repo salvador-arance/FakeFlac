@@ -405,6 +405,9 @@ pub struct GridReport<'a> {
     /// Confirmed fakes checked by feasibility constraint (2), and how many of them are in holdout.
     pub confirmed_checked: u32,
     pub confirmed_holdout: u32,
+    /// Indices into the baseline's labelled rows of the detectable `must_catch` tune positives that
+    /// the baseline classifies `Real` (allowed by constraint (1), calibration.md OQ-19).
+    pub must_catch_real_at_baseline: Vec<usize>,
 }
 
 /// Everything the Markdown reports are made of.
@@ -1512,7 +1515,17 @@ fn generation_lists(md: &mut Md, data: &ReportData<'_>) {
     }
 }
 
-fn grid_section(md: &mut Md, data: &ReportData<'_>, grid: &GridReport<'_>) {
+/// The "Grid search" section (evaluation.md section 7). `report.md` (`full`) also lists the
+/// `must_catch` positives that are `Real` at the baseline; `summary.md` has only their count.
+fn grid_section(md: &mut Md, data: &ReportData<'_>, grid: &GridReport<'_>, full: bool) {
+    grid_summary(md, grid);
+    if full {
+        must_catch_real_at_baseline(md, data, grid);
+    }
+}
+
+/// The part of the "Grid search" section shared by `summary.md` and `report.md`.
+fn grid_summary(md: &mut Md, grid: &GridReport<'_>) {
     let w = &grid.file.weights;
     md.line("## Grid search");
     md.blank();
@@ -1521,8 +1534,12 @@ fn grid_section(md: &mut Md, data: &ReportData<'_>, grid: &GridReport<'_>) {
         w.fp, w.fn_, w.suspicious_negative, w.suspicious_positive
     ));
     md.line(format!(
-        "- feasible: no Real among the tune positives of the settings [{}], and no confirmed fake classified Real",
+        "- feasible: no must_catch tune positive of the settings [{}] that the baseline catches becomes Real, no confirmed fake classified Real, and no confirmed fake that is Fake at the baseline loses Fake",
         grid.file.must_catch.join(", ")
+    ));
+    md.line(format!(
+        "- cost excludes the positives of the settings [{}]",
+        grid.file.cost_exclude.join(", ")
     ));
     md.line(format!(
         "- confirmed fakes checked by that constraint: {} ({} in holdout; they never enter the cost or the ranking)",
@@ -1538,6 +1555,10 @@ fn grid_section(md: &mut Md, data: &ReportData<'_>, grid: &GridReport<'_>) {
         "- baseline: cost {:.3}, {}",
         b.cost,
         if b.feasible { "feasible" } else { "infeasible" }
+    ));
+    md.line(format!(
+        "- must_catch Real at baseline: {}",
+        grid.must_catch_real_at_baseline.len()
     ));
     match (grid.proposal, grid.result.proposal) {
         (Some(p), _) => md.line(format!(
@@ -1558,51 +1579,57 @@ fn grid_section(md: &mut Md, data: &ReportData<'_>, grid: &GridReport<'_>) {
     md.line("### Best points");
     md.blank();
     let keys: Vec<&str> = grid.file.keys.iter().map(|k| k.key.as_str()).collect();
-    let table: Vec<Vec<String>> = grid
-        .result
-        .top
-        .iter()
-        .enumerate()
-        .map(|(rank, i)| {
-            let p = &grid.result.points[*i];
-            let changed: Vec<String> = keys
-                .iter()
-                .zip(p.values.iter().zip(b.values.iter()))
-                .filter(|(_, (n, o))| n != o)
-                .map(|(k, (n, o))| {
-                    format!(
-                        "{k} {} -> {}",
-                        crate::grid::float_token(*o),
-                        crate::grid::float_token(*n)
-                    )
-                })
-                .collect();
-            vec![
-                (rank + 1).to_string(),
-                if changed.is_empty() {
-                    "(baseline values)".to_string()
-                } else {
-                    changed.join(", ")
-                },
-                format!("{:.3}", p.cost),
-                if p.feasible { "yes" } else { "no" }.to_string(),
-                p.tally.must_catch_real.to_string(),
-                p.tally.confirmed_real.to_string(),
+    let row = |rank: String, p: &crate::grid::Scored| -> Vec<String> {
+        let changed: Vec<String> = keys
+            .iter()
+            .zip(p.values.iter().zip(b.values.iter()))
+            .filter(|(_, (n, o))| n != o)
+            .map(|(k, (n, o))| {
                 format!(
-                    "{} / {} / {} / {}",
-                    p.tally.fake_negatives,
-                    p.tally.suspicious_negatives,
-                    p.tally.real_positives,
-                    p.tally.suspicious_positives
-                ),
-                if p.min_margin.is_finite() {
-                    fmt::db(p.min_margin)
-                } else {
-                    "n/a".to_string()
-                },
-            ]
-        })
-        .collect();
+                    "{k} {} -> {}",
+                    crate::grid::float_token(*o),
+                    crate::grid::float_token(*n)
+                )
+            })
+            .collect();
+        let is_baseline = rank == "baseline";
+        vec![
+            rank,
+            if is_baseline {
+                String::new()
+            } else if changed.is_empty() {
+                "(baseline values)".to_string()
+            } else {
+                changed.join(", ")
+            },
+            format!("{:.3}", p.cost),
+            if p.feasible { "yes" } else { "no" }.to_string(),
+            p.tally.must_catch_real.to_string(),
+            p.tally.must_catch_lost.to_string(),
+            p.tally.confirmed_real.to_string(),
+            p.tally.confirmed_lost.to_string(),
+            format!(
+                "{} / {} / {} / {}",
+                p.tally.fake_negatives,
+                p.tally.suspicious_negatives,
+                p.tally.real_positives,
+                p.tally.suspicious_positives
+            ),
+            if p.min_margin.is_finite() {
+                fmt::db(p.min_margin)
+            } else {
+                "n/a".to_string()
+            },
+        ]
+    };
+    let mut table: Vec<Vec<String>> = vec![row("baseline".to_string(), b)];
+    table.extend(
+        grid.result
+            .top
+            .iter()
+            .enumerate()
+            .map(|(rank, i)| row((rank + 1).to_string(), &grid.result.points[*i])),
+    );
     md.table(
         &[
             "rank",
@@ -1610,13 +1637,51 @@ fn grid_section(md: &mut Md, data: &ReportData<'_>, grid: &GridReport<'_>) {
             "cost",
             "feasible",
             "must_catch Real",
+            "must_catch lost",
             "confirmed fakes Real",
+            "confirmed lost",
             "tune: Fake neg / Suspicious neg / Real pos / Suspicious pos",
             "smallest margin (dB)",
         ],
         &table,
     );
-    let _ = data;
+}
+
+/// `report.md` only: the `must_catch` tune positives that the baseline already misses, sorted by
+/// setting and then path (evaluation.md section 7).
+fn must_catch_real_at_baseline(md: &mut Md, data: &ReportData<'_>, grid: &GridReport<'_>) {
+    md.line("### must_catch Real at baseline");
+    md.blank();
+    let Some(base) = data.runs.first() else {
+        return;
+    };
+    let rows = &data.groups[base.group].rows;
+    let mut listed: Vec<(&LabelRow, &RowEval)> = grid
+        .must_catch_real_at_baseline
+        .iter()
+        .filter_map(|i| rows.get(*i).zip(base.evals.get(*i)))
+        .collect();
+    if listed.is_empty() {
+        md.line("None.");
+        md.blank();
+        return;
+    }
+    listed.sort_by(|(a, _), (b, _)| (&a.setting, &a.path).cmp(&(&b.setting, &b.path)));
+    let table: Vec<Vec<String>> = listed
+        .into_iter()
+        .map(|(r, e)| {
+            vec![
+                r.path.clone(),
+                r.setting.clone(),
+                r.split.as_str().to_string(),
+                fmt::opt_db(e.m.as_ref().map(|m| m.gap_db)),
+                fmt::opt_db(e.m.as_ref().map(|m| m.step_db)),
+                fmt::opt_hz(e.m.as_ref().and_then(|m| m.step_hz)),
+                fmt::opt_hz(e.m.as_ref().map(|m| m.extent_hz)),
+            ]
+        })
+        .collect();
+    md.table(&["path", "setting", "split", "G", "D", "fs", "fe"], &table);
 }
 
 /// `summary.md` (`full = false`) or `report.md` (`full = true`).
@@ -1627,7 +1692,7 @@ pub fn markdown(data: &ReportData<'_>, full: bool) -> String {
     md.blank();
     side_by_side(&mut md, data);
     if let Some(grid) = &data.grid {
-        grid_section(&mut md, data, grid);
+        grid_section(&mut md, data, grid, full);
     }
     for idx in 0..data.runs.len() {
         params_section(&mut md, data, idx, full);
@@ -1639,4 +1704,104 @@ pub fn markdown(data: &ReportData<'_>, full: bool) -> String {
     md.blank();
     md.line("v1 (ADR-0035, Rust v1 code, known-truth album): 0 of 7 transcodes found, all 16 tracks `Real`.");
     md.0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::grid::{GridKey, Scored, Tally, Weights};
+
+    fn scored(index: usize, value: f64, tally: Tally, feasible: bool) -> Scored {
+        Scored {
+            index,
+            values: vec![value],
+            tally,
+            cost: 1.0,
+            feasible,
+            min_margin: f64::INFINITY,
+            changed: usize::from(index > 0),
+        }
+    }
+
+    /// The normative text of the "Grid search" section that the end-to-end tests do not compare:
+    /// the `feasible:` line, the `cost excludes` line with an empty list, the baseline row of the
+    /// best-points table, and no `must_catch` list in `summary.md` (evaluation.md section 7).
+    #[test]
+    fn grid_summary_lines() {
+        let file = GridFile {
+            baseline: None,
+            must_catch: vec!["cbr128".to_string(), "cbr192".to_string()],
+            cost_exclude: Vec::new(),
+            max_points: 10,
+            weights: Weights {
+                fp: 10.0,
+                fn_: 1.0,
+                suspicious_negative: 0.5,
+                suspicious_positive: 0.1,
+            },
+            keys: vec![GridKey {
+                key: "verdict.gap_fake_db".to_string(),
+                values: vec![6.0, 7.0],
+            }],
+        };
+        let lost = Tally {
+            must_catch_lost: 2,
+            confirmed_lost: 1,
+            ..Tally::default()
+        };
+        let result = SearchResult {
+            baseline: scored(0, 6.0, Tally::default(), true),
+            points: vec![scored(1, 7.0, lost, false)],
+            skipped: 0,
+            top: vec![0],
+            proposal: None,
+            must_catch_real_at_baseline: Vec::new(),
+        };
+        let grid = GridReport {
+            file: &file,
+            result: &result,
+            proposal: None,
+            confirmed_checked: 3,
+            confirmed_holdout: 1,
+            must_catch_real_at_baseline: vec![4, 7],
+        };
+        let mut md = Md::default();
+        grid_summary(&mut md, &grid);
+        let lines: Vec<&str> = md.0.lines().collect();
+
+        let feasible = lines
+            .iter()
+            .position(|l| l.starts_with("- feasible:"))
+            .expect("feasible line");
+        assert_eq!(
+            lines[feasible],
+            "- feasible: no must_catch tune positive of the settings [cbr128, cbr192] that the baseline catches becomes Real, no confirmed fake classified Real, and no confirmed fake that is Fake at the baseline loses Fake"
+        );
+        assert_eq!(
+            lines[feasible + 1],
+            "- cost excludes the positives of the settings []"
+        );
+        assert!(lines.contains(&"- confirmed fakes checked by that constraint: 3 (1 in holdout; they never enter the cost or the ranking)"));
+        let base = lines
+            .iter()
+            .position(|l| l.starts_with("- baseline: cost"))
+            .expect("baseline line");
+        assert_eq!(lines[base + 1], "- must_catch Real at baseline: 2");
+        assert!(
+            !md.0.contains("### must_catch Real at baseline"),
+            "summary.md has only the count"
+        );
+
+        let header = lines
+            .iter()
+            .position(|l| l.starts_with("| rank |"))
+            .expect("best-points table");
+        assert_eq!(
+            lines[header],
+            "| rank | changed values | cost | feasible | must_catch Real | must_catch lost | confirmed fakes Real | confirmed lost | tune: Fake neg / Suspicious neg / Real pos / Suspicious pos | smallest margin (dB) |"
+        );
+        assert!(lines[header + 2].starts_with("| baseline |  | 1.000 | yes | 0 | 0 | 0 | 0 |"));
+        assert!(lines[header + 3]
+            .starts_with("| 1 | verdict.gap_fake_db 6.0 -> 7.0 | 1.000 | no | 0 | 2 | 0 | 1 |"));
+    }
 }

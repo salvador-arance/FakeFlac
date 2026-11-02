@@ -53,11 +53,26 @@ pub struct Tally {
     pub must_catch_real: u32,
     /// Confirmed fakes classified `Real`.
     pub confirmed_real: u32,
+    /// Generated positives of the `must_catch` settings that are `Real` under the point but not under
+    /// the baseline (constraint (1), calibration.md OQ-19). Only set by the search.
+    pub must_catch_lost: u32,
+    /// Confirmed fakes that are `Fake` under the baseline and not `Fake` under the point (constraint
+    /// (2), calibration.md OQ-20). Only set by the search.
+    pub confirmed_lost: u32,
 }
 
 impl Tally {
+    /// The absolute constraints, without a baseline: no `must_catch` positive and no confirmed fake
+    /// classified `Real`. This is non-regression against a baseline that misses no `must_catch`
+    /// positive and whose confirmed fakes are all `Fake`.
     pub fn feasible(&self) -> bool {
         self.must_catch_real == 0 && self.confirmed_real == 0
+    }
+
+    /// The constraints against the baseline (evaluation.md section 7): no `must_catch` positive lost
+    /// (1), no confirmed fake `Real` and none that loses `Fake` (2).
+    pub fn feasible_against_baseline(&self) -> bool {
+        self.must_catch_lost == 0 && self.confirmed_real == 0 && self.confirmed_lost == 0
     }
 
     pub fn cost(&self, w: &Weights) -> f64 {
@@ -72,8 +87,21 @@ pub fn tally<'a>(
     rows: impl Iterator<Item = (RowKind, &'a str, Verdict)>,
     must_catch: &[String],
 ) -> Tally {
+    tally_excluding(rows, must_catch, &[])
+}
+
+/// As [`tally`], leaving out of the verdict counts (so out of the cost) the generated positives of
+/// the `cost_exclude` settings (calibration.md OQ-24).
+pub fn tally_excluding<'a>(
+    rows: impl Iterator<Item = (RowKind, &'a str, Verdict)>,
+    must_catch: &[String],
+    cost_exclude: &[String],
+) -> Tally {
     let mut t = Tally::default();
     for (kind, setting, verdict) in rows {
+        if kind == RowKind::GeneratedPositive && cost_exclude.iter().any(|s| s == setting) {
+            continue;
+        }
         match (kind, verdict) {
             (RowKind::Negative, Verdict::Fake) => t.fake_negatives += 1,
             (RowKind::Negative, Verdict::Suspicious) => t.suspicious_negatives += 1,
@@ -108,6 +136,54 @@ pub fn is_feasible(rows: &[PointRow], must_catch: &[String]) -> bool {
     tally_rows(rows, must_catch).feasible()
 }
 
+/// Whether a row regresses from the baseline verdict `base` to `verdict`: (a `must_catch` positive
+/// that becomes `Real`, a confirmed fake that loses `Fake`).
+fn regression(
+    kind: RowKind,
+    setting: &str,
+    base: Verdict,
+    verdict: Verdict,
+    must_catch: &[String],
+) -> (bool, bool) {
+    match kind {
+        RowKind::GeneratedPositive => (
+            must_catch.iter().any(|s| s == setting)
+                && base != Verdict::Real
+                && verdict == Verdict::Real,
+            false,
+        ),
+        RowKind::ConfirmedFake => (false, base == Verdict::Fake && verdict != Verdict::Fake),
+        RowKind::Negative => (false, false),
+    }
+}
+
+/// Feasibility against a baseline (evaluation.md section 7, calibration.md OQ-19 and OQ-20): no
+/// detectable `must_catch` positive that is not `Real` under the baseline is `Real` under the point,
+/// no confirmed fake is `Real`, and no confirmed fake that is `Fake` under the baseline loses `Fake`.
+/// `baseline` holds the same rows under the baseline parameters, in the same order.
+pub fn is_feasible_against_baseline(
+    rows: &[PointRow],
+    baseline: &[PointRow],
+    must_catch: &[String],
+) -> bool {
+    let mut t = tally_rows(rows, must_catch);
+    for (row, base) in rows.iter().zip(baseline.iter()) {
+        if row.undetectable {
+            continue;
+        }
+        let (mc, cf) = regression(
+            row.kind,
+            &row.setting,
+            base.verdict,
+            row.verdict,
+            must_catch,
+        );
+        t.must_catch_lost += u32::from(mc);
+        t.confirmed_lost += u32::from(cf);
+    }
+    t.feasible_against_baseline()
+}
+
 /// `fp * #Fake(neg) + fn * #Real(pos) + suspicious_negative * #Suspicious(neg) + suspicious_positive * #Suspicious(pos)`.
 /// Positives are generated positives and confirmed fakes.
 pub fn cost(rows: &[PointRow], weights: &Weights) -> f64 {
@@ -122,8 +198,11 @@ pub fn cost(rows: &[PointRow], weights: &Weights) -> f64 {
 #[serde(deny_unknown_fields)]
 struct RawGrid {
     grid_version: u32,
-    baseline: String,
+    #[serde(default)]
+    baseline: Option<String>,
     must_catch: Vec<String>,
+    #[serde(default)]
+    cost_exclude: Vec<String>,
     max_points: u64,
     weights: Weights,
     values: toml::Table,
@@ -138,8 +217,11 @@ pub struct GridKey {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct GridFile {
-    pub baseline: String,
+    /// `None`: the default params file (calibration.md OQ-18).
+    pub baseline: Option<String>,
     pub must_catch: Vec<String>,
+    /// Settings whose positives leave the cost and the tune counts (calibration.md OQ-24).
+    pub cost_exclude: Vec<String>,
     pub max_points: u64,
     pub weights: Weights,
     /// In file order: the first key varies slowest.
@@ -341,15 +423,23 @@ pub fn parse_grid(text: &str, settings: &[String]) -> Result<GridFile, ToolError
     let raw: RawGrid = toml::from_str(text)
         .map_err(|e| ToolError::input_lines(e.to_string().lines().map(str::to_string).collect()))?;
     let mut errors: Vec<String> = Vec::new();
-    if !matches!(raw.grid_version, 1 | 2) {
+    if !matches!(raw.grid_version, 1..=3) {
         errors.push(format!(
-            "grid_version {} is not supported (expected 1 or 2)",
+            "grid_version {} is not supported (expected 1, 2 or 3)",
             raw.grid_version
         ));
     }
     for s in &raw.must_catch {
         if !settings.contains(s) {
             errors.push(format!("must_catch: unknown setting '{s}'"));
+        }
+    }
+    for s in &raw.cost_exclude {
+        if !settings.contains(s) {
+            errors.push(format!("cost_exclude: unknown setting '{s}'"));
+        }
+        if raw.must_catch.contains(s) {
+            errors.push(format!("cost_exclude: '{s}' is also in must_catch"));
         }
     }
     let order = values_key_order(text);
@@ -445,6 +535,7 @@ pub fn parse_grid(text: &str, settings: &[String]) -> Result<GridFile, ToolError
     Ok(GridFile {
         baseline: raw.baseline,
         must_catch: raw.must_catch,
+        cost_exclude: raw.cost_exclude,
         max_points: raw.max_points,
         weights: raw.weights,
         keys,
@@ -458,6 +549,8 @@ pub fn parse_grid(text: &str, settings: &[String]) -> Result<GridFile, ToolError
 /// A tune row prepared for the search.
 #[derive(Debug, Clone)]
 pub struct SearchRow<'a> {
+    /// Index of the labelled row this search row comes from (for the report lists).
+    pub row: usize,
     pub kind: RowKind,
     pub setting: &'a str,
     /// `None`: silent track (verdict `silent_verdict`, no measurements).
@@ -510,19 +603,20 @@ pub struct SearchResult {
     pub top: Vec<usize>,
     /// Index into `points` of the proposal: the best point if it ranks strictly above the baseline.
     pub proposal: Option<usize>,
+    /// Indices into the search rows of the `must_catch` tune positives that the baseline classifies
+    /// `Real` (allowed by constraint (1), listed in the report), in row order.
+    pub must_catch_real_at_baseline: Vec<usize>,
 }
 
-fn score(
-    index: usize,
+/// The verdict of every row under `params`, and the smallest `nearest_fake_margin_db` among the tune
+/// negatives that are not `Fake` (+inf if none).
+fn verdicts(
     params: &DetectionParams,
-    values: Vec<f64>,
-    changed: usize,
     rows: &[SearchRow<'_>],
     measured: &[Option<Measurements>],
-    grid: &GridFile,
-) -> Scored {
+) -> (Vec<Verdict>, f64) {
     let mut min_margin = f64::INFINITY;
-    let verdicts: Vec<Verdict> = rows
+    let verdicts = rows
         .iter()
         .zip(measured.iter())
         .map(|(row, m)| match m {
@@ -537,24 +631,45 @@ fn score(
             None => row.silent_verdict,
         })
         .collect();
-    let mut t = tally(
+    (verdicts, min_margin)
+}
+
+/// Scores the verdicts of one point against those of the baseline (`base`, same rows).
+fn score(
+    index: usize,
+    values: Vec<f64>,
+    changed: usize,
+    rows: &[SearchRow<'_>],
+    (verdicts, min_margin): (Vec<Verdict>, f64),
+    base: &[Verdict],
+    grid: &GridFile,
+) -> Scored {
+    let mut t = tally_excluding(
         rows.iter()
             .zip(verdicts.iter())
             .filter(|(r, _)| !r.constraint_only)
             .map(|(r, v)| (r.kind, r.setting, *v)),
         &grid.must_catch,
+        &grid.cost_exclude,
     );
-    t.confirmed_real += rows
-        .iter()
-        .zip(verdicts.iter())
-        .filter(|(r, v)| r.constraint_only && **v == Verdict::Real)
-        .count() as u32;
+    for ((row, verdict), base) in rows.iter().zip(verdicts.iter()).zip(base.iter()) {
+        // Holdout confirmed fakes count for constraint (2) only.
+        if row.constraint_only {
+            if row.kind != RowKind::ConfirmedFake {
+                continue;
+            }
+            t.confirmed_real += u32::from(*verdict == Verdict::Real);
+        }
+        let (mc, cf) = regression(row.kind, row.setting, *base, *verdict, &grid.must_catch);
+        t.must_catch_lost += u32::from(mc && !row.constraint_only);
+        t.confirmed_lost += u32::from(cf);
+    }
     Scored {
         index,
         values,
         tally: t,
         cost: t.cost(&grid.weights),
-        feasible: t.feasible(),
+        feasible: t.feasible_against_baseline(),
         min_margin,
         changed,
     }
@@ -574,15 +689,29 @@ pub fn search(baseline: &DetectionParams, rows: &[SearchRow<'_>], grid: &GridFil
         .map(|k| get_value(baseline, &k.key).unwrap_or(f64::NAN))
         .collect();
     let base_measured = measure_rows(rows, baseline);
+    let base_eval = verdicts(baseline, rows, &base_measured);
+    let base_verdicts = base_eval.0.clone();
     let base = score(
         0,
-        baseline,
         baseline_values.clone(),
         0,
         rows,
-        &base_measured,
+        base_eval,
+        &base_verdicts,
         grid,
     );
+    let must_catch_real_at_baseline: Vec<usize> = rows
+        .iter()
+        .zip(base_verdicts.iter())
+        .enumerate()
+        .filter(|(_, (r, v))| {
+            r.kind == RowKind::GeneratedPositive
+                && !r.constraint_only
+                && **v == Verdict::Real
+                && grid.must_catch.iter().any(|s| s == r.setting)
+        })
+        .map(|(i, _)| i)
+        .collect();
 
     // Enumerate the points: the first key varies slowest.
     struct Spec {
@@ -661,11 +790,11 @@ pub fn search(baseline: &DetectionParams, rows: &[SearchRow<'_>], grid: &GridFil
             let spec = &specs[*i];
             scored[*i] = Some(score(
                 i + 1,
-                &spec.params,
                 spec.values.clone(),
                 spec.changed,
                 rows,
-                &measured,
+                verdicts(&spec.params, rows, &measured),
+                &base_verdicts,
                 grid,
             ));
         }
@@ -685,6 +814,7 @@ pub fn search(baseline: &DetectionParams, rows: &[SearchRow<'_>], grid: &GridFil
         skipped,
         top: order,
         proposal,
+        must_catch_real_at_baseline,
     }
 }
 
@@ -856,6 +986,113 @@ mod tests {
         );
         let out = replace_value(text, None, "a", "2").expect("found");
         assert!(out.starts_with("a = 2\n[verdict]"));
+    }
+
+    fn point(kind: RowKind, setting: &str, verdict: Verdict) -> PointRow {
+        PointRow {
+            kind,
+            setting: setting.to_string(),
+            verdict,
+            undetectable: false,
+        }
+    }
+
+    #[test]
+    fn feasibility_is_non_regression_against_the_baseline() {
+        let mc = vec!["cbr128".to_string()];
+        let base = vec![
+            point(RowKind::GeneratedPositive, "cbr128", Verdict::Real),
+            point(RowKind::GeneratedPositive, "cbr128", Verdict::Suspicious),
+            point(RowKind::ConfirmedFake, "", Verdict::Fake),
+            point(RowKind::ConfirmedFake, "", Verdict::Suspicious),
+        ];
+        // The baseline is feasible against itself, though it misses a must_catch positive.
+        assert!(is_feasible_against_baseline(&base, &base, &mc));
+        assert!(!is_feasible(&base, &mc));
+        // Losing the Suspicious must_catch positive (1), or the Fake confirmed fake (2): infeasible.
+        let mut lost = base.clone();
+        lost[1].verdict = Verdict::Real;
+        assert!(!is_feasible_against_baseline(&lost, &base, &mc));
+        let mut lost = base.clone();
+        lost[2].verdict = Verdict::Suspicious;
+        assert!(!is_feasible_against_baseline(&lost, &base, &mc));
+        // A confirmed fake that was not Fake may stay Suspicious, but never become Real.
+        let mut real = base.clone();
+        real[3].verdict = Verdict::Real;
+        assert!(!is_feasible_against_baseline(&real, &base, &mc));
+        // An undetectable must_catch positive never counts.
+        let mut undetectable = base.clone();
+        undetectable[1].verdict = Verdict::Real;
+        undetectable[1].undetectable = true;
+        assert!(is_feasible_against_baseline(&undetectable, &base, &mc));
+    }
+
+    #[test]
+    fn cost_exclude_positives_leave_the_counts() {
+        let rows = [
+            (RowKind::GeneratedPositive, "v0", Verdict::Real),
+            (RowKind::GeneratedPositive, "v0", Verdict::Suspicious),
+            (RowKind::GeneratedPositive, "cbr128", Verdict::Suspicious),
+            (RowKind::ConfirmedFake, "", Verdict::Suspicious),
+            (RowKind::Negative, "", Verdict::Suspicious),
+        ];
+        let t = tally_excluding(rows.iter().copied(), &[], &["v0".to_string()]);
+        assert_eq!(t.real_positives, 0);
+        assert_eq!(t.suspicious_positives, 2);
+        assert_eq!(t.suspicious_negatives, 1);
+        let all = tally(rows.iter().copied(), &[]);
+        assert_eq!((all.real_positives, all.suspicious_positives), (1, 3));
+    }
+
+    #[test]
+    fn grid_versions_baseline_and_cost_exclude() {
+        let settings = vec!["cbr128".to_string(), "v0".to_string()];
+        let text = |version: u32, extra: &str| {
+            format!(
+                "grid_version = {version}
+must_catch = [\"cbr128\"]
+{extra}max_points = 10
+
+                 [weights]
+fp = 10.0
+fn = 1.0
+suspicious_negative = 0.5
+suspicious_positive = 0.1
+
+                 [values]
+\"verdict.gap_fake_db\" = [6.0]
+"
+            )
+        };
+        let g = parse_grid(
+            &text(
+                3,
+                "cost_exclude = [\"v0\"]
+",
+            ),
+            &settings,
+        )
+        .expect("v3");
+        assert_eq!(g.baseline, None);
+        assert_eq!(g.cost_exclude, vec!["v0".to_string()]);
+        let g = parse_grid(
+            &text(
+                1,
+                "baseline = \"b.toml\"
+",
+            ),
+            &settings,
+        )
+        .expect("v1");
+        assert_eq!(g.baseline.as_deref(), Some("b.toml"));
+        assert!(g.cost_exclude.is_empty());
+        let Err(e) = parse_grid(&text(0, ""), &settings) else {
+            panic!("version 0");
+        };
+        assert_eq!(
+            e.lines,
+            vec!["grid_version 0 is not supported (expected 1, 2 or 3)".to_string()]
+        );
     }
 
     #[test]
