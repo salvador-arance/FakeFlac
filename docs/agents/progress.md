@@ -6,7 +6,7 @@
 
 **Done**
 - The owner merged header-fix PR #112 into `main` (`8b24925`), confirmed via GitHub. The new spec branch includes that merge; its header-height correction must be preserved.
-- Branch `spec/RF-06-RF-10-resizing`: drafted the requested draggable Albums panel and all ten result-column widths as a proposed extension of RF-06/RF-10. Covers independent widths, bounds, mouse/keyboard operation, per-target reset, local layout persistence and invalid/unavailable storage recovery. The fixed-240px decision in RF-10 is explicitly proposed for amendment; no backend settings/command, production code, dependency or executable test changed.
+- Branch `spec/RF-06-RF-10-resizing`, PR [#113](https://github.com/salvador-arance/FakeFlac/pull/113): drafted the requested draggable Albums panel and all ten result-column widths as a proposed extension of RF-06/RF-10. Covers independent widths, bounds, mouse/keyboard operation, per-target reset, local layout persistence and invalid/unavailable storage recovery. The fixed-240px decision in RF-10 is explicitly proposed for amendment; no backend settings/command, production code, dependency or executable test changed. Independent review: no blocking findings; its displayed-width baseline clarification was incorporated.
 - `just check` passed (1,295 frontend tests). Local Edge/Segoe UI measurements and width arithmetic informed the proposed limits and constrained-header policy; these are design measurements, not validation of implemented resizing. Future rendered acceptance remains explicit.
 
 **Pending**
