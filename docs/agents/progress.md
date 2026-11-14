@@ -2,6 +2,24 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-14 - RNF-02 merged at G2
+
+**Done**
+- The owner merged [PR #137](https://github.com/salvador-arance/FakeFlac/pull/137) as `accc3ee`. Updated local main by fast-forward and ran `just prune-branches`, deleting the merged `feat/RNF-02` and `spec/RNF-02-memory-adr` branches.
+- RNF-02 is integrated with the two-pass Opus reader, chunk seam, normal memory gate and opt-in `just memory` suite. G1 spec #134 and accepted ADR-0050 (#136) are closed. Independent review, local `just ci`, F6, fresh performance, unchanged cached corpus acceptance and F7 are recorded in #137 and the earlier blocks.
+- F7 met both indicative targets on 11,396 tracks. Analysis private/working-set peak increases were 221.457/246.477 MiB against 544 MiB targets. The 60 min 32 s spectrogram raised neither peak. All 13,203 files checked retained sizes and last-write timestamps. The run recorded 64 track errors.
+- Updated RNF-02 traceability and architecture wording to record G2. Documentation follow-up branch is `docs/RNF-02-g2-handoff`.
+- Fresh `just check` passes on the merged code and this handoff, including all Rust suites and 83 frontend files / 1,430 tests (`target/rnf02-g2-check.txt`).
+
+**Pending**
+- Remote CI for the final F7 documentation head and the merge commit was still running at the G2 audit.
+- The owner maintains the two agent-configuration edits assigned by memory.md section 13, adding `just memory` to the canonical `CLAUDE.md` command list and the memory-gate/long-report requirements to `.claude/agents/code-reviewer.md`, then running `just agents-sync`.
+
+**Blockers / questions for the human**
+- None for RNF-02 implementation or F7. The human-owned configuration follow-up remains assigned as approved at G1.
+
+**Next step:** the owner completes the memory-related agent-configuration edits from memory.md section 13 and runs `just agents-sync`.
+
 ## 2026-11-14 - F7 whole-app memory check measured
 
 **Done**
