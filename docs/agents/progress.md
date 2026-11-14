@@ -2,6 +2,28 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-14 - RP-11 v5 corpus acceptance after G2
+
+**Done**
+- PR [#132](https://github.com/salvador-arance/FakeFlac/pull/132) is merged as `fac327a`; G2 is closed. Ran `just accept` on that commit with the defaults: calibration config v5 and shipped detection v8. Report id: `20261114T130952Z`; detailed outputs remain in the private calibration directory.
+- T1 PASS: 0/78 primary tracks, 0/6 albums (95 % CI 0.0-4.7 %); holdout 0/23 tracks, 0/2 albums (95 % CI 0.0-14.3 %). Primary Suspicious: 8/78 (10.3 %).
+- T2 FAIL as accepted: 3 detectable `Real` on all, 1 on holdout; 5 and 4 undetectable transcodes excluded, respectively. Compared track identities against pre-G1 run `20261114T113810Z`: exactly the quiet piano, clipping-masked cutoff and 14450 Hz step, with no new miss.
+- T3 PASS: 5/2021 on all (0.2474 %, displayed 0.2 %) and 2/548 on holdout (0.3650 %, displayed 0.4 %), against the 1.0 % bound. Undetectable transcodes: 475 overall (88 extent, 387 hf drop). All 15 lossless confirmed fakes remain `Fake`.
+- The 12 Bandcamp WAV tracks (one primary album, tune) were already incorporated by the pre-G1 measurement, despite the older maintenance handoff saying incorporation was pending. All 12 are `Real`, with 108 lossless and 168 lossy generated rows (9 and 14 settings). Relative to the pre-G1 run: 49,443 rows, no verdict, measurement or split changes.
+- Cache: 49,443 hits, 0 decoded, 0 transcoded, 0 generation failures and 0 skipped lines; 0 track errors. Every active corpus label and generated source path resolves. Corpus verified before/after: all 12,836 files retain size and mtime, with no additions or removals.
+- `just prune-branches` completed: nothing to delete; only the active documentation branch and main remain locally. The formerly carried-over release branch is absent locally and on origin; v0.2.0 publication is already recorded in #120.
+- Updated RP-11 traceability for merged G2 and this manual acceptance run. Documentation branch: `docs/RP-11-acceptance-v5`.
+- `just check` passed (all Rust suites; 83 frontend files / 1,430 tests), as did `just trace` and `git diff --check`.
+
+**Pending**
+- None for the acceptance of #132; no implementation or spec behaviour change is needed.
+- No grid search in this session. The last L5 run (`20261102T170123Z`) predates the additional Bandcamp album; rerun `/calibrate` when resuming parameter tuning.
+
+**Blockers / questions for the human**
+- None for this acceptance. The existing limitations remain: small primary sample and no confirmed-fake holdout album.
+
+**Next step:** choose the next requirement; RP-11 acceptance for #132 is complete.
+
 ## 2026-11-14 - RP-11 acceptance targets implemented (PR #132, G2 pending)
 
 **Done**
