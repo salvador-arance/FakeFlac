@@ -2,6 +2,26 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-14 - RNF-02 spec approved at G1 (PR #134)
+
+**Done**
+- Spec PR [#134](https://github.com/salvador-arance/FakeFlac/pull/134) is merged as `f0b9124`. It adds `specs/contracts/memory.md` and `specs/features/memory.feature`, and sets RNF-02 to `specified`. It also holds the traceability row.
+- Criterion: a 300 s file may use at most 1 MiB more peak memory than a 30 s copy, per format, and stays within 32 MiB of an idle process. Measured per child process through PowerShell, with no new dependency.
+- F1-F5 are measured on today's code. Opus fails the growth bound (+2.1 MiB, one index entry per packet in `opus.rs`). Every other format grows by at most 92 KiB, noise is at most about 190 KiB per pair, and the gate takes about 55 s against 120 s.
+- Throwaway measurement harness lives under `target/rnf02-measure/` (untracked).
+
+**Pending**
+- ADR extending ADR-0046 and ADR-0019 (CI memory gate, PowerShell measurement and its flake risk, `just memory`). It must exist before the `feat/RNF-02` PR opens (memory.md Q9). No ADR was merged at this G1, so none moves to `accepted`.
+- Human edits after the spec (memory.md section 13): `CLAUDE.md` `memory` recipe line and `code-reviewer.md`, then `just agents-sync`.
+- With or after the feature PR: `overview.md` RNF-02 row and `backend.md` section 5 wording ("reused window buffers").
+- F6 (hi-res and 1-hour `just memory` report, 64 MiB provisional) and F7 (manual whole-app check).
+- Delete `target/rnf02-measure/harness/target` and `harness2/target` (a guard hook blocked the agent's `rm -rf`).
+
+**Blockers / questions for the human**
+- None.
+
+**Next step:** `/feature RNF-02` (tests, then the Opus two-pass reader and the `memory` recipe), after the ADR and the `CLAUDE.md` edits above.
+
 ## 2026-11-14 - RP-11 acceptance documentation PR #133 opened
 
 **Done**
