@@ -138,6 +138,11 @@ perf *args:
     const r = require('node:child_process').spawnSync('cargo', cargoArgs, { stdio: 'inherit', env })
     process.exit(r.status === 0 ? 0 : 1)
 
+# RNF-02 long memory suite (specs/contracts/memory.md). Release build, opt-in: not part of
+# check, ci or any workflow. Prints the long-suite report.
+memory:
+    cargo test --release -p fakeflac-audio --test memory -- --ignored --nocapture --test-threads=1
+
 # Search the branch diff for the corpus paths and names (ADR-022): privacy-check [--base REF]
 [positional-arguments]
 [script("node")]

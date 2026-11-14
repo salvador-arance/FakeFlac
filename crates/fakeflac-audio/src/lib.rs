@@ -22,14 +22,28 @@ pub const EXTRACTION_VERSION: u32 = 2;
 #[doc(hidden)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ChunkStats {
+    /// Calls of the decoding loop's sink.
     pub chunks: u64,
+    /// Frames decoded in this pass.
     pub frames: u64,
+    /// Frames of the largest chunk.
     pub max_chunk_frames: u64,
 }
 
+/// One decoding pass through the same stream used by analysis and spectrograms.
 #[doc(hidden)]
-pub fn decode_chunks_for_test(_path: &Path) -> Result<ChunkStats, TrackError> {
-    todo!("RNF-02: one MonoStream decoding pass")
+pub fn decode_chunks_for_test(path: &Path) -> Result<ChunkStats, TrackError> {
+    let mut stream = decode::MonoStream::open(path)?;
+    let mut stats = ChunkStats {
+        chunks: 0,
+        frames: 0,
+        max_chunk_frames: 0,
+    };
+    stats.frames = stream.for_each_chunk(|_, samples| {
+        stats.chunks += 1;
+        stats.max_chunk_frames = stats.max_chunk_frames.max(samples.len() as u64);
+    })?;
+    Ok(stats)
 }
 
 /// `SpectrumAnalyzer` for WAV, FLAC, MP3 and M4A (AAC-LC, ALAC) based on symphonia.

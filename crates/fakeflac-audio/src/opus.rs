@@ -1,5 +1,6 @@
 //! Ogg Opus (ADR-0047; lossy-source.md §2.4). Validate the complete container before
-//! decoding. Keep packet byte ranges, not the whole compressed stream or decoded PCM.
+//! decoding, retaining only counters and headers. A second pass decodes completed packets
+//! in order without an index that grows with the track (RNF-02, memory.md §8).
 use fakeflac_core::TrackError;
 use rusty_opus::OpusDecoder;
 use std::fs::File;
@@ -39,20 +40,10 @@ fn crc(bytes: impl Iterator<Item = u8>) -> u32 {
     })
 }
 
-#[derive(Clone, Copy)]
-struct Span {
-    offset: u64,
-    len: usize,
-}
-struct Packet {
-    spans: Vec<Span>,
-    toc: Vec<u8>,
-    frames: u64,
-}
-
 pub struct OpusStream {
     file: File,
-    packets: Vec<Packet>,
+    audio_start: u64,
+    packet_count: usize,
     pub channels: u8,
     pre_skip: u64,
     pub length: u64,
@@ -162,10 +153,13 @@ fn packet_frames(prefix: &[u8]) -> Result<u64, &'static str> {
 impl OpusStream {
     pub fn open(path: &Path) -> Result<Self, TrackError> {
         let mut file = File::open(path).map_err(|e| TrackError::Unreadable(e.to_string()))?;
-        let mut packets = Vec::new();
-        let mut spans = Vec::new();
         let mut prefix = Vec::new();
         let mut header_packet = Vec::new();
+        let mut audio_start = 0;
+        let mut total = 0u64;
+        // Previously TOCs were checked after every page had been validated. Defer the
+        // first TOC/count error to preserve that precedence without keeping an index.
+        let mut packet_error = None;
         let mut packet_number = 0usize;
         let mut page_number = 0usize;
         let mut serial = None;
@@ -197,9 +191,6 @@ impl OpusStream {
             let mut lacing = vec![0u8; usize::from(header[26])];
             read_exact(&mut file, &mut lacing)?;
             let mut body = vec![0u8; lacing.iter().map(|n| usize::from(*n)).sum()];
-            let body_offset = file
-                .stream_position()
-                .map_err(|e| TrackError::Unreadable(e.to_string()))?;
             read_exact(&mut file, &mut body)?;
             if header[4] != 0 {
                 return Err(corrupt("unsupported Ogg page version"));
@@ -257,10 +248,6 @@ impl OpusStream {
                     if prefix.len() < 2 {
                         prefix.extend(bytes.iter().take(2 - prefix.len()));
                     }
-                    spans.push(Span {
-                        offset: body_offset + offset as u64,
-                        len,
-                    });
                     payload_bytes = payload_bytes
                         .checked_add(len as u64)
                         .ok_or_else(|| corrupt("Opus payload too large"))?;
@@ -281,13 +268,26 @@ impl OpusStream {
                         if segment_index + 1 != lacing.len() {
                             return Err(corrupt("audio data on the OpusTags page"));
                         }
+                        audio_start = file
+                            .stream_position()
+                            .map_err(|e| TrackError::Unreadable(e.to_string()))?;
                     }
                     _ => {
-                        packets.push(Packet {
-                            spans: std::mem::take(&mut spans),
-                            toc: std::mem::take(&mut prefix),
-                            frames: 0,
-                        });
+                        if packet_error.is_none() {
+                            match packet_frames(&prefix) {
+                                Ok(frames) => match total.checked_add(frames) {
+                                    Some(count) => total = count,
+                                    None => {
+                                        packet_error = Some(corrupt("Opus sample count overflow"))
+                                    }
+                                },
+                                Err(e) => {
+                                    let i = packet_number - 2;
+                                    packet_error = Some(corrupt(format!("Opus packet {i}: {e}")));
+                                }
+                            }
+                        }
+                        prefix.clear();
                         audio_completed = true;
                     }
                 }
@@ -315,16 +315,11 @@ impl OpusStream {
         if packet_number < 2 {
             return Err(corrupt("no OpusTags"));
         }
-        if packets.is_empty() {
+        if packet_number == 2 {
             return Err(corrupt("no Opus audio packets"));
         }
-        let mut total = 0u64;
-        for (i, packet) in packets.iter_mut().enumerate() {
-            packet.frames =
-                packet_frames(&packet.toc).map_err(|e| corrupt(format!("Opus packet {i}: {e}")))?;
-            total = total
-                .checked_add(packet.frames)
-                .ok_or_else(|| corrupt("Opus sample count overflow"))?;
+        if let Some(error) = packet_error {
+            return Err(error);
         }
         let granule = granule.unwrap_or(-1);
         if granule < 0 || (granule as u64) < pre_skip {
@@ -340,7 +335,8 @@ impl OpusStream {
         });
         Ok(Self {
             file,
-            packets,
+            audio_start,
+            packet_count: packet_number - 2,
             channels,
             pre_skip,
             length,
@@ -359,41 +355,60 @@ impl OpusStream {
             OpusDecoder::new(RATE as i32, channels).map_err(|e| corrupt(e.to_string()))?;
         let mut pcm = vec![0f32; MAX_FRAMES * channels];
         let mut bytes = Vec::new();
+        let mut body = Vec::new();
+        let mut lacing = [0u8; 255];
         let mut decoded = 0u64;
         let mut kept = 0u64;
-        for (i, packet) in self.packets.iter().enumerate() {
-            bytes.clear();
-            for span in &packet.spans {
-                self.file
-                    .seek(SeekFrom::Start(span.offset))
-                    .map_err(|e| TrackError::Unreadable(e.to_string()))?;
-                let start = bytes.len();
-                bytes.resize(start + span.len, 0);
-                self.file
-                    .read_exact(&mut bytes[start..])
-                    .map_err(|e| corrupt(format!("Opus packet {i}: {e}")))?;
-            }
-            let n = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                decoder.decode(&bytes, MAX_FRAMES, &mut pcm)
-            }))
-            .map_err(|_| corrupt(format!("Opus packet {i}: decoder panic")))?
-            .map_err(|e| corrupt(format!("Opus packet {i}: {e}")))?;
-            if n as u64 != packet.frames {
-                return Err(corrupt(format!("Opus packet {i}: decoded length mismatch")));
-            }
-            let start = self.pre_skip.saturating_sub(decoded).min(n as u64) as usize;
-            let end = (self.pre_skip + self.length)
-                .saturating_sub(decoded)
-                .min(n as u64) as usize;
-            if end > start {
-                let samples = &mut pcm[start * channels..end * channels];
-                for x in samples.iter_mut() {
-                    *x *= self.gain;
+        self.file
+            .seek(SeekFrom::Start(self.audio_start))
+            .map_err(|e| TrackError::Unreadable(e.to_string()))?;
+        let mut i = 0;
+        while i < self.packet_count {
+            // The first pass validated the entire container, including pages beyond the
+            // end trim. Read its audio pages sequentially; a packet can cross many pages.
+            let mut header = [0u8; 27];
+            read_exact(&mut self.file, &mut header)?;
+            let segments = &mut lacing[..usize::from(header[26])];
+            read_exact(&mut self.file, segments)?;
+            body.resize(segments.iter().map(|n| usize::from(*n)).sum(), 0);
+            read_exact(&mut self.file, &mut body)?;
+            let mut offset = 0;
+            for segment in segments {
+                let len = usize::from(*segment);
+                bytes.extend_from_slice(&body[offset..offset + len]);
+                offset += len;
+                if *segment == 255 {
+                    continue;
                 }
-                sink(kept, samples);
-                kept += (end - start) as u64;
+                let frames =
+                    packet_frames(&bytes).map_err(|e| corrupt(format!("Opus packet {i}: {e}")))?;
+                let n = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    decoder.decode(&bytes, MAX_FRAMES, &mut pcm)
+                }))
+                .map_err(|_| corrupt(format!("Opus packet {i}: decoder panic")))?
+                .map_err(|e| corrupt(format!("Opus packet {i}: {e}")))?;
+                if n as u64 != frames {
+                    return Err(corrupt(format!("Opus packet {i}: decoded length mismatch")));
+                }
+                let start = self.pre_skip.saturating_sub(decoded).min(n as u64) as usize;
+                let end = (self.pre_skip + self.length)
+                    .saturating_sub(decoded)
+                    .min(n as u64) as usize;
+                if end > start {
+                    let samples = &mut pcm[start * channels..end * channels];
+                    for x in samples.iter_mut() {
+                        *x *= self.gain;
+                    }
+                    sink(kept, samples);
+                    kept += (end - start) as u64;
+                }
+                decoded += n as u64;
+                bytes.clear();
+                i += 1;
+                if i == self.packet_count {
+                    break;
+                }
             }
-            decoded += n as u64;
         }
         Ok(kept)
     }
