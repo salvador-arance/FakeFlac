@@ -29,6 +29,10 @@ Feature: Calibration and acceptance for lossy files
   (v2, v5) still leave it not evaluated, and a run with detection-params.v8.toml
   evaluates it; formats=lossy includes ".opus"; Opus may be the last stage of a
   lossy entry.
+  Changed for authentic releases with a lossy master (calibration.md OQ-32 to
+  OQ-39): the unknown-kind message of "Errors in the attributes of
+  confirmed.txt" names the fourth kind, lossy-master. Nothing else changes: the
+  kind applies to lossless files only (OQ-36).
 
   # --- Lossless rows do not change -------------------------------------------
 
@@ -195,7 +199,7 @@ Feature: Calibration and acceptance for lossy files
       | Pérdidas\Vídeo\07 – Falso 320.mp3 \| fake chain=Álbum                    | invalid id 'Álbum' for chain (1 to 16 letters, digits, '_' or '-')          |
       | Pérdidas\Vídeo\07 – Falso 320.mp3 \| real upstream=aac                   | upstream=, source_max_kbps= and weak apply to fake lines only               |
       | Compras\Ñandú – Ácido, Vol. 1 (2024)\03 – Bonus.flac \| fake upstream=aac | upstream=, source_max_kbps= and weak apply to lossy files only             |
-      | Pérdidas\Vídeo\07 – Falso 320.mp3 \| dudoso                              | unknown kind 'dudoso' (expected fake, real or false-positive)               |
+      | Pérdidas\Vídeo\07 – Falso 320.mp3 \| dudoso                              | unknown kind 'dudoso' (expected fake, real, false-positive or lossy-master) |
       | Pérdidas\Vídeo \| real formats=all                                       | real applies to lossy files only                                            |
       | Compras\Ñandú – Ácido, Vol. 1 (2024)\03 – Bonus.flac \| real             | real applies to lossy files only                                            |
       | Colección\Álbum Ü\folder.jpg \| fake                                     | not a supported audio file (FLAC, WAV, MP3, M4A or Opus)                    |

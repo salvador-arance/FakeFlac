@@ -10,7 +10,7 @@ status: approved
 
 ## 1. What is generated
 
-- **Sources:** every trusted track (all classes, `reference` included, inputs.md 1.5) whose own analysis is not `Error` and not silent (rules.md section 1.6). Confirmed fakes are not sources. A skipped source is listed in the report with its reason.
+- **Sources:** every trusted track (all classes, `reference` included, inputs.md 1.5) whose own analysis is not `Error` and not silent (rules.md section 1.6). Confirmed fakes are not sources, and neither are `lossy-master` tracks (inputs.md section 2.1, calibration.md OQ-34): their audio carries lossy traces, so a transcode of them would not be a lossless source encoded once. A skipped source is listed in the report with its reason.
 - **Settings:** the `[[generate.settings]]` of the config. Version 1 has the 9 settings of the issue:
 
 | id | encoder | ffmpeg encoder arguments | ext | `bitrate_kbps` |
