@@ -90,10 +90,12 @@ impl LabelRow {
     }
 }
 
-/// What the lossy extension adds to a row of `labels.csv` (lossy.md section 2). Kept apart from
-/// [`LabelRow`] and found through [`LabelRow::identity`], so lossless rows are built as before.
+/// Additional metadata, including the lossy columns of `labels.csv` (lossy.md section 2) and
+/// undetectable criteria. Kept apart from [`LabelRow`] and found through [`LabelRow::identity`].
 #[derive(Debug, Clone, Default)]
 pub struct RowMeta {
+    /// The first matching criterion for an undetectable generated row (evaluation.md section 2).
+    pub undetectable_criterion: Option<&'static str>,
     /// `stages`: the stage setting ids joined with `>` (generated lossy rows).
     pub stages: String,
     /// Generated cascades: the lowest bitrate before the last stage; confirmed lossy fakes: the bound.

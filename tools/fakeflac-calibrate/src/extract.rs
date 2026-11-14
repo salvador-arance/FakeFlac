@@ -667,13 +667,9 @@ pub fn extract_group(
         });
         let (row, row_meta) = match &gen.lossy {
             None => {
-                let undetectable = is_undetectable(
-                    &corpus_results[gen.source],
-                    &extracted,
-                    gen.setting.lowpass_hz,
-                    config,
-                    params,
-                );
+                let criterion = corpus_results[gen.source].as_deref().and_then(|source| {
+                    undetectable_criterion(source, &extracted, gen.setting, params, config)
+                });
                 let row = LabelRow {
                     root: RowRoot::Generated,
                     path: format!("{}.flac", gen.id),
@@ -691,9 +687,10 @@ pub fn extract_group(
                     split: source.split,
                     watch_id: String::new(),
                     extracted,
-                    undetectable,
+                    undetectable: criterion.is_some(),
                 };
                 let row_meta = RowMeta {
+                    undetectable_criterion: criterion,
                     split_unit: source.unit.clone(),
                     ..RowMeta::default()
                 };
@@ -710,14 +707,19 @@ pub fn extract_group(
                     (Some((low, _)), Some(last)) => low < last,
                     _ => false,
                 };
-                let undetectable = cascade_fake
-                    && is_undetectable(
-                        &corpus_results[gen.source],
-                        &extracted,
-                        before.iter().filter_map(|s| s.lowpass_hz).min(),
-                        config,
-                        params,
-                    );
+                let criterion = if cascade_fake {
+                    corpus_results[gen.source].as_deref().and_then(|source| {
+                        criterion_with_lowpass(
+                            source,
+                            &extracted,
+                            before.iter().filter_map(|s| s.lowpass_hz).min(),
+                            config,
+                            params,
+                        )
+                    })
+                } else {
+                    None
+                };
                 let row = LabelRow {
                     root: RowRoot::Generated,
                     path: format!("{}.{}", gen.id, gen.ext()),
@@ -744,9 +746,10 @@ pub fn extract_group(
                     split: source.split,
                     watch_id: String::new(),
                     extracted,
-                    undetectable,
+                    undetectable: criterion.is_some(),
                 };
                 let row_meta = RowMeta {
+                    undetectable_criterion: criterion,
                     stages: l.entry.stages.join(">"),
                     source_bitrate_kbps: lowest.map(|(b, _)| b),
                     upstream: lowest
@@ -821,48 +824,40 @@ fn corpus_meta(item: &CorpusItem, extracted: &Extracted, lossy: bool, config: &C
 }
 
 /// The first matching undetectable criterion of evaluation.md section 2 (`extent` or `hf drop`).
-/// Compile-only signature for the approved RP-11 criterion scenarios; implementation follows.
 pub fn undetectable_criterion(
-    _source: &Extracted,
-    _generated: &Extracted,
-    _setting: &Setting,
-    _params: &DetectionParams,
-    _config: &Config,
+    source: &Extracted,
+    generated: &Extracted,
+    setting: &Setting,
+    params: &DetectionParams,
+    config: &Config,
 ) -> Option<&'static str> {
-    todo!("RP-11 undetectable criterion")
+    criterion_with_lowpass(source, generated, setting.lowpass_hz, config, params)
 }
 
 /// A transcode is undetectable when its source has no content above lowpass_hz or
 /// the maximum drop in HF bands is below min_removed_hf_db (evaluation.md section 2).
-fn is_undetectable(
-    source_extracted: &Option<Arc<Extracted>>,
+fn criterion_with_lowpass(
+    source_extracted: &Extracted,
     transcode_extracted: &Extracted,
     lowpass_hz: Option<u32>,
     config: &Config,
     params: &DetectionParams,
-) -> bool {
-    let Some(lowpass_hz) = lowpass_hz else {
-        return false;
+) -> Option<&'static str> {
+    let lowpass_hz = lowpass_hz?;
+    let Extracted::Probe(src_probe) = source_extracted else {
+        return None;
     };
-    let Some(src_ext) = source_extracted.as_ref() else {
-        return false;
-    };
-    let Extracted::Probe(src_probe) = src_ext.as_ref() else {
-        return false;
-    };
-    let Some(src_spec) = &src_probe.spectrum else {
-        return false;
-    };
+    let src_spec = src_probe.spectrum.as_ref()?;
 
     let nyquist = src_spec.nyquist_hz();
     if lowpass_hz as f64 >= nyquist {
-        return false;
+        return None;
     }
 
     // Criterion 1: source.fe <= setting.lowpass_hz
     let m = measure(src_spec, params);
     if m.extent_hz < nyquist && m.extent_hz <= lowpass_hz as f64 {
-        return true;
+        return Some("extent");
     }
 
     // Criterion 2: maximum drop in high-frequency bands (b >= lowpass_hz/100)
@@ -882,7 +877,7 @@ fn is_undetectable(
                             .map(|b| src_spec.mean_db[b] - t_spec.mean_db[b])
                             .fold(f64::NEG_INFINITY, f64::max);
                         if max_drop.is_finite() && max_drop < min_drop {
-                            return true;
+                            return Some("hf drop");
                         }
                     }
                 }
@@ -890,5 +885,5 @@ fn is_undetectable(
         }
     }
 
-    false
+    None
 }

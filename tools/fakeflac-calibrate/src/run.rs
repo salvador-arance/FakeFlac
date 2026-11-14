@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 /// `DetectionParams::default()`.
 pub const DEFAULT_PARAMS: &str = "specs/detection/detection-params.v8.toml";
 /// The default `--config`, relative to the repository root.
-pub const DEFAULT_CONFIG: &str = "specs/calibration/calibration.v2.toml";
+pub const DEFAULT_CONFIG: &str = "specs/calibration/calibration.v5.toml";
 /// The default `--grid`, relative to the repository root.
 pub const DEFAULT_GRID: &str = "specs/calibration/calibrate-grid.v3.toml";
 

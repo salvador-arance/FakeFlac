@@ -486,24 +486,48 @@ pub fn evaluation(
     let mut targets = Vec::new();
     for target in &config.targets {
         for sel in [SplitSel::All, SplitSel::Holdout] {
-            let count = selected(rows, evals, sel)
-                .filter(|(r, e)| {
-                    let by_class = target
-                        .classes
-                        .as_ref()
-                        .is_some_and(|c| r.truth == Truth::Real && c.contains(&r.class));
-                    let by_setting = target
-                        .settings
-                        .as_ref()
-                        .is_some_and(|s| r.origin == "generated" && s.contains(&r.setting));
-                    (by_class || by_setting) && verdict_name(e.verdict) == target.verdict
-                })
-                .count() as u32;
+            let mut count = 0;
+            let mut total = 0;
+            let mut undetectable_excluded = 0;
+            for (r, e) in selected(rows, evals, sel) {
+                let by_class = target
+                    .classes
+                    .as_ref()
+                    .is_some_and(|c| r.truth == Truth::Real && c.contains(&r.class));
+                let by_setting = target
+                    .settings
+                    .as_ref()
+                    .is_some_and(|s| r.origin == "generated" && s.contains(&r.setting));
+                if !(by_class || by_setting) {
+                    continue;
+                }
+                if r.undetectable {
+                    undetectable_excluded += 1;
+                    continue;
+                }
+                if e.verdict == Verdict::Error {
+                    continue;
+                }
+                total += 1;
+                if verdict_name(e.verdict) == target.verdict {
+                    count += 1;
+                }
+            }
+            let pass = if let Some(max) = target.max_count {
+                count <= max
+            } else if let Some(m) = target.max_rate_thousandths() {
+                // u64 holds these products for every u32 row count, including a 100 % bound.
+                100000 * u64::from(count) <= u64::from(m) * u64::from(total)
+            } else {
+                false // Config validation rejects a target without a bound.
+            };
             targets.push(TargetResult {
                 id: target.id.clone(),
                 split: sel,
-                pass: count <= target.max_count,
+                pass,
                 count,
+                total,
+                undetectable_excluded,
             });
         }
     }
