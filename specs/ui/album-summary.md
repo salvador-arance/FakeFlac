@@ -11,6 +11,11 @@ draggable Albums width. It supersedes only the fixed-width/no-splitter
 part of the layout below and Q3; the panel remains non-collapsible. The extension was approved at G1 on 2026-11-02; the existing implementation
 remains fixed-width until its feature is built.
 
+Proposed extension (RF-17, G1 pending): `fake-evidence.md` section 3 shows, in the detail panel of a
+selected `Fake` track, an album note built from the `summary` of the latest `AlbumUpdate` of its
+album (the counts this panel already shows). The panel, its items, the album verdict rule and the
+store do not change; the note never changes a track's or an album's verdict.
+
 > Where the summary verdict of each folder/album appears, what it shows, when it changes and how it works with the table and the spectrogram. The rule that produces the summary is `specs/detection/album-summary.md` (H0, unchanged); the data arrives with every `trackDone` event (`specs/contracts/commands.md`, "Album summary (version 5)"); scenarios: `specs/features/album-summary-app.feature` (tag `@RF-10`). Layout, the other states and interaction stay those of `main-screen.md`; export stays that of `export-csv.md`. Components follow `components.md` (atomic design, ADR-0014: a story per state and a component test before use, S6). Presentational components get data through props and emit events; only `AnalysisPage` touches the store and the API client.
 
 ## Where it appears: the Albums panel

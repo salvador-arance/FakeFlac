@@ -1,13 +1,13 @@
 ---
 id: SPEC-CONTRACT-H1
-requirements: [RF-01, RF-02, RF-05, RF-06, RF-07, RF-09, RF-10, RF-11, RF-13, RF-14, RF-15, RF-16]
+requirements: [RF-01, RF-02, RF-05, RF-06, RF-07, RF-09, RF-10, RF-11, RF-13, RF-14, RF-15, RF-16, RF-17]
 status: approved
-version: 8
+version: 9
 ---
 
 # Backend ↔ frontend contract (H1, with the H2 lossy formats, CSV export and album summaries)
 
-> The commands, events and types the frontend can use. They are defined once in Rust and the TypeScript bindings are **generated** with `tauri-specta` (S3, ADR-0003); this document is the readable reference. Field names are camelCase on the TS side. Settings commands arrive later in H2 (the cache command is version 7). Version 3 adds MP3 and M4A files (RF-14 H2) and the source-bitrate estimate (RF-15); changes are listed in "Lossy formats (version 3)". Version 4 adds `export_csv` (RF-09); changes are listed in "CSV export (version 4)". Version 5 adds the album summary to every `trackDone` event (RF-10); changes are listed in "Album summary (version 5)". Version 6 adds the reason `streamingSampleRate` (RF-16, detection v7, ADR-0043); changes are listed in "Streaming sample rate (version 6)". Version 7 adds the result cache (RF-11, ADR-0044): the command `clear_cache`, the error `CACHE_FAILED` and the summary fields `fromCache` and `cache`; changes are listed in "Result cache (version 7)". Detection v8 adds Opus files (RF-14, RF-15, ADR-0047) **without a new contract version**: no type changes; changes are listed in "Opus files (detection v8)".
+> The commands, events and types the frontend can use. They are defined once in Rust and the TypeScript bindings are **generated** with `tauri-specta` (S3, ADR-0003); this document is the readable reference. Field names are camelCase on the TS side. Settings commands arrive later in H2 (the cache command is version 7). Version 3 adds MP3 and M4A files (RF-14 H2) and the source-bitrate estimate (RF-15); changes are listed in "Lossy formats (version 3)". Version 4 adds `export_csv` (RF-09); changes are listed in "CSV export (version 4)". Version 5 adds the album summary to every `trackDone` event (RF-10); changes are listed in "Album summary (version 5)". Version 6 adds the reason `streamingSampleRate` (RF-16, detection v7, ADR-0043); changes are listed in "Streaming sample rate (version 6)". Version 7 adds the result cache (RF-11, ADR-0044): the command `clear_cache`, the error `CACHE_FAILED` and the summary fields `fromCache` and `cache`; changes are listed in "Result cache (version 7)". Detection v8 adds Opus files (RF-14, RF-15, ADR-0047) **without a new contract version**: no type changes; changes are listed in "Opus files (detection v8)". Version 9 (RF-17, proposed for G1) adds `TrackAnalysis.evidence`, the evidence of a `fake` verdict, and the types `EvidenceKind` and `FakeEvidence`; changes are listed in "Fake evidence (version 9)".
 
 ## Commands
 
@@ -83,6 +83,14 @@ type TrackInfo = {
 
 type CutoffEstimate = { frequencyHz: number; steepnessDbPerKhz: number; noiseFloorDb: number }
 
+type EvidenceKind = 'gapStep' | 'cutoffStep' | 'shortfall' // version 9 (RF-17)
+type FakeEvidence = {                                      // version 9 (RF-17); specs/detection/fake-evidence.md section 2
+  kind: EvidenceKind
+  value: number       // gapStep: G (dB); cutoffStep: D (dB); shortfall: s = c_exp − fc (Hz)
+  threshold: number   // the DetectionParams value the rule compared it with
+  margin: number      // value − threshold, ≥ 0
+}
+
 type TrackError =
   | { kind: 'unreadable'; detail: string }
   | { kind: 'corruptStream'; detail: string }
@@ -95,6 +103,7 @@ type TrackAnalysis = {
   cutoff: CutoffEstimate | null
   estimatedSourceBitrateKbps: number | null          // RF-15: lossy codecs only (specs/detection/lossy-source.md section 5); null with streamingSampleRate (version 6); null for an Opus track that is not real (detection v8)
   reasons: SuspicionReason[]
+  evidence: FakeEvidence[]                           // version 9 (RF-17): not empty exactly when verdict is 'fake'
   error: TrackError | null
   algorithmVersion: number                           // 8 with the default DetectionParams (detection v8: lossless rules of rules.md, lossy rules of lossy-source.md)
 }
@@ -157,6 +166,8 @@ Detection v6 (ADR-0042) does not change them either. It adds the optional sectio
 Detection v7 (RF-16, ADR-0043) **does** change them: it adds the reason `streamingSampleRate` (contract version 6, "Streaming sample rate (version 6)").
 
 Detection v8 (RF-14, RF-15, ADR-0047) does not change them: `AudioFormat` and `AudioCodec` already hold `opus`. It adds Opus files to the scan and the `opus` rows of `[lossy.cutoffs]` ("Opus files (detection v8)"); `algorithmVersion` is 8 with the defaults.
+
+RF-17 (no detection version) **does** change them: `TrackAnalysis` gains `evidence` and there are two new types (contract version 9, "Fake evidence (version 9)"); `algorithmVersion` stays 8.
 
 ## Lossy formats (version 3)
 
@@ -316,6 +327,25 @@ Detection v8 (RF-14, RF-15; ADR-0047; rules: `specs/detection/lossy-source.md` s
 - **CSV export:** `format` and `codec` already allow `opus` (csv-export.md); `csv_format_version` stays 1.
 - **Unchanged:** the commands, events, `AppError` codes and every type.
 - **Layers.** `fakeflac-fs` lists `.opus`; `fakeflac-audio` reads the Ogg layer and decodes with `rusty-opus` (ADR-0047); `fakeflac-core` gains no type (it already has `AudioCodec::Opus`) and computes the null estimate in its pure lossy functions; `src-tauri` maps nothing new.
+
+## Fake evidence (version 9)
+
+Version 9 (RF-17, proposed for G1; rule: `specs/detection/fake-evidence.md`; UI: `specs/ui/fake-evidence.md`; scenarios: `specs/features/fake-evidence.feature`):
+
+- **New field** `TrackAnalysis.evidence: FakeEvidence[]`: what made a `fake` verdict, and how strong it is. It is **not empty exactly when `verdict` is `'fake'`**, and empty for `real`, `suspicious` and `error` tracks.
+  - A lossless `fake` (codec `pcm`, `flac` or `alac`) lists `gapStep` when rule V3's condition holds and `cutoffStep` when rule V4's does, in that order, one or both (`specs/detection/rules.md` section 3).
+  - A lossy `fake` (codec `mp3`, `aac` or `opus`) lists `shortfall` then `cutoffStep` (rule L3, `specs/detection/lossy-source.md` section 4).
+- **New types** `EvidenceKind` (`'gapStep' | 'cutoffStep' | 'shortfall'`) and `FakeEvidence` (`kind`, `value`, `threshold`, `margin`). `value` is the measurement the rule compared (`G` or `D` in dB, the shortfall `s` in Hz); `threshold` is the `DetectionParams` value it was compared with; `margin` is `value − threshold`, never negative. All are finite numbers (`f32` in Rust, like `CutoffEstimate`).
+- **`reasons` does not change.** A `fake` still carries no reason; `SuspicionReason` has no new member; `streamingSampleRate` still never appears on a `fake`.
+- **Nothing else changes.** For the same file the verdict, reasons, error, cutoff, `estimatedSourceBitrateKbps` and `algorithmVersion` (8 with the defaults) are those of version 8. `DetectionParams` gets no new section, so the result cache's engine does not change.
+- **CSV export:** `evidence` is not exported; the file and `csv_format_version` 1 do not change (fake-evidence.md Q8).
+- **Result cache:** a cached analysis is reused only if its `evidence` is not empty exactly when its verdict is `fake`; a row written before version 9 parses with an empty `evidence` (`result-cache.md` section 3; fake-evidence.md section 6.3).
+- **Album note:** computed in the frontend from the `AlbumSummary` counts it already receives; `AlbumUpdate` and `AlbumSummary` do not change (fake-evidence.md section 4).
+- **Unchanged:** the commands, events, `AppError` codes, `TrackInfo`, `CutoffEstimate`, `SuspicionReason`, `AlbumUpdate`, `AlbumSummary`, `AnalysisSummary`, `CacheStatus`, `Spectrogram`, `ExportResult`, `Settings` and its types.
+- **Layers.** `fakeflac-core`: `FakeEvidence` and `EvidenceKind` in `domain`, the field of `TrackAnalysis`, and a pure function of `detect` that `analyze_track` calls after the verdict; the cache re-check in the cached use case. `src-tauri/src/dto.rs` maps the field and the types (serialised camelCase) and adds no logic. `fakeflac-export`, `fakeflac-store` and `tools/fakeflac-calibrate` write nothing new. No new port, crate or dependency.
+- **Consequence on existing tests (declared, fake-evidence.md section 9 (f)):** tests that build a `TrackAnalysis` field by field or compare its exact JSON gain `evidence` in `test(RF-17)`; their other assertions do not change.
+
+`just gen` produces new bindings (the two types and the field); `just gen-check` must pass. The API client does not change. The frontend needs the texts of `ui/fake-evidence.md` section 6.
 
 ## Supported files (RF-14)
 
