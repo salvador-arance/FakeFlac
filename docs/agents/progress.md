@@ -2,6 +2,29 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-14 - RNF-02 reviewed and local CI green
+
+**Done**
+- Confirmed PR #136 is merged with all final-head CI checks green; ADR-0050 is accepted. Created `feat/RNF-02` from up-to-date main. Baseline full `just check` passed (all Rust suites; 83 frontend files / 1,430 tests).
+- Fresh test author committed `404dbd7`: serial gate/long drivers, synthetic length-parametrized fixtures, child peak protocol, portable chunk checks, pure checks, report and recipe wiring tests. The test-stage preflight verified all fixture metadata, file growth and outcomes in 48.497 s; only Opus peak growth failed (+2,224,128 B private / +2,166,784 B working set).
+- Implementation stopped when full workspace compilation exposed a shared fixture helper referencing a module absent from calibration tests. The owner explicitly authorized a mechanical test-stage repair; a fresh test author committed `5060a3e`, passing unchanged Gaussian noise through a callback. No assertions/bounds changed; the 30 s Opus fixture remains byte-identical (SHA256 `4DAF103B7FEBDAB62CD57758A3C19EC225A2CA6436BD4A42E084603736CEA235`).
+- A fresh implementer verified and committed `bbc98ea`: the two-pass Opus reader, one-pass chunk seam and `just memory` recipe. Full `just check` passes (all Rust suites, memory gate 7 passed / 2 ignored in 60.06 s, 291 hook/script tests, 83 frontend files / 1,430 tests). The first implemented run reduced Opus growth to 36,864 B private / 16,384 B working set. All 21 existing Opus tests pass unchanged. Reports are under `target/rnf02-*.txt`.
+- Before/after probes, spectrograms, errors and raw Opus sample bits match over 234 cached synthetic fixtures; both fingerprint reports have SHA256 `354CC44D90C200440D8E40A09FB6347B1E7AFDCA106D892A60E2A7B4803C729B` (`target/rnf02-equivalence*`).
+- F6 `just memory` passes in 166.18 s excluding compilation: one-hour FLAC/Opus and 24-bit/96 kHz FLAC meet all bounds. Hi-res peaks over baseline are 7,327,744 B private / 7,086,080 B working set, confirming the provisional 64 MiB ceiling. Full report: `target/rnf02-memory-long-report.md`.
+- Fresh `just perf` passes: T1 off/cold medians 170/198 ms and T2 off/cold 563/594 ms; differences from the current section 10.1 reference are +4.9%/+6.5%/+8.5%/+5.3%, below the 20% regression threshold. Full report: `target/rnf02-perf-report.md`.
+- Independent read-only review found no blocking or improvement findings, verified report/hash evidence and independently passed `just guard-tests`, `just lint-arch` and `git diff --check`. No implementation changes followed review.
+- Final `just ci` passes, including all workspace/frontend tests, traceability, protected-test/version checks, generated bindings, Tauri clippy and Tauri tests (`target/rnf02-ci.txt`). Stage is clear.
+
+**Pending**
+- Obtain permission to open the prepared feature PR for G2 after corpus acceptance. F7 remains the owner's manual whole-app check. PR text and complete reports are prepared under `target/rnf02-feature-pr.md` and `target/rnf02-*-report.md`.
+- Corpus `just accept` comparison still needs resolution of the root instruction forbidding writes outside the repository: that command writes reports/cache in the private external calibration directory. No such run was made during this feature yet.
+- Architecture wording is updated per memory.md section 13. Human-owned command-list and reviewer-checklist edits remain due, followed by `just agents-sync`. No spec, threshold, dependency or detection/extraction version change is proposed.
+
+**Blockers / questions for the human**
+- The protected-helper blocker is resolved by the owner's explicit authorization and `5060a3e`; full checks now pass. Corpus acceptance requires a specific exception for the command's external calibration outputs. The feature is not yet declared complete or merged.
+
+**Next step:** obtain the specific corpus-acceptance write exception and permission to open the prepared PR.
+
 ## 2026-11-14 - RNF-02 ADR approved at G1
 
 **Done**

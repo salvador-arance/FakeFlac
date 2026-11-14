@@ -39,7 +39,7 @@ Why hexagonal: the detection core is the most valuable and most delicate asset (
 | RF-14 formats | symphonia for WAV, FLAC, MP3 and M4A (ADR-0030, ADR-0040); Opus with `rusty-opus` and an Ogg reader in the adapter (ADR-0047) |
 | RF-03/RF-04 detection | Band spectra (power mean and per-frame median), relative cutoff step and 16 kHz gap step (ADR-0035); thresholds as versioned data (ADR-0011) |
 | RNF-01 performance | parallel tracks on std scoped threads (ADR-0006, ADR-0034), window sampling (ADR-0010), cache (ADR-0007/0008), real FFT (ADR-0026); budget, fixtures and the opt-in harness `just perf`: `specs/contracts/performance.md`, ADR-0046 |
-| RNF-02 memory | Reused window buffers, streaming decode |
+| RNF-02 memory | Streaming decode, bounded working set per track; criterion and gate: `specs/contracts/memory.md`, `just memory` |
 | RNF-03 privacy | No network dependencies; Tauri CSP without external `connect-src`; minimal capabilities |
 | RNF-04 reliability | Typed per-track errors (ADR-0013) |
 | RNF-05 read-only | No write port over audio; cache stored outside the music folder |
@@ -59,7 +59,7 @@ Minimal capabilities (folder dialog, read of the chosen path, write only of the 
 
 ## Related
 
-- RNF-02 memory gate: [ADR-0050](../adr/0050-memory-budget-os-peaks-std-only-gated-in-ci.md), [memory contract](../../specs/contracts/memory.md). The spec is approved at G1 (#134); the owner approved ADR-0050 in chat on 2026-11-14 (PR #136). The gate and `just memory` are not implemented yet.
+- RNF-02 memory gate: [ADR-0050](../adr/0050-memory-budget-os-peaks-std-only-gated-in-ci.md), [memory contract](../../specs/contracts/memory.md). The spec is approved at G1 (#134); ADR-0050 is accepted (#136). The feature adds the Windows per-track peak-memory gate to normal tests, portable chunk checks, the two-pass Opus reader and the opt-in `just memory` long suite. Local gate and long-suite reports pass; G2 remains pending.
 
 - RF-13 language preference: [ADR-0049](../adr/0049-persist-language-preference-in-app-config-json.md), [settings contract](../../specs/contracts/settings.md). Approved at G1 (#107), implemented in #109; language-only settings, independent of detection and the result cache.
 
