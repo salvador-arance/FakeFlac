@@ -2,6 +2,24 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-14 - F7 whole-app memory check measured
+
+**Done**
+- Desktop control recovered after the owner requested another attempt. Built the current release with `just build` from `2f800f2`, started it fresh, captured P0, cleared its results cache and analysed the complete music folder through the normal UI. Selected the longest track after sorting by descending duration and verified its rendered spectrogram before P2.
+- F7 covers 11,396 tracks / 902 albums, including 66 folders with exactly 15 supported tracks, in a folder of 150,714.379 MB including hidden files. Machine has 16 logical processors / 15 workers. Longest analysed track is 60 min 32 s (3,632.639978 s from read-only metadata).
+- P0 private/working-set peaks were 8,110,080 / 33,443,840 B. P1 and P2 were both 240,324,608 / 291,893,248 B. Analysis growth is 221.457 / 246.477 MiB against 544 MiB indicative targets. Spectrogram peak growth is 0 / 0 MiB against 32 MiB targets. Both targets are met.
+- Run completed with 9,003 real, 1,173 suspicious, 1,156 fake and 64 track errors. These errors were recorded, without a separate diagnosis in this memory check. All 13,203 files including hidden files retained exact paths, sizes and last-write timestamps before/after.
+- Aggregate report is `target/f7-report.md`. Private selection details and snapshots remain only in ignored `target/f7-*` files. PR #137 CI on `2f800f2` passed all jobs including `ci-ok` before this documentation update.
+- Added the complete aggregate F7 report to [PR #137](https://github.com/salvador-arance/FakeFlac/pull/137). Fresh `just check` passes after the measurement, including every Rust suite and 83 frontend files / 1,430 tests (`target/f7-check.txt`).
+
+**Pending**
+- Final-head CI after this F7 documentation update, human G2 review/merge and the human-owned agent-configuration edits from memory.md section 13 remain pending.
+
+**Blockers / questions for the human**
+- None for F7. The desktop-control blocker is resolved and both indicative targets are met.
+
+**Next step:** inspect final-head CI on #137, then the owner reviews G2.
+
 ## 2026-11-14 - RNF-02 feature PR #137 opened
 
 **Done**
