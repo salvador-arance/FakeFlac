@@ -12,14 +12,14 @@
 - `just check` passed.
 
 **Pending**
-- Gate G1 on PR #131 (owner): confirm OQ-25's review addition and OQ-26.
+- Gate G1 on PR #131: the owner delegated the decision to the reviewing agent, which accepted OQ-25's review addition and OQ-26 and found the spec ready. The merge itself stays with the owner.
 - After G1: `/feature RP-11` (tests, then implementation; the protected tests listed in calibration.md OQ-31 (d) change in the test stage).
 - Carried over: `docs/release-0.2.0-record` (commits after #119).
 
 **Blockers / questions for the human**
 - None.
 
-**Next step:** owner reviews PR #131 (G1).
+**Next step:** owner merges PR #131, then `/feature RP-11`.
 
 ## 2026-11-14 - Local calibration path repair
 
