@@ -18,6 +18,20 @@ use std::path::Path;
 /// produced for the same file and parameters, and whenever `symphonia` is upgraded (ADR-0036, OQ-3).
 pub const EXTRACTION_VERSION: u32 = 2;
 
+/// RNF-02 hidden test seam (memory.md section 3.5).
+#[doc(hidden)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChunkStats {
+    pub chunks: u64,
+    pub frames: u64,
+    pub max_chunk_frames: u64,
+}
+
+#[doc(hidden)]
+pub fn decode_chunks_for_test(_path: &Path) -> Result<ChunkStats, TrackError> {
+    todo!("RNF-02: one MonoStream decoding pass")
+}
+
 /// `SpectrumAnalyzer` for WAV, FLAC, MP3 and M4A (AAC-LC, ALAC) based on symphonia.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct SymphoniaAnalyzer;
