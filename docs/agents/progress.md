@@ -2,6 +2,25 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-14 - RP-11 acceptance targets implemented (G2 pending)
+
+**Done**
+- G1 closed: spec PR #131 merged as `7999698`; feature branch `feat/RP-11` starts at `b36f69e`.
+- Tests `49a63fc`: exact rate bounds, target exclusions and report cells, undetectable criteria, legacy configs and default v5; authorized existing test updates from calibration.md OQ-31 (d). New tests compiled and failed for the expected reasons before implementation.
+- Implementation `8fb40e3`: rate targets compared in integer thousandths, config validation, error/undetectable exclusions, criterion metadata and reports, v5 default. No dependency or app detection changes.
+- Fresh review agent found no blocking or improvement findings. Specs and protected tests were unchanged during implementation.
+- `just check` and final `just ci` passed (all Rust suites, 83 frontend files / 1430 tests, generated bindings and Tauri adapter checks). `just guard-tests`, `just lint-arch` and `git diff --check` passed; privacy check found 0 matches.
+- Traceability updated for the new executable scenarios. No new acceptance or calibration run on the local corpus.
+
+**Pending**
+- Approval to publish the feature branch and open its PR (the `/feature` skill explicitly requires asking first). The proposed PR body is in ignored `target/rp11-pr-body.md`. G2 remains with the owner.
+- Carried over: `docs/release-0.2.0-record` (commits after #119).
+
+**Blockers / questions for the human**
+- None for implementation.
+
+**Next step:** obtain approval to publish `feat/RP-11` and open the feature PR.
+
 ## 2026-11-14 - RP-11 acceptance-target spec: review fixes (PR #131, G1 pending)
 
 **Done**
