@@ -2,6 +2,42 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-14 - RNF-02 ADR approved at G1
+
+**Done**
+- The owner approved ADR-0050 in chat and explicitly authorized the agent to merge [PR #136](https://github.com/salvador-arance/FakeFlac/pull/136) after CI passes. This authorization applies to #136; the human merge rule remains the default for future PRs.
+- Marked ADR-0050 `accepted` in the ADR and its index, and recorded G1 in the architecture overview. The approved RNF-02 spec (#134) and its bounds are unchanged.
+- Full `just check` passed before this documentation-only G1 record (83 frontend files / 1,430 tests and all Rust suites).
+
+**Pending**
+- Integrate #136 after its final-head CI passes, then `/feature RNF-02`: tests, the two-pass Opus reader, the chunk seam, the memory harness and recipe, independent review, and `just ci`.
+- F6 long-suite and fresh `just perf` reports for the feature PR; F7 manual whole-app check.
+- Architecture wording and human-owned agent configuration edits at the times assigned by memory.md section 13. Earlier throwaway measurement build folders remain.
+
+**Blockers / questions for the human**
+- None. G1 is closed; integration waits for CI.
+
+**Next step:** integrate #136 when CI is green, then `/feature RNF-02`.
+
+## 2026-11-14 - RNF-02 memory infrastructure ADR proposed for G1
+
+**Done**
+- `86c5e6e` proposes [ADR-0050](../adr/0050-memory-budget-os-peaks-std-only-gated-in-ci.md), as required by memory.md Q9: OS peaks per child through PowerShell, a std-only CI gate, an opt-in `just memory` long suite, the memory-only extension of ADR-0046 and ADR-0019, rejected alternatives and explicit shared-runner failure/flake policy.
+- Linked the proposal from the ADR index and architecture overview. ADR status remains `proposed`; RNF-02 remains `specified` by #134. No spec, test, production code, recipe or agent configuration changed.
+- Clarified the order from memory.md section 13: the human's `CLAUDE.md` recipe entry follows implementation of the recipe; the reviewer checklist is due with or after the feature PR. Neither is an ADR-preparation prerequisite.
+- `just check` passed (all Rust suites; 83 frontend files / 1,430 tests), as did `just trace`, `git diff --check` and `just privacy-check --base main` (0 matches). This handoff is a documentation-only follow-up.
+
+**Pending**
+- Human G1 review of ADR-0050 on `spec/RNF-02-memory-adr`, then the RNF-02 feature cycle: fresh test-author, fresh Rust implementer, independent review, `just ci` and feature PR.
+- The feature PR needs the F6 long-suite report (including the provisional 64 MiB hi-res ceiling) and a fresh `just perf` report. F7 remains a manual whole-app check.
+- With or after the feature PR: architecture RNF-02 wording and the human-owned agent configuration edits from memory.md section 13, followed by `just agents-sync`.
+- Earlier throwaway measurement build folders under `target/rnf02-measure/` remain; no cleanup attempted in this session.
+
+**Blockers / questions for the human**
+- ADR-0050 awaits G1. No new dependency or change to the approved memory bounds is proposed.
+
+**Next step:** review and approve ADR-0050 at G1, then `/feature RNF-02`.
+
 ## 2026-11-14 - RNF-02 spec approved at G1 (PR #134)
 
 **Done**
