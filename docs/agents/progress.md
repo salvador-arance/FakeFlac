@@ -2,6 +2,44 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-14 - RP-11 acceptance-target spec: review fixes (PR #131, G1 pending)
+
+**Done**
+- Spec PR #131 (`spec/RP-11-targets`) reviewed; six findings, all in the calibration specs.
+- T2's third detectable `Real` row confirmed on run `20261114T113810Z` as the 14450 Hz step: the three rows are the three `cbr128` known limitations. "To confirm" removed from evaluation.md, calibration.md and rules.md.
+- `max_rate_pct`: at most 3 decimals, compared in integer thousandths of a percent (`100000 · k ≤ m · n`), bound written from `m`; new config error and scenarios in `calibration.feature`. Recorded in OQ-25 as proposed, for the owner to confirm at G1.
+- Written down without behaviour change: a rate target with `n = 0` keeps passing (OQ-25); v1–v4 runs no longer reproduce the old target counts (evaluation.md section 6); an include mechanism for v5 rejected (OQ-29); T2's accepted `FAIL` is the three known rows only.
+- `just check` passed.
+
+**Pending**
+- Gate G1 on PR #131 (owner): confirm OQ-25's review addition and OQ-26.
+- After G1: `/feature RP-11` (tests, then implementation; the protected tests listed in calibration.md OQ-31 (d) change in the test stage).
+- Carried over: `docs/release-0.2.0-record` (commits after #119).
+
+**Blockers / questions for the human**
+- None.
+
+**Next step:** owner reviews PR #131 (G1).
+
+## 2026-11-14 - Local calibration path repair
+
+**Done**
+- Repaired the references affected by a renamed library folder in the local lists, labels, feature cache, reports and analysis artifacts (46 files). Originals and a SHA-256 manifest are in the local `_arreglo-rutas-2026-11-14/` backup directory; no corpus paths or names were added to the repository.
+- Updated generated recipe ids with their source paths; preserved cached spectra, source size/mtime keys, labels and historical verdicts. Kept labels sorted by the specified columns.
+- Added one owner-confirmed Bandcamp purchase (12 WAV tracks) to the local trusted list.
+- Active trusted/confirmed references and current label paths resolve. Old reports also reference an album absent from the configured library; those historical references were retained rather than assigned to another recording.
+- `just check` passed. No implementation/spec changes or commits were made for this maintenance.
+
+**Pending**
+- The next acceptance run will incorporate the new purchase into generated labels/features and recompute the split from the current paths. No new acceptance or calibration run was requested.
+- RP-11 acceptance-target spec and the floor measurement remain pending as detailed in the 2026-11-02 block below; the four owner decisions still apply.
+- Carried over: `docs/release-0.2.0-record` (commits after #119).
+
+**Blockers / questions for the human**
+- None for the active calibration inputs. The absent historical album has no verified replacement path.
+
+**Next step:** `/new-spec RP-11` when the owner resumes the acceptance-target spec.
+
 ## 2026-11-02 - RP-11 acceptance targets: owner decisions (spec paused)
 
 **Done**
