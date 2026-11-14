@@ -2,6 +2,21 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-14 - RP-11 acceptance documentation PR #133 opened
+
+**Done**
+- With the owner's authorization, published `docs/RP-11-acceptance-v5` and opened PR [#133](https://github.com/salvador-arance/FakeFlac/pull/133) from acceptance record `9b0cded`.
+- The PR records the v5 corpus acceptance and closes #132's G2 status in traceability; numerical evidence and the unchanged-corpus verification are in the next block.
+- `just check` passed on `9b0cded`; this publication handoff changes documentation only. `just trace`, `git diff --check` and `just privacy-check --base main` verify the documentation follow-up. No additional acceptance or grid-search run.
+
+**Pending**
+- Owner's review and merge of documentation PR #133.
+
+**Blockers / questions for the human**
+- None.
+
+**Next step:** owner reviews and merges #133, then chooses the next requirement.
+
 ## 2026-11-14 - RP-11 v5 corpus acceptance after G2
 
 **Done**
