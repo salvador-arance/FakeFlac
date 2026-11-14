@@ -111,3 +111,28 @@ Grid: baseline `detection-params.v2.toml`, `must_catch = ["fx128"]`, default wei
 - With `holdout_fraction = 0.0` (everything `tune`): the baseline costs `0.5 · 1 + 0.1 · 6 = 1.1` (1 Suspicious negative, 6 Suspicious positives; `Error` rows left out), and the point `gap_fake_db = 4.0` costs `0.5`. Proposal: `detection-params.v9.toml` with `algorithm_version = 9` (the next free version, evaluation.md section 7) and `gap_fake_db = 4.0`, the rest of the baseline text unchanged.
 - From the v4 baseline with `"full_band.max_lossy_step_db" = [3.0, 10.0, 12.0]` and `holdout_fraction = 0.0`: 12.0 breaks `max_lossy_step_db ≤ step_fake_db` and is skipped. The baseline costs 1.1, as v2 (same verdicts). With 10.0 the `fxv0` step (≈ 6 dB) no longer removes the guard, the 6 `fxv0` entries become `Suspicious`, and the point costs `1.1 + 0.1 · 6 = 1.7`. Output: "no change proposed", no file written.
 - With `holdout_fraction = 1.0` (everything `holdout`): there is no tune data, every point ties with the baseline, and the output is "no change proposed" with no file written. This shows that holdout rows are never used to choose.
+
+## 6. Lossy-master variant (calibration.md OQ-32 to OQ-39)
+
+The base corpus of section 2, unchanged, plus one release listed as `lossy-master` (inputs.md section 2.1). Scenarios: `calibration.feature`, "Authentic releases with a lossy master". Sections 1 to 5 do not use it.
+
+| # | Path under `FAKEFLAC_CORPUS` | Fixture | Listed as |
+|---|---|---|---|
+| 12 | `Reediciones/Ætheria – Edición ’98/01 – Única.flac` | `lp16k_dither` | `confirmed.txt` line 4: `lossy-master` (folder line) |
+| 13 | `Reediciones/Ætheria – Edición ’98/02 – Otra.flac` | `full_band` | the same line |
+| 14 | `Reediciones/Ætheria – Edición ’98/03 – Rota.flac` | `corrupt` | the same line |
+| 15 | `Reediciones/Ætheria – Edición ’98/04 – Extra.mp3` | (bytes of any small file) | not included: the folder line includes FLAC and WAV only. Never decoded |
+
+`trusted.txt` is the one of section 2. `confirmed.txt` is the one of section 2 plus line 4:
+
+```
+4  Reediciones\Ætheria – Edición ’98 | lossy-master | AccurateRip
+```
+
+**Expected results with `detection-params.v2.toml`:**
+- **Albums (5):** the 4 of section 3 and `Reediciones/Ætheria – Edición ’98`, class `lossy_master`. With the default `holdout_fraction` (0.30) every class has 1 album, so every album is in `tune`, as in the base corpus.
+- **Sources (6) and generated entries (24):** as in section 3; tracks 12 to 14 are never sources.
+- **Labelled rows (36):** the 33 of section 3 and tracks 12, 13 and 14, with `truth`, `class` `lossy_master` and `origin` `confirmed_lossy_master`. **Decodes on a cold run:** 36 (12 corpus files plus 24 generated).
+- **Every table, figure, list and target of evaluation.md sections 3 to 9** equals the one of section 3 (the global matrix, per setting, false positives by origin, the primary figure, the watch list, T1 and T2 `PASS`).
+- **Section 10, split `all`:** tracks 2, albums 1, `Real` 1 (track 13), `Suspicious` 0, `Fake` 1 (track 12), `Error` 1 (track 14, `corruptStream`), albums with ≥ 1 Fake 1, Fake rate 50.0 %, 95 % CI 9.5–90.5 %. Headline: `- lossy_master Fake (all): 1/2 tracks (50.0 %, 95 % CI 9.5–90.5 %), 1/1 albums`, with the small-sample warning. `tune` equals `all`; `holdout` has 0 tracks (`n/a`).
+- **Grid search** (section 5 grid, `holdout_fraction = 0.0`): the same costs (baseline 1.1, point 0.5) and the same proposal as without the variant. If the `Fake` of track 12 were counted as a negative, the baseline would cost 11.1.
