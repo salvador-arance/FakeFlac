@@ -393,7 +393,7 @@ fn rf15_adding_lossy_only_labels_does_not_move_a_lossless_album() {
 
 // ---- Configuration, grid, command lines and defaults ---------------------------------------------
 
-// Scenario: The default config is calibration.v2.toml (@RP-11 @RF-15), the file itself
+// Scenario: The default config is calibration.v5.toml (@RP-11 @RF-15), the file itself
 #[test]
 fn rf15_calibration_v2_loads_with_its_lossy_entries_and_v1_still_loads() {
     let v2 = Config::parse(&read(&spec_config_v2())).expect("calibration.v2.toml loads");
@@ -419,11 +419,11 @@ fn rf15_calibration_v2_loads_with_its_lossy_entries_and_v1_still_loads() {
     assert_eq!(v1.generate.settings, v2.generate.settings);
 }
 
-// Scenario: The default config is calibration.v2.toml (@RP-11 @RF-15)
+// Scenario: The default config is calibration.v5.toml (@RP-11 @RF-15)
 #[test]
-fn rf15_the_default_config_is_calibration_v2() {
+fn rf15_the_default_config_is_calibration_v5() {
     let args = |v: &[&str]| v.iter().map(|s| (*s).to_string()).collect::<Vec<_>>();
-    let expected = PathBuf::from("specs/calibration/calibration.v2.toml");
+    let expected = PathBuf::from("specs/calibration/calibration.v5.toml");
     let Ok(Command::Accept(a)) = parse_args(&args(&["accept"])) else {
         panic!("accept");
     };

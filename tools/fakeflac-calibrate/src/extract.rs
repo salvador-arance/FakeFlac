@@ -820,6 +820,18 @@ fn corpus_meta(item: &CorpusItem, extracted: &Extracted, lossy: bool, config: &C
     meta
 }
 
+/// The first matching undetectable criterion of evaluation.md section 2 (`extent` or `hf drop`).
+/// Compile-only signature for the approved RP-11 criterion scenarios; implementation follows.
+pub fn undetectable_criterion(
+    _source: &Extracted,
+    _generated: &Extracted,
+    _setting: &Setting,
+    _params: &DetectionParams,
+    _config: &Config,
+) -> Option<&'static str> {
+    todo!("RP-11 undetectable criterion")
+}
+
 /// A transcode is undetectable when its source has no content above lowpass_hz or
 /// the maximum drop in HF bands is below min_removed_hf_db (evaluation.md section 2).
 fn is_undetectable(
