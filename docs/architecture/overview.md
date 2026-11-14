@@ -59,7 +59,7 @@ Minimal capabilities (folder dialog, read of the chosen path, write only of the 
 
 ## Related
 
-- RNF-02 memory gate: [ADR-0050](../adr/0050-memory-budget-os-peaks-std-only-gated-in-ci.md), [memory contract](../../specs/contracts/memory.md). The spec is approved at G1 (#134); ADR-0050 is accepted (#136). [Feature PR #137](https://github.com/salvador-arance/FakeFlac/pull/137) adds the Windows per-track peak-memory gate to normal tests, portable chunk checks, the two-pass Opus reader and the opt-in `just memory` long suite. Local CI, memory and performance reports pass; corpus acceptance figures are unchanged. G2 remains pending.
+- RNF-02 memory gate: [ADR-0050](../adr/0050-memory-budget-os-peaks-std-only-gated-in-ci.md), [memory contract](../../specs/contracts/memory.md). The spec is approved at G1 (#134); ADR-0050 is accepted (#136). [Feature PR #137](https://github.com/salvador-arance/FakeFlac/pull/137) merged at G2 as `accc3ee`, adding the Windows per-track peak-memory gate to normal tests, portable chunk checks, the two-pass Opus reader and the opt-in `just memory` long suite. Local CI, memory and performance reports pass; corpus acceptance figures are unchanged. The whole-app F7 check meets both indicative targets.
 
 - RF-13 language preference: [ADR-0049](../adr/0049-persist-language-preference-in-app-config-json.md), [settings contract](../../specs/contracts/settings.md). Approved at G1 (#107), implemented in #109; language-only settings, independent of detection and the result cache.
 
