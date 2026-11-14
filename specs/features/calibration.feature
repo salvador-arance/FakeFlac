@@ -35,6 +35,14 @@ Feature: Calibration and acceptance against a labelled corpus
   at every point, and every grid has a baseline and no cost_exclude. Default
   files and relative grid baselines are read from the repository root, so the
   tests do not depend on the current folder.
+  Changed for the acceptance targets (calibration.md OQ-25 to OQ-31): targets
+  leave out undetectable transcodes, may bound a rate (max_rate_pct) and select
+  by classes or by settings, never both; the default config is
+  calibration.v5.toml ("ffmpeg missing when a transcode is needed" names it).
+  The undetectable rule is unchanged: evaluation.md section 2 now states the
+  conditions the tool has always applied. No earlier scenario changes its
+  expectations: none sets max_rate_pct or both classes and settings, and in
+  each of them the undetectable fx128 row is Fake, so no target count changes.
   Lossy rows: calibration-lossy.feature.
 
   # --- Environment -------------------------------------------------------
@@ -125,6 +133,168 @@ Feature: Calibration and acceptance against a labelled corpus
     Then the transcode is classified as undetectable
     And it is counted in the Undetectable column of the confusion matrices
     And it is listed in the undetectable section of report.md
+
+  # --- Acceptance targets and undetectable transcodes (calibration.md OQ-25 to OQ-31)
+  # The counts below are those of sample-corpus.md section 3 with
+  # detection-params.v2.toml: fx128 6 Fake, fxweak 6 Suspicious, class reviewed
+  # 1 Real (track 7) and 2 Error (tracks 8 and 9). With split.holdout_fraction
+  # 0.0 every album is in tune, so holdout selects no row.
+  # "The sample config without lowpass_hz" is the config of sample-corpus.md
+  # section 2 with no lowpass_hz on any of the 4 fixture settings, so no row is
+  # undetectable (as in "Global confusion matrix"). "The sample config with
+  # lowpass_hz 16000 on fx128" sets lowpass_hz 16000 on fx128 only, as
+  # "Undetectable transcodes on band-limited sources" does: the fx128 transcode
+  # of track 5 (low_hf, content extent at most 16 kHz, sample-corpus.md
+  # section 1) is undetectable by criterion "extent", and the other 5 fx128
+  # rows are Fake. "A target T9" is added to the sample targets T1 and T2.
+
+  @RP-11
+  Scenario Outline: A target with settings leaves out undetectable transcodes
+    Given split.holdout_fraction is 0.0
+    And the sample config <variant>
+    And a target "T9" with settings ["fx128"], verdict "fake" and max_count 5
+    When "accept" runs on the sample corpus
+    Then the matrix per setting has <fake> Fake and <undetectable> Undetectable for fx128
+    And target T9 is "<status>" with count <fake> on split "all"
+    And summary.md has the line "- T9: all <status> (<fake> of max 5; <undetectable> undetectable excluded), holdout PASS (0 of max 5; 0 undetectable excluded)"
+    And the side-by-side cell "T9 (all)" is "<status> (<fake>)"
+
+    Examples:
+      | variant                       | fake | undetectable | status |
+      | without lowpass_hz            | 6    | 0            | FAIL   |
+      | with lowpass_hz 16000 on fx128 | 5    | 1            | PASS   |
+
+  @RP-11 @RNF-09
+  Scenario: The undetectable line and list name the criterion
+    Given split.holdout_fraction is 0.0
+    And the sample config with lowpass_hz 16000 on fx128
+    When "accept" runs on the sample corpus
+    Then summary.md has the line "- undetectable transcodes by criterion: extent 1, hf drop 0"
+    And report.md lists exactly one row under "### Undetectable transcodes": the fx128 transcode of "Colección/Álbum Ü/CD2/01 – Dos.flac", with criterion "extent"
+
+  @RP-11
+  Scenario Outline: The undetectable rule as the tool applies it
+    The rule of evaluation.md section 2 (calibration.md OQ-30), with
+    generate.min_removed_hf_db 12.0. The spectra have 100 Hz bands (fft.band_hz
+    100), so with lowpass_hz 16000 criterion "hf drop" reads the bands from
+    16000-16100 Hz up to the last band. The source's reference bands
+    (1000-10000 Hz) are at -40 dB, so with content_drop_db 60 dB a band at
+    -40 dB is content and a band at -130 dB is not: with the edge at 15000 Hz
+    the source's fe is below 16000 Hz, with the edge at 18000 Hz it lies between
+    16000 Hz and Nyquist, and with every band at -40 dB fe is Nyquist (22050 Hz).
+    In the third row both criteria hold, and "extent" is the one listed, because
+    it is checked first.
+    Given a 44.1 kHz source whose mean spectrum has 100 Hz bands <source>
+    And a transcode of it with a setting whose lowpass_hz is <lowpass>
+    And the transcode's mean spectrum equals the source's below 16000 Hz and, from 16000 Hz up, is <transcode>
+    When the undetectable rule of evaluation.md section 2 is applied with detection-params.v8.toml
+    Then the transcode is <result>
+
+    Examples:
+      | source                                         | lowpass | transcode                     | result                                |
+      | at -40 dB below 15000 Hz and -130 dB above     | absent  | equal to the source's         | detectable                            |
+      | at -40 dB below 15000 Hz and -130 dB above     | 22050   | equal to the source's         | detectable                            |
+      | at -40 dB below 15000 Hz and -130 dB above     | 16000   | equal to the source's         | undetectable with criterion "extent"  |
+      | at -40 dB below 18000 Hz and -130 dB above     | 16000   | 11.9 dB below it in each band | undetectable with criterion "hf drop" |
+      | at -40 dB below 18000 Hz and -130 dB above     | 16000   | 12.0 dB below it in each band | detectable                            |
+      | at -40 dB below 18000 Hz and -130 dB above     | 16000   | digital silence (-inf dB)     | detectable                            |
+      | at -40 dB in every band                        | 16000   | equal to the source's         | detectable                            |
+      | at -40 dB in every band                        | 16000   | 11.9 dB below it in each band | detectable                            |
+
+  @RP-11
+  Scenario Outline: A rate target
+    k is the 6 Suspicious fxweak rows and n the 12 rows of fx128 and fxweak.
+    Given split.holdout_fraction is 0.0
+    And the sample config without lowpass_hz
+    And a target "T9" with settings ["fx128", "fxweak"], verdict "suspicious" and max_rate_pct <max>
+    When "accept" runs on the sample corpus
+    Then target T9 is "<status>" on split "all"
+    And summary.md has the line "- T9: all <status> (6 of 12 = 50.0 %, max <max> %; 0 undetectable excluded), holdout PASS (0 of 0 = n/a, max <max> %; 0 undetectable excluded)"
+    And the side-by-side cell "T9 (all)" is "<status> (50.0 %)"
+    And the exit code is 0
+
+    Examples:
+      | max   | status |
+      | 50.0  | PASS   |
+      | 49.9  | FAIL   |
+      | 100.0 | PASS   |
+      | 0.0   | FAIL   |
+
+  @RP-11
+  Scenario Outline: A rate leaves out undetectable transcodes and is compared exactly
+    The undetectable fx128 row is left out of n: k is the 6 Suspicious fxweak rows and n
+    the 11 detectable rows of fx128 and fxweak. 100 x 6 = 600 is above
+    54.5 x 11 = 599.5 and below 54.6 x 11 = 600.6, so a bound of 54.5 fails
+    although the rate shown, 54.5 %, is rounded to the bound.
+    Given split.holdout_fraction is 0.0
+    And the sample config with lowpass_hz 16000 on fx128
+    And a target "T9" with settings ["fx128", "fxweak"], verdict "suspicious" and max_rate_pct <max>
+    When "accept" runs on the sample corpus
+    Then target T9 is "<status>" on split "all"
+    And summary.md has the line "- T9: all <status> (6 of 11 = 54.5 %, max <max> %; 1 undetectable excluded), holdout PASS (0 of 0 = n/a, max <max> %; 0 undetectable excluded)"
+    And the side-by-side cell "T9 (all)" is "<status> (54.5 %)"
+
+    Examples:
+      | max  | status |
+      | 54.5 | FAIL   |
+      | 54.6 | PASS   |
+
+  @RP-11
+  Scenario: A rate target with no row in a split passes without a rate
+    The bound 0.0 is the strictest: on "all" it passes only because k is 0
+    (100 x 0 is at most 0.0 x 6), and on "holdout" n is 0.
+    Given split.holdout_fraction is 0.0
+    And the sample config without lowpass_hz
+    And a target "T9" with settings ["fx128"], verdict "real" and max_rate_pct 0.0
+    When "accept" runs on the sample corpus
+    Then target T9 is "PASS" on split "all" and on split "holdout"
+    And summary.md has the line "- T9: all PASS (0 of 6 = 0.0 %, max 0.0 %; 0 undetectable excluded), holdout PASS (0 of 0 = n/a, max 0.0 %; 0 undetectable excluded)"
+    And the side-by-side cell "T9 (all)" is "PASS (0.0 %)"
+
+  @RP-11 @RNF-04
+  Scenario: Error tracks are left out of a target's rate
+    Class reviewed has track 7 (Real) and the corrupt and too-short tracks 8 and 9 (Error).
+    Given split.holdout_fraction is 0.0
+    And a target "T9" with classes ["reviewed"], verdict "real" and max_rate_pct 100.0
+    When "accept" runs on the sample corpus
+    Then target T9 is "PASS" on split "all"
+    And summary.md has the line "- T9: all PASS (1 of 1 = 100.0 %, max 100.0 %), holdout PASS (0 of 0 = n/a, max 100.0 %)"
+
+  @RP-11
+  Scenario Outline: Invalid target bounds and selections
+    T2 of the sample config has settings ["fx128"], verdict "real" and
+    max_count 0 (sample-corpus.md section 2).
+    Given the sample config with target T2 changed: <change>
+    When "accept" runs on the sample corpus
+    Then the exit code is 2
+    And the error output says "targets 'T2': <message>"
+    And nothing is written anywhere
+
+    Examples:
+      | change                                          | message                                         |
+      | max_rate_pct = 1.0 added next to max_count = 0  | max_count and max_rate_pct cannot both be set   |
+      | max_count = 0 removed                           | needs max_count or max_rate_pct                 |
+      | max_count = 0 replaced by max_rate_pct = 100.5  | max_rate_pct must be between 0 and 100          |
+      | max_count = 0 replaced by max_rate_pct = -0.5   | max_rate_pct must be between 0 and 100          |
+      | max_count = 0 replaced by max_rate_pct = nan    | max_rate_pct must be between 0 and 100          |
+      | classes = ["primary"] added next to settings    | classes and settings cannot both be set         |
+
+  @RP-11
+  Scenario: Configs v1 to v4 keep their targets
+    Given specs/calibration/calibration.v1.toml, calibration.v2.toml, calibration.v3.toml and calibration.v4.toml
+    Then each one loads
+    And in each one T1, T2 and T3 have max_count 0 and no max_rate_pct
+    And in each one T1 has classes and no settings, and T2 and T3 have settings and no classes
+
+  @RP-11
+  Scenario: calibration.v5.toml is calibration.v2.toml with targets version 2
+    The file and this scenario follow calibration.md OQ-29.
+    Given specs/calibration/calibration.v5.toml and specs/calibration/calibration.v2.toml
+    Then calibration.v5.toml loads and has config_version 5
+    And its T2 has settings ["cbr128", "cbr192"], verdict "real", max_count 0 and the description "No detectable transcode from 128 or 192 kbps is Real (H1 delivery criterion)"
+    And its T3 has settings ["cbr320"], verdict "real", max_rate_pct 1.0, no max_count and the description "At most 1 % of the detectable transcodes from 320 kbps are Real (planning 2.7)"
+    And its T1 equals the T1 of calibration.v2.toml
+    And every other section, setting and lossy entry equals the one of calibration.v2.toml
 
   # --- Split -------------------------------------------------------------
 
@@ -674,7 +844,7 @@ Feature: Calibration and acceptance against a labelled corpus
 
   @RP-11
   Scenario: ffmpeg missing when a transcode is needed
-    Given the sample corpus with the default config (calibration.v2.toml, whose settings are those of calibration.v1.toml plus the lossy entries) and an empty features folder
+    Given the sample corpus with the default config (calibration.v5.toml, whose settings are those of calibration.v1.toml plus the lossy entries of calibration.v2.toml) and an empty features folder
     And FAKEFLAC_FFMPEG points to a file that does not exist
     When the binary runs "accept"
     Then the exit code is 3

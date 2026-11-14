@@ -27,8 +27,19 @@ Numbers: rates as percentages with 1 decimal, dB with 2 decimals, Hz with no dec
 - **Domain (RF-15).** Every table, figure, list and target of sections 3 to 9 counts **lossless-domain rows only**; lossy rows (MP3, AAC, Opus) have their own tables (`lossy.md` section 6). Wherever this document says "labelled track" or "row", it means a lossless-domain one.
 - **Negatives:** `truth = real`. **Positives:** `truth = fake`. **Evaluation set:** every labelled row except class `reference`. `reference` rows appear only in their own row of section 3.
 - **False positive (FP):** negative with `Fake`. **Soft FP:** negative with `Suspicious`. **False negative (FN):** positive with `Real`. **Detected:** positive with `Fake`. **Caught:** positive with `Fake` or `Suspicious`.
-- **Undetectable transcodes:** Generated entries whose source has no content the codec would remove: either the source's measured bandwidth `source.fe <= setting.lowpass_hz`, or the maximum drop in high-frequency bands ($b \ge \text{lowpass\_hz}/100$) between source and transcode is below `generate.min_removed_hf_db`. They cannot exhibit an encoder-induced cutoff step and are classified as undetectable. They are excluded from the `must_catch` feasibility constraint and from the cost calculation, and reported in the `Undetectable` column of the confusion matrices and listed in `report.md`.
-- Rate denominators exclude `Error` tracks and undetectable transcodes, which are counted in their own columns.
+- **Undetectable transcodes:** Generated entries whose source has no content the codec would remove. They cannot exhibit an encoder-induced cutoff step and are classified as undetectable. The rule below is the one the tool has applied since its first run (2026-10-18); calibration.md OQ-30 wrote its conditions down. Every undetectable count and rate reported so far was produced this way.
+  - **Never undetectable:** an entry whose setting has no `lowpass_hz`, or has `lowpass_hz` at or above the source's Nyquist frequency (`v0`, 22050 Hz, on a 44.1 kHz source).
+  - **Otherwise** the entry is undetectable when one of the two **criteria** below holds. Both need the source's content extent `fe` (rules.md section 2, measured on the source's cached spectra) to be **below Nyquist**, so neither applies to a source whose `fe` is Nyquist. They are checked in this order, and the first one that holds is the criterion `report.md` lists for the entry.
+    1. **`extent`:** `fe ≤ lowpass_hz`.
+    2. **`hf drop`:** the config has `generate.min_removed_hf_db`, and the largest drop of the mean spectrum `M` between source and transcode is **below** it (`<`). The drop of a band is the source's level minus the transcode's, in dB. The bands are those with index `b ≥ floor(lowpass_hz / band_hz)`, up to the last band that both spectra have; `band_hz` is the params file's `fft.band_hz` (100 Hz in every v2-family file), so with `lowpass_hz` 16000 the first band is 16000–16100 Hz. A drop that is not a number (both levels −∞) is ignored. When there is no such band, or the largest drop is not finite (every drop ignored, or a drop of +∞, as when the transcode is digital silence in a band where the source is not), criterion 2 does not hold.
+  - **Scope:** lossless transcodes, and the undetectable cascades of lossy.md section 4.5, which use the same two criteria.
+  - **What they are excluded from:** the `must_catch` feasibility constraint, the cost calculation, every rate denominator and the acceptance targets (section 6).
+  - **Where they are reported:**
+    - in the `Undetectable` column of the confusion matrices;
+    - in `report.md`, under `### Undetectable transcodes`, with the columns `path`, `setting`, `source_path`, `verdict` and `criterion` (`extent` or `hf drop`);
+    - in `summary.md` and `report.md`, right after the global confusion matrix of split `all` of each params file, as the line `- undetectable transcodes by criterion: extent k1, hf drop k2`. The line is always written, with zeros included. It counts the lossless transcodes of every split.
+  - **Not undetectable: a source already at the digital floor above `lowpass_hz`.** A quiet source whose content above the low-pass is at the digital floor has a quiet reference band too, so that floor counts as content, `fe` is Nyquist, and neither criterion applies. Its transcode counts as detectable. None of the criteria on the absolute level of the source that were measured separates it from transcodes that v8 catches ( rules.md section 6, "Calibration findings with v8"; calibration.md, decision 1). It is a known limitation.
+- Rate denominators exclude `Error` tracks and undetectable transcodes, which are counted in their own columns. So do the acceptance targets (section 6).
 - **Splits:** `all`, `tune`, `holdout` (inputs.md section 4).
 
 ## 3. False positives by origin (main metric; OQ-13)
@@ -77,15 +88,61 @@ The first run with the Rust pipeline (2026-10-18) confirmed it: the watch ids W1
 
 ## 6. Acceptance targets (OQ-12)
 
-Data in `[[targets]]` of the config. Each target selects rows by `classes` or by `settings`, a `verdict`, and a `max_count`. Version 1:
+Data in `[[targets]]` of the config (lossless rows only). The format follows calibration.md OQ-25 and OQ-26.
 
-| id | Selection | Verdict | Max | Source |
+**Keys of a target:**
+- `id`;
+- `description`, optional;
+- **exactly one** of these two selections:
+  - `classes`, a list of classes;
+  - `settings`, a list of setting ids;
+- `verdict` (`real`, `suspicious` or `fake`);
+- **exactly one** of these two bounds:
+  - `max_count`, an integer ≥ 0;
+  - `max_rate_pct`, a number from 0 to 100, both included: a percentage, so `1.0` means 1 %.
+
+**Config errors** (exit 2, nothing written). Each message is prefixed `targets '<id>': `:
+- both selections set: `classes and settings cannot both be set` (calibration.md OQ-26);
+- both bounds set: `max_count and max_rate_pct cannot both be set`;
+- neither bound set: `needs max_count or max_rate_pct`;
+- `max_rate_pct` outside [0, 100], NaN included: `max_rate_pct must be between 0 and 100`.
+
+The earlier checks are unchanged (`needs classes or settings`, unknown class or setting, unknown verdict).
+
+**Rows of a target**, per params file and split:
+- **Selected rows:**
+  - with `classes`: the negatives of those classes;
+  - with `settings`: the generated rows of those settings.
+- **Left out:** `Error` rows and **undetectable transcodes** (section 2; rules.md Q9, decided by the owner on 2026-11-02 and 2026-11-14), as in every rate.
+- **Counts:**
+  - `n`: the selected rows that are left;
+  - `k`: those of them with the target's `verdict`;
+  - `u`: the undetectable transcodes left out. It is shown for a target with `settings` only, since negatives are never undetectable.
+
+**PASS or FAIL:**
+- With `max_count`: `PASS` when `k ≤ max_count`.
+- With `max_rate_pct`: the rate is `100 · k / n`. The target passes when `100 · k ≤ max_rate_pct · n`, compared exactly, never on the rounded rate. With `n = 0` the rate is `n/a` and the target passes, because nothing it selects can break it.
+
+**Report.** Per params file, for `all` and `holdout`. A `FAIL` does not change the exit code (OQ-12).
+- **Lines** of the "Acceptance targets" section (`summary.md` and `report.md`): `- <id>: all <cell>, holdout <cell>`. The cell is one of:
+  - `<STATUS> (k of max m)` for `max_count`;
+  - `<STATUS> (k of n = p %, max r %)` for `max_rate_pct`. `p` is the rate with 1 decimal, or `n/a` when `n = 0`, and `r` is `max_rate_pct` with 1 decimal.
+
+  A target with `settings` appends `; u undetectable excluded` inside the parentheses.
+- **Side-by-side table** (section 9): `<STATUS> (k)` for `max_count`, and `<STATUS> (p %)` or `<STATUS> (n/a)` for `max_rate_pct`.
+
+**Targets, version 2** (`calibration.v5.toml`, the default config, calibration.md OQ-29). Version 1 is the targets of `calibration.v1.toml` to `calibration.v4.toml`, the same with T3 at `max_count` 0. Those files are not changed, but from this change on their T2 and T3 also leave out undetectable transcodes.
+
+| id | Selection | Verdict | Bound | Source |
 |---|---|---|---|---|
-| T1 | class `primary` | Fake | 0 | planning 2.7: no real track marked fake |
-| T2 | settings `cbr128`, `cbr192` | Real | 0 | H1 delivery criterion: 0 false negatives at 128 and 192 kbps |
-| T3 | setting `cbr320` | Real | 0 | planning 2.7: transcodes from 320 kbps marked fake or suspicious |
+| T1 | class `primary` | Fake | `max_count` 0 | planning 2.7: no real track marked fake |
+| T2 | settings `cbr128`, `cbr192` | Real | `max_count` 0 (calibration.md OQ-28) | H1 delivery criterion: 0 false negatives at 128 and 192 kbps, over detectable transcodes |
+| T3 | setting `cbr320` | Real | `max_rate_pct` 1.0 (calibration.md OQ-27) | planning 2.7: transcodes from 320 kbps marked fake or suspicious. It is a rate bound because the detectable cbr320 transcodes that v8 leaves `Real` lie in the zone of genuine purchased discs (rules.md section 6, "Calibration findings with v8") |
 
-Reported as `PASS`/`FAIL` with the count, per params file, for `all` and `holdout`. A `FAIL` does not change the exit code.
+**Status with v8 on the owner's corpus** (measured before G1, run `20261114T113810Z`; calibration.md, "Measured before G1"):
+- **T2:** `FAIL`, 3 detectable `Real` on `all` (n = 4099) and 1 on `holdout` (n = 1118). Two are known limitations of rules.md section 6 (the quiet solo-piano source at the digital floor, and the low-pass masked by clipping); the cause of the third is to confirm. The `FAIL` is accepted, as v4 accepted T1's `FAIL` on W4 (calibration.md OQ-28).
+- **T3:** `PASS` on `all` (5 of 2021 = 0.25 %, against 1.0 %) and on `holdout` (2 of 548 = 0.36 %). The report cells show these rates with 1 decimal (0.2 % and 0.4 %).
+- **T1:** not part of that measurement. Its rows do not change (negatives are never undetectable); the L5 run of 2026-11-02 (`20261102T170123Z`) gave `PASS` (0).
 
 ## 7. `/calibrate` grid search (OQ-11)
 
