@@ -208,6 +208,64 @@ pub fn serialize(p: &Page) -> Vec<u8> {
     b[22..26].copy_from_slice(&sum.to_le_bytes());
     b
 }
+
+/// RNF-02: the section 4 stereo, 256 kbps, 20 ms fixture with a caller-selected length.
+/// Reuses the independent Ogg page/CRC writer; only 50 encoded packets are retained at once.
+/// The caller supplies the per-channel noise so this shared module has no memory-suite dependency.
+pub fn write_length(path: &Path, samples: usize, mut noise: impl FnMut(usize) -> f64) {
+    use std::io::Write;
+    let mut out = std::io::BufWriter::new(std::fs::File::create(path).unwrap());
+    let mut head = b"OpusHead".to_vec();
+    head.extend([1, 2]);
+    head.extend(120u16.to_le_bytes());
+    head.extend(48000u32.to_le_bytes());
+    head.extend(0i16.to_le_bytes());
+    head.push(0);
+    let mut tags = b"OpusTags".to_vec();
+    tags.extend(13u32.to_le_bytes());
+    tags.extend(b"fakeflac-test");
+    tags.extend(0u32.to_le_bytes());
+    let mut sequence = 0;
+    for p in [page(&[head], 2, 0), page(&[tags], 0, 0)] {
+        let mut p = p;
+        p.seq = sequence;
+        sequence += 1;
+        out.write_all(&serialize(&p)).unwrap();
+    }
+    let mut encoder = OpusEncoder::new(48000, 2, Application::Audio).unwrap();
+    encoder.bitrate_bps = 256_000;
+    encoder.max_bandwidth = Bandwidth::Fullband;
+    let count = (samples + 120).div_ceil(960);
+    let mut packets = Vec::new();
+    let mut bytes = vec![0; 4000];
+    let mut block = vec![0.0; 1920];
+    for number in 0..count {
+        block.fill(0.0);
+        for (i, frame) in block.chunks_exact_mut(2).enumerate() {
+            if number * 960 + i < samples {
+                for (ch, x) in frame.iter_mut().enumerate() {
+                    *x = noise(ch).clamp(-0.89, 0.89) as f32;
+                }
+            }
+        }
+        let n = encoder.encode(&block, 960, &mut bytes).unwrap();
+        packets.push(bytes[..n].to_vec());
+        let last = number + 1 == count;
+        if packets.len() == 50 || last {
+            let granule = if last {
+                samples + 120
+            } else {
+                (number + 1) * 960
+            };
+            let mut p = page(&packets, if last { 4 } else { 0 }, granule as i64);
+            p.seq = sequence;
+            sequence += 1;
+            out.write_all(&serialize(&p)).unwrap();
+            packets.clear();
+        }
+    }
+    out.flush().unwrap();
+}
 pub fn bytes(name: &str) -> Vec<u8> {
     if name == "opus_not_ogg" {
         return vec![b'A'; 4096];

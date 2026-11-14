@@ -2,6 +2,48 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-14 - F7 whole-app memory check measured
+
+**Done**
+- Desktop control recovered after the owner requested another attempt. Built the current release with `just build` from `2f800f2`, started it fresh, captured P0, cleared its results cache and analysed the complete music folder through the normal UI. Selected the longest track after sorting by descending duration and verified its rendered spectrogram before P2.
+- F7 covers 11,396 tracks / 902 albums, including 66 folders with exactly 15 supported tracks, in a folder of 150,714.379 MB including hidden files. Machine has 16 logical processors / 15 workers. Longest analysed track is 60 min 32 s (3,632.639978 s from read-only metadata).
+- P0 private/working-set peaks were 8,110,080 / 33,443,840 B. P1 and P2 were both 240,324,608 / 291,893,248 B. Analysis growth is 221.457 / 246.477 MiB against 544 MiB indicative targets. Spectrogram peak growth is 0 / 0 MiB against 32 MiB targets. Both targets are met.
+- Run completed with 9,003 real, 1,173 suspicious, 1,156 fake and 64 track errors. These errors were recorded, without a separate diagnosis in this memory check. All 13,203 files including hidden files retained exact paths, sizes and last-write timestamps before/after.
+- Aggregate report is `target/f7-report.md`. Private selection details and snapshots remain only in ignored `target/f7-*` files. PR #137 CI on `2f800f2` passed all jobs including `ci-ok` before this documentation update.
+- Added the complete aggregate F7 report to [PR #137](https://github.com/salvador-arance/FakeFlac/pull/137). Fresh `just check` passes after the measurement, including every Rust suite and 83 frontend files / 1,430 tests (`target/f7-check.txt`).
+
+**Pending**
+- Final-head CI after this F7 documentation update, human G2 review/merge and the human-owned agent-configuration edits from memory.md section 13 remain pending.
+
+**Blockers / questions for the human**
+- None for F7. The desktop-control blocker is resolved and both indicative targets are met.
+
+**Next step:** inspect final-head CI on #137, then the owner reviews G2.
+
+## 2026-11-14 - RNF-02 feature PR #137 opened
+
+**Done**
+- Confirmed PR #136 is merged with all final-head CI checks green; ADR-0050 is accepted. Created `feat/RNF-02` from up-to-date main. Baseline full `just check` passed (all Rust suites; 83 frontend files / 1,430 tests).
+- Fresh test author committed `404dbd7`: serial gate/long drivers, synthetic length-parametrized fixtures, child peak protocol, portable chunk checks, pure checks, report and recipe wiring tests. The test-stage preflight verified all fixture metadata, file growth and outcomes in 48.497 s; only Opus peak growth failed (+2,224,128 B private / +2,166,784 B working set).
+- Implementation stopped when full workspace compilation exposed a shared fixture helper referencing a module absent from calibration tests. The owner explicitly authorized a mechanical test-stage repair; a fresh test author committed `5060a3e`, passing unchanged Gaussian noise through a callback. No assertions/bounds changed; the 30 s Opus fixture remains byte-identical (SHA256 `4DAF103B7FEBDAB62CD57758A3C19EC225A2CA6436BD4A42E084603736CEA235`).
+- A fresh implementer verified and committed `bbc98ea`: the two-pass Opus reader, one-pass chunk seam and `just memory` recipe. Full `just check` passes (all Rust suites, memory gate 7 passed / 2 ignored in 60.06 s, 291 hook/script tests, 83 frontend files / 1,430 tests). The first implemented run reduced Opus growth to 36,864 B private / 16,384 B working set. All 21 existing Opus tests pass unchanged. Reports are under `target/rnf02-*.txt`.
+- Before/after probes, spectrograms, errors and raw Opus sample bits match over 234 cached synthetic fixtures; both fingerprint reports have SHA256 `354CC44D90C200440D8E40A09FB6347B1E7AFDCA106D892A60E2A7B4803C729B` (`target/rnf02-equivalence*`).
+- F6 `just memory` passes in 166.18 s excluding compilation: one-hour FLAC/Opus and 24-bit/96 kHz FLAC meet all bounds. Hi-res peaks over baseline are 7,327,744 B private / 7,086,080 B working set, confirming the provisional 64 MiB ceiling. Full report: `target/rnf02-memory-long-report.md`.
+- Fresh `just perf` passes: T1 off/cold medians 170/198 ms and T2 off/cold 563/594 ms; differences from the current section 10.1 reference are +4.9%/+6.5%/+8.5%/+5.3%, below the 20% regression threshold. Full report: `target/rnf02-perf-report.md`.
+- Independent read-only review found no blocking or improvement findings, verified report/hash evidence and independently passed `just guard-tests`, `just lint-arch` and `git diff --check`. No implementation changes followed review.
+- Final `just ci` passes, including all workspace/frontend tests, traceability, protected-test/version checks, generated bindings, Tauri clippy and Tauri tests (`target/rnf02-ci.txt`). Stage is clear.
+- With the owner's explicit authorization for the external calibration outputs, ran `just accept` on `701336f` (run `20261114T153457Z`). Every summary line matches baseline `20261114T130952Z` after excluding run id/date/tool commit. Primary 0/78 Fake and 0/6 albums; T1/T3 pass and the previously accepted T2 misses remain 3 all / 1 holdout. Cache: 49,443 hits, zero decoded/transcoded/failures/skipped/errors. Decoder equivalence is covered separately by the synthetic comparison. All 12,411 corpus files checked retain size/mtime; no additions/removals during the run.
+- With the owner's explicit permission, published `feat/RNF-02` and opened [PR #137](https://github.com/salvador-arance/FakeFlac/pull/137), with complete F6 and fresh performance reports, independent review and acceptance evidence. The owner retains G2. Privacy check before publication: 11 changed files, zero matches.
+
+**Pending**
+- Final-head remote CI on #137, then human G2 review/merge. F7 remains the owner's manual whole-app check; record its indicative aggregates in the PR or later. Local reports and PR text remain under `target/rnf02-*`.
+- Architecture wording is updated per memory.md section 13. Human-owned command-list and reviewer-checklist edits remain due, followed by `just agents-sync`. No spec, threshold, dependency or detection/extraction version change is proposed.
+
+**Blockers / questions for the human**
+- None for implementation. The protected-helper and external-output authorization questions are resolved. Remote CI and human G2 remain pending; the branch has not been merged.
+
+**Next step:** inspect final-head CI on #137, then the owner performs G2 review/merge.
+
 ## 2026-11-14 - RNF-02 ADR approved at G1
 
 **Done**

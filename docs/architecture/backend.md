@@ -40,7 +40,7 @@ See `crates/fakeflac-core/src/domain.rs`: `Verdict { Real, Suspicious, Fake, Err
 
 ## 5. Concurrency and resources
 
-- `cores − 1` worker threads (chosen by the composition root, ADR-0034), each taking the next track from a shared counter. One track per thread, reused window buffers → bounded memory (RNF-02).
+- `cores − 1` worker threads (chosen by the composition root, ADR-0034), each taking the next track from a shared counter. One track per thread, streaming decode and per-track window buffers → bounded memory ([RNF-02 criterion and gate](../../specs/contracts/memory.md)). Opus validates the full container with counters and header fields, then rereads audio pages sequentially without a per-packet index. Normal tests gate per-track memory on Windows and decoding chunks on every platform; `just memory` runs the opt-in long suite.
 - Cancellation: the token is checked before each track; tracks already running finish, so the batch stops in < 500 ms as long as one track takes less than that. `SpectrumAnalyzer::analyze` takes no cancel token, so a running track is never interrupted. RNF-01 measured the per-track times (`specs/contracts/performance.md` section 10): about 0.27 s for a typical 40 MB FLAC, and up to about 1.8 s for a 40-minute file, which the cancel then has to wait for. `just perf` reports the latency (T9). Checking the token between windows would change the port, so it needs an RF-05 spec change at G1 (performance.md Q10).
 - A panic while analysing one track is caught and becomes an error track (ADR-0013).
 - Read-only: files are opened read-only; no port can write audio (RNF-05).
