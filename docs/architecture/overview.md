@@ -59,6 +59,8 @@ Minimal capabilities (folder dialog, read of the chosen path, write only of the 
 
 ## Related
 
+- RNF-02 memory gate proposal: [ADR-0050](../adr/0050-memory-budget-os-peaks-std-only-gated-in-ci.md), [memory contract](../../specs/contracts/memory.md). The spec is approved at G1 (#134); the ADR is proposed for G1 before the feature cycle. The gate and `just memory` are not implemented yet.
+
 - RF-13 language preference: [ADR-0049](../adr/0049-persist-language-preference-in-app-config-json.md), [settings contract](../../specs/contracts/settings.md). Approved at G1 (#107), implemented in #109; language-only settings, independent of detection and the result cache.
 
 - Local harness consolidation: [ADR-0048](../adr/0048-claude-canonical-harness-codex-generated-adapter.md), [contract](../../specs/contracts/agent-harness.md). Claude remains canonical; Codex compatibility is generated.
