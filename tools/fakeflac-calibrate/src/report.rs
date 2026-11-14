@@ -115,6 +115,9 @@ pub struct TargetResult {
     pub split: SplitSel,
     pub pass: bool,
     pub count: u32,
+    /// Selected rows after excluding Error rows and undetectable transcodes.
+    pub total: u32,
+    pub undetectable_excluded: u32,
 }
 
 /// Evaluation.md section 9: counts of (baseline verdict, verdict) over the evaluation set.

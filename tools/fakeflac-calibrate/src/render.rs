@@ -5,7 +5,7 @@
 //! `report.md` adds the per-track lists, with paths relative to the roots, never absolute.
 
 use crate::cache::{bitrate_mode_name, codec_name, error_code, Extracted};
-use crate::config::Config;
+use crate::config::{Config, Target};
 use crate::env::Roots;
 use crate::evaluate::{
     changed_rows, class_totals, clean_fakes, edge_margins, edge_report, figure, is_near_in,
@@ -18,7 +18,7 @@ use crate::grid::{GridFile, Proposal, SearchResult};
 use crate::lossy::LossyRowEval;
 use crate::model::RowMeta;
 use crate::model::{album_class_of, LabelRow, Truth, CLASSES};
-use crate::report::{ConfusionMatrix, Evaluation, SettingRow, SplitSel};
+use crate::report::{ConfusionMatrix, Evaluation, SettingRow, SplitSel, TargetResult};
 use fakeflac_core::detect::{is_full_band, Measurements};
 use fakeflac_core::Verdict;
 use std::collections::{BTreeMap, BTreeSet};
@@ -818,12 +818,48 @@ fn side_by_side(md: &mut Md, data: &ReportData<'_>) {
                     .targets
                     .iter()
                     .find(|t| t.id == target.id && t.split == sel)
-                    .map(|t| format!("{} ({})", if t.pass { "PASS" } else { "FAIL" }, t.count))
+                    .map(|t| target_cell(t, target, true))
                     .unwrap_or_default()
             });
         }
     }
     md.table(&header, &rows);
+}
+
+/// Both target displays share the same counts and integer rate bound (evaluation.md section 6).
+fn target_cell(result: &TargetResult, target: &Target, compact: bool) -> String {
+    let status = if result.pass { "PASS" } else { "FAIL" };
+    let details = if let Some(max) = target.max_count {
+        if compact {
+            result.count.to_string()
+        } else {
+            format!("{} of max {max}", result.count)
+        }
+    } else if let Some(m) = target.max_rate_thousandths() {
+        let rate = fmt::rate(result.count, result.total);
+        if compact {
+            rate
+        } else {
+            let mut bound = format!("{}.{:03}", m / 1000, m % 1000)
+                .trim_end_matches('0')
+                .to_string();
+            if bound.ends_with('.') {
+                bound.push('0');
+            }
+            format!(
+                "{} of {} = {rate}, max {bound} %",
+                result.count, result.total
+            )
+        }
+    } else {
+        String::new() // Config validation rejects a target without a bound.
+    };
+    let excluded = if !compact && target.settings.is_some() {
+        format!("; {} undetectable excluded", result.undetectable_excluded)
+    } else {
+        String::new()
+    };
+    format!("{status} ({details}{excluded})")
 }
 
 /// Per album class (the class used for the split): tracks, albums in tune, albums in holdout.
@@ -1181,6 +1217,25 @@ fn params_section(md: &mut Md, data: &ReportData<'_>, idx: usize, full: bool) {
         md.line(format!("Split `{}`:", sel.as_str()));
         md.blank();
         matrix_table(md, &eval.matrix[&sel]);
+        if sel == SplitSel::All {
+            let mut extent = 0;
+            let mut hf_drop = 0;
+            let meta = &data.groups[run.group].meta;
+            for row in rows.iter().filter(|r| r.undetectable) {
+                match meta
+                    .get(&row.identity())
+                    .and_then(|m| m.undetectable_criterion)
+                {
+                    Some("extent") => extent += 1,
+                    Some("hf drop") => hf_drop += 1,
+                    _ => {}
+                }
+            }
+            md.line(format!(
+                "- undetectable transcodes by criterion: extent {extent}, hf drop {hf_drop}"
+            ));
+            md.blank();
+        }
     }
 
     md.line("### Per encoder setting");
@@ -1265,14 +1320,7 @@ fn params_section(md: &mut Md, data: &ReportData<'_>, idx: usize, full: bool) {
             eval.targets
                 .iter()
                 .find(|t| t.id == target.id && t.split == sel)
-                .map(|t| {
-                    format!(
-                        "{} ({} of max {})",
-                        if t.pass { "PASS" } else { "FAIL" },
-                        t.count,
-                        target.max_count
-                    )
-                })
+                .map(|t| target_cell(t, target, false))
                 .unwrap_or_default()
         };
         md.line(format!(
@@ -1436,10 +1484,19 @@ fn full_lists(md: &mut Md, data: &ReportData<'_>, idx: usize) {
                     r.setting.clone(),
                     r.source_path.clone(),
                     verdict_name(e.verdict).to_string(),
+                    data.groups[run.group]
+                        .meta
+                        .get(&r.identity())
+                        .and_then(|m| m.undetectable_criterion)
+                        .unwrap_or_default()
+                        .to_string(),
                 ]
             })
             .collect();
-        md.table(&["path", "setting", "source_path", "verdict"], &table);
+        md.table(
+            &["path", "setting", "source_path", "verdict", "criterion"],
+            &table,
+        );
     }
 
     if idx > 0 {

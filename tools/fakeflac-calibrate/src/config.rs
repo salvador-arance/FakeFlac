@@ -144,7 +144,16 @@ pub struct Target {
     pub classes: Option<Vec<String>>,
     pub settings: Option<Vec<String>>,
     pub verdict: String,
-    pub max_count: u32,
+    pub max_count: Option<u32>,
+    pub max_rate_pct: Option<f64>,
+}
+
+impl Target {
+    /// A validated rate bound in integer thousandths of a percent (evaluation.md section 6).
+    /// All comparisons and bound rendering use this integer, never a floating-point product.
+    pub fn max_rate_thousandths(&self) -> Option<u32> {
+        self.max_rate_pct.map(|rate| (1000.0 * rate).round() as u32)
+    }
 }
 
 /// Encoders a setting may name (`fixture` is for tests: the binary rejects it).
@@ -247,9 +256,9 @@ impl Config {
 
     fn validate(&self) -> Result<(), ToolError> {
         let mut errors: Vec<String> = Vec::new();
-        if !(1..=4).contains(&self.config_version) {
+        if !(1..=5).contains(&self.config_version) {
             errors.push(format!(
-                "config_version {} is not supported (expected 1, 2, 3 or 4)",
+                "config_version {} is not supported (expected 1, 2, 3, 4 or 5)",
                 self.config_version
             ));
         }
@@ -301,6 +310,36 @@ impl Config {
             }
             if t.classes.is_none() && t.settings.is_none() {
                 errors.push(format!("targets '{}': needs classes or settings", t.id));
+            }
+            if t.classes.is_some() && t.settings.is_some() {
+                errors.push(format!(
+                    "targets '{}': classes and settings cannot both be set",
+                    t.id
+                ));
+            }
+            match (t.max_count, t.max_rate_pct) {
+                (Some(_), Some(_)) => errors.push(format!(
+                    "targets '{}': max_count and max_rate_pct cannot both be set",
+                    t.id
+                )),
+                (None, None) => errors.push(format!(
+                    "targets '{}': needs max_count or max_rate_pct",
+                    t.id
+                )),
+                _ => {}
+            }
+            if let Some(rate) = t.max_rate_pct {
+                if !(0.0..=100.0).contains(&rate) {
+                    errors.push(format!(
+                        "targets '{}': max_rate_pct must be between 0 and 100",
+                        t.id
+                    ));
+                } else if (1000.0 * rate - (1000.0 * rate).round()).abs() > 1e-6 {
+                    errors.push(format!(
+                        "targets '{}': max_rate_pct must have at most 3 decimals",
+                        t.id
+                    ));
+                }
             }
             for s in t.settings.iter().flatten() {
                 if !ids.contains(s.as_str()) {
