@@ -271,10 +271,13 @@ Feature: Calibration and acceptance for lossy files
     And each one is a list of separate arguments with <source> passed unchanged
 
   @RP-11 @RF-15
-  Scenario: The default config is calibration.v2.toml
+  Scenario: The default config is calibration.v5.toml
+    Changed for the acceptance targets (calibration.md OQ-29, OQ-31 (d)): the
+    default was calibration.v2.toml; calibration.v5.toml has the same settings
+    and lossy entries, and only its targets differ.
     Given no --config argument
     When "accept" starts
-    Then it reads specs/calibration/calibration.v2.toml
+    Then it reads specs/calibration/calibration.v5.toml
 
   @RP-11 @RF-15 @RNF-05
   Scenario: The corpus is not modified by lossy evaluation
