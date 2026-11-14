@@ -37,7 +37,8 @@ Feature: Calibration and acceptance against a labelled corpus
   tests do not depend on the current folder.
   Changed for the acceptance targets (calibration.md OQ-25 to OQ-31): targets
   leave out undetectable transcodes, may bound a rate (max_rate_pct) and select
-  by classes or by settings, never both; the default config is
+  by classes or by settings, never both; a rate bound has at most 3 decimals
+  and is compared in integer thousandths of a percent; the default config is
   calibration.v5.toml ("ffmpeg missing when a transcode is needed" names it).
   The undetectable rule is unchanged: evaluation.md section 2 now states the
   conditions the tool has always applied. No earlier scenario changes its
@@ -240,6 +241,29 @@ Feature: Calibration and acceptance against a labelled corpus
       | 54.6 | PASS   |
 
   @RP-11
+  Scenario Outline: A rate bound is compared in integer thousandths of a percent
+    The rule of evaluation.md section 6: m is the integer nearest to
+    1000 x max_rate_pct and the target passes when 100000 x k is at most m x n.
+    In the first and third rows k / n is exactly the bound, and the
+    floating-point products 16.15 x 2000 and 8.075 x 4000 evaluate just below
+    100 x k (32299.999999999996), so a floating-point comparison would fail them.
+    Given a rate target with max_rate_pct <max>
+    When it is judged on <n> selected rows of which <k> have its verdict
+    Then it is "<status>"
+    And its cell shows the bound as "max <shown> %"
+
+    Examples:
+      | max   | k   | n      | status | shown |
+      | 16.15 | 323 | 2000   | PASS   | 16.15 |
+      | 16.15 | 324 | 2000   | FAIL   | 16.15 |
+      | 8.075 | 323 | 4000   | PASS   | 8.075 |
+      | 1.0   | 20  | 2000   | PASS   | 1.0   |
+      | 1.0   | 21  | 2000   | FAIL   | 1.0   |
+      | 0.001 | 1   | 100000 | PASS   | 0.001 |
+      | 0.001 | 1   | 99999  | FAIL   | 0.001 |
+      | 100.0 | 7   | 7      | PASS   | 100.0 |
+
+  @RP-11
   Scenario: A rate target with no row in a split passes without a rate
     The bound 0.0 is the strictest: on "all" it passes only because k is 0
     (100 x 0 is at most 0.0 x 6), and on "holdout" n is 0.
@@ -277,6 +301,8 @@ Feature: Calibration and acceptance against a labelled corpus
       | max_count = 0 replaced by max_rate_pct = 100.5  | max_rate_pct must be between 0 and 100          |
       | max_count = 0 replaced by max_rate_pct = -0.5   | max_rate_pct must be between 0 and 100          |
       | max_count = 0 replaced by max_rate_pct = nan    | max_rate_pct must be between 0 and 100          |
+      | max_count = 0 replaced by max_rate_pct = 0.0005 | max_rate_pct must have at most 3 decimals       |
+      | max_count = 0 replaced by max_rate_pct = 1.0001 | max_rate_pct must have at most 3 decimals       |
       | classes = ["primary"] added next to settings    | classes and settings cannot both be set         |
 
   @RP-11

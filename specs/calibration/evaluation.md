@@ -99,13 +99,14 @@ Data in `[[targets]]` of the config (lossless rows only). The format follows cal
 - `verdict` (`real`, `suspicious` or `fake`);
 - **exactly one** of these two bounds:
   - `max_count`, an integer ≥ 0;
-  - `max_rate_pct`, a number from 0 to 100, both included: a percentage, so `1.0` means 1 %.
+  - `max_rate_pct`, a number from 0 to 100, both included, with at most 3 decimals: a percentage, so `1.0` means 1 %. It is read in thousandths of a percent: `m` is the integer nearest to `1000 · max_rate_pct` (so `1.0` gives `m = 1000`). The value has more than 3 decimals when `1000 · max_rate_pct` differs from `m` by more than `1e-6`.
 
 **Config errors** (exit 2, nothing written). Each message is prefixed `targets '<id>': `:
 - both selections set: `classes and settings cannot both be set` (calibration.md OQ-26);
 - both bounds set: `max_count and max_rate_pct cannot both be set`;
 - neither bound set: `needs max_count or max_rate_pct`;
-- `max_rate_pct` outside [0, 100], NaN included: `max_rate_pct must be between 0 and 100`.
+- `max_rate_pct` outside [0, 100], NaN included: `max_rate_pct must be between 0 and 100`;
+- `max_rate_pct` inside [0, 100] with more than 3 decimals: `max_rate_pct must have at most 3 decimals`.
 
 The earlier checks are unchanged (`needs classes or settings`, unknown class or setting, unknown verdict).
 
@@ -121,17 +122,17 @@ The earlier checks are unchanged (`needs classes or settings`, unknown class or 
 
 **PASS or FAIL:**
 - With `max_count`: `PASS` when `k ≤ max_count`.
-- With `max_rate_pct`: the rate is `100 · k / n`. The target passes when `100 · k ≤ max_rate_pct · n`, compared exactly, never on the rounded rate. With `n = 0` the rate is `n/a` and the target passes, because nothing it selects can break it.
+- With `max_rate_pct`: the rate is `100 · k / n`. The target passes when `100 · k ≤ max_rate_pct · n`, compared exactly, never on the rounded rate. "Exactly" means in integers, as `100000 · k ≤ m · n` with the `m` above, and never as a floating-point product: `16.15 · 2000` evaluates to 32299.999999999996 in binary floating point, which would fail `k = 323` (exactly 16.15 %). With `n = 0` the rate is `n/a` and the target passes, because nothing it selects can break it.
 
 **Report.** Per params file, for `all` and `holdout`. A `FAIL` does not change the exit code (OQ-12).
 - **Lines** of the "Acceptance targets" section (`summary.md` and `report.md`): `- <id>: all <cell>, holdout <cell>`. The cell is one of:
   - `<STATUS> (k of max m)` for `max_count`;
-  - `<STATUS> (k of n = p %, max r %)` for `max_rate_pct`. `p` is the rate with 1 decimal, or `n/a` when `n = 0`, and `r` is `max_rate_pct` with 1 decimal.
+  - `<STATUS> (k of n = p %, max r %)` for `max_rate_pct`. `p` is the rate with 1 decimal, or `n/a` when `n = 0`, and `r` is `max_rate_pct` written from `m` with at least 1 decimal and at most 3, without other trailing zeros (`1.0`, `54.5`, `16.15`, `8.075`).
 
   A target with `settings` appends `; u undetectable excluded` inside the parentheses.
 - **Side-by-side table** (section 9): `<STATUS> (k)` for `max_count`, and `<STATUS> (p %)` or `<STATUS> (n/a)` for `max_rate_pct`.
 
-**Targets, version 2** (`calibration.v5.toml`, the default config, calibration.md OQ-29). Version 1 is the targets of `calibration.v1.toml` to `calibration.v4.toml`, the same with T3 at `max_count` 0. Those files are not changed, but from this change on their T2 and T3 also leave out undetectable transcodes.
+**Targets, version 2** (`calibration.v5.toml`, the default config, calibration.md OQ-29). Version 1 is the targets of `calibration.v1.toml` to `calibration.v4.toml`, the same with T3 at `max_count` 0. Those files are not changed, but from this change on their T2 and T3 also leave out undetectable transcodes. So a run with one of them no longer reproduces the target counts of the earlier reports: with `calibration.v2.toml` and v8, T2 goes from 5 to 3 and T3 from 8 to 5 on `all` (calibration.md, "Measured before G1"). The target line itself shows the difference (`; u undetectable excluded`, absent from the earlier reports), and a report is read with the spec of its date, so no version marker is added.
 
 | id | Selection | Verdict | Bound | Source |
 |---|---|---|---|---|
@@ -140,7 +141,7 @@ The earlier checks are unchanged (`needs classes or settings`, unknown class or 
 | T3 | setting `cbr320` | Real | `max_rate_pct` 1.0 (calibration.md OQ-27) | planning 2.7: transcodes from 320 kbps marked fake or suspicious. It is a rate bound because the detectable cbr320 transcodes that v8 leaves `Real` lie in the zone of genuine purchased discs (rules.md section 6, "Calibration findings with v8") |
 
 **Status with v8 on the owner's corpus** (measured before G1, run `20261114T113810Z`; calibration.md, "Measured before G1"):
-- **T2:** `FAIL`, 3 detectable `Real` on `all` (n = 4099) and 1 on `holdout` (n = 1118). Two are known limitations of rules.md section 6 (the quiet solo-piano source at the digital floor, and the low-pass masked by clipping); the cause of the third is to confirm. The `FAIL` is accepted, as v4 accepted T1's `FAIL` on W4 (calibration.md OQ-28).
+- **T2:** `FAIL`, 3 detectable `Real` on `all` (n = 4099) and 1 on `holdout` (n = 1118). The three are the three `cbr128` known limitations of rules.md section 6: the quiet solo-piano source at the digital floor (the `holdout` row), the low-pass masked by clipping, and the step at 14450 Hz (the two `tune` rows). The `FAIL` is accepted, as v4 accepted T1's `FAIL` on W4 (calibration.md OQ-28). Only those three rows are accepted: with v8 on this corpus, a T2 count above 3 on `all` or above 1 on `holdout` is a new miss to diagnose, not part of the accepted `FAIL`. In `calibrate`, the `must_catch` non-regression constraint (section 7) already rejects a point that loses a `tune` row the baseline catches.
 - **T3:** `PASS` on `all` (5 of 2021 = 0.25 %, against 1.0 %) and on `holdout` (2 of 548 = 0.36 %). The report cells show these rates with 1 decimal (0.2 % and 0.4 %).
 - **T1:** not part of that measurement. Its rows do not change (negatives are never undetectable); the L5 run of 2026-11-02 (`20261102T170123Z`) gave `PASS` (0).
 

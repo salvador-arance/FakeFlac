@@ -183,4 +183,4 @@ id = "T3"
 description = "At most 1 % of the detectable transcodes from 320 kbps are Real (planning 2.7)"
 settings = ["cbr320"]
 verdict = "real"
-max_rate_pct = 1.0                    # percentage, 0 to 100 (calibration.md OQ-25, OQ-27)
+max_rate_pct = 1.0                    # percentage, 0 to 100, at most 3 decimals (calibration.md OQ-25, OQ-27)

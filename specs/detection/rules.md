@@ -308,7 +308,7 @@ Catching V0 and AAC 256 needs new measurements, not new thresholds; clearing W4 
     - So a source already at the digital floor above `lowpass_hz` cannot be told apart from caught sources by any absolute level criterion of these forms, and the owner removed the criterion (calibration.md, decision 1).
   - **What would separate it.** Not known, and not specified here; it is left to a later calibration spec with its own figures. One candidate that the run did not measure: criterion `hf drop` without its condition on `fe`, since this transcode is identical to its source above the low-pass. Dropping that condition would change undetectable counts on every setting (calibration.md OQ-30), so it needs its own measurement.
 
-In the run of 2026-11-14 (`20261114T113810Z`), target T2 counts 3 detectable `cbr128` and `cbr192` transcodes that v8 leaves `Real` (2 in `tune`, 1 in `holdout`). Two of them are the clipping-masked transcode and the quiet source at the digital floor above. **The cause of the third is to confirm**: whether it is the 14450 Hz step above has not been checked on that run.
+In the run of 2026-11-14 (`20261114T113810Z`), target T2 counts 3 detectable `cbr128` and `cbr192` transcodes that v8 leaves `Real` (2 in `tune`, 1 in `holdout`). They are the three `cbr128` known limitations above, checked on that run's `tracks.csv`: the clipping-masked transcode and the 14450 Hz step (`tune`), and the quiet source at the digital floor (`holdout`).
 
 ## 7. Acceptance criteria (v4)
 
