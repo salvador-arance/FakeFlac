@@ -211,7 +211,8 @@ pub fn serialize(p: &Page) -> Vec<u8> {
 
 /// RNF-02: the section 4 stereo, 256 kbps, 20 ms fixture with a caller-selected length.
 /// Reuses the independent Ogg page/CRC writer; only 50 encoded packets are retained at once.
-pub fn write_length(path: &Path, samples: usize) {
+/// The caller supplies the per-channel noise so this shared module has no memory-suite dependency.
+pub fn write_length(path: &Path, samples: usize, mut noise: impl FnMut(usize) -> f64) {
     use std::io::Write;
     let mut out = std::io::BufWriter::new(std::fs::File::create(path).unwrap());
     let mut head = b"OpusHead".to_vec();
@@ -234,10 +235,6 @@ pub fn write_length(path: &Path, samples: usize) {
     let mut encoder = OpusEncoder::new(48000, 2, Application::Audio).unwrap();
     encoder.bitrate_bps = 256_000;
     encoder.max_bandwidth = Bandwidth::Fullband;
-    let mut noise = [
-        super::memory::Gaussian::new(304, -12.0),
-        super::memory::Gaussian::new(305, -12.0),
-    ];
     let count = (samples + 120).div_ceil(960);
     let mut packets = Vec::new();
     let mut bytes = vec![0; 4000];
@@ -247,7 +244,7 @@ pub fn write_length(path: &Path, samples: usize) {
         for (i, frame) in block.chunks_exact_mut(2).enumerate() {
             if number * 960 + i < samples {
                 for (ch, x) in frame.iter_mut().enumerate() {
-                    *x = noise[ch].sample().clamp(-0.89, 0.89) as f32;
+                    *x = noise(ch).clamp(-0.89, 0.89) as f32;
                 }
             }
         }

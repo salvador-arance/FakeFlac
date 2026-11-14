@@ -493,7 +493,13 @@ impl Case {
             Kind::Mp3 => writers::write_mp3_length(path, frames as usize / 1152),
             Kind::Aac => writers::write_aac_length(path, frames as usize / 1024),
             Kind::Alac => writers::write_alac_length(path, frames as usize),
-            Kind::Opus => common::opus::write_length(path, frames as usize),
+            Kind::Opus => {
+                let mut noise = [
+                    writers::Gaussian::new(304, -12.0),
+                    writers::Gaussian::new(305, -12.0),
+                ];
+                common::opus::write_length(path, frames as usize, |ch| noise[ch].sample());
+            }
         }
     }
 }
