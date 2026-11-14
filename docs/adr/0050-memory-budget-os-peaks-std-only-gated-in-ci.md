@@ -1,7 +1,9 @@
 # ADR-0050: Memory budget: OS peak memory of a child process, std-only, gated in CI
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-11-14
+
+G1: approved by the owner in chat on 2026-11-14, with authorization for the agent to merge PR #136 after CI passes.
 
 ## Context and rationale
 

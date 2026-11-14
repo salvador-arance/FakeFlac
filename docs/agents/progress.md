@@ -2,6 +2,23 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-14 - RNF-02 ADR approved at G1
+
+**Done**
+- The owner approved ADR-0050 in chat and explicitly authorized the agent to merge [PR #136](https://github.com/salvador-arance/FakeFlac/pull/136) after CI passes. This authorization applies to #136; the human merge rule remains the default for future PRs.
+- Marked ADR-0050 `accepted` in the ADR and its index, and recorded G1 in the architecture overview. The approved RNF-02 spec (#134) and its bounds are unchanged.
+- Full `just check` passed before this documentation-only G1 record (83 frontend files / 1,430 tests and all Rust suites).
+
+**Pending**
+- Integrate #136 after its final-head CI passes, then `/feature RNF-02`: tests, the two-pass Opus reader, the chunk seam, the memory harness and recipe, independent review, and `just ci`.
+- F6 long-suite and fresh `just perf` reports for the feature PR; F7 manual whole-app check.
+- Architecture wording and human-owned agent configuration edits at the times assigned by memory.md section 13. Earlier throwaway measurement build folders remain.
+
+**Blockers / questions for the human**
+- None. G1 is closed; integration waits for CI.
+
+**Next step:** integrate #136 when CI is green, then `/feature RNF-02`.
+
 ## 2026-11-14 - RNF-02 memory infrastructure ADR proposed for G1
 
 **Done**
