@@ -2,7 +2,7 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
-## 2026-11-14 - RNF-02 reviewed and local CI green
+## 2026-11-14 - RNF-02 feature PR #137 opened
 
 **Done**
 - Confirmed PR #136 is merged with all final-head CI checks green; ADR-0050 is accepted. Created `feat/RNF-02` from up-to-date main. Baseline full `just check` passed (all Rust suites; 83 frontend files / 1,430 tests).
@@ -14,16 +14,17 @@
 - Fresh `just perf` passes: T1 off/cold medians 170/198 ms and T2 off/cold 563/594 ms; differences from the current section 10.1 reference are +4.9%/+6.5%/+8.5%/+5.3%, below the 20% regression threshold. Full report: `target/rnf02-perf-report.md`.
 - Independent read-only review found no blocking or improvement findings, verified report/hash evidence and independently passed `just guard-tests`, `just lint-arch` and `git diff --check`. No implementation changes followed review.
 - Final `just ci` passes, including all workspace/frontend tests, traceability, protected-test/version checks, generated bindings, Tauri clippy and Tauri tests (`target/rnf02-ci.txt`). Stage is clear.
+- With the owner's explicit authorization for the external calibration outputs, ran `just accept` on `701336f` (run `20261114T153457Z`). Every summary line matches baseline `20261114T130952Z` after excluding run id/date/tool commit. Primary 0/78 Fake and 0/6 albums; T1/T3 pass and the previously accepted T2 misses remain 3 all / 1 holdout. Cache: 49,443 hits, zero decoded/transcoded/failures/skipped/errors. Decoder equivalence is covered separately by the synthetic comparison. All 12,411 corpus files checked retain size/mtime; no additions/removals during the run.
+- With the owner's explicit permission, published `feat/RNF-02` and opened [PR #137](https://github.com/salvador-arance/FakeFlac/pull/137), with complete F6 and fresh performance reports, independent review and acceptance evidence. The owner retains G2. Privacy check before publication: 11 changed files, zero matches.
 
 **Pending**
-- Obtain permission to open the prepared feature PR for G2 after corpus acceptance. F7 remains the owner's manual whole-app check. PR text and complete reports are prepared under `target/rnf02-feature-pr.md` and `target/rnf02-*-report.md`.
-- Corpus `just accept` comparison still needs resolution of the root instruction forbidding writes outside the repository: that command writes reports/cache in the private external calibration directory. No such run was made during this feature yet.
+- Final-head remote CI on #137, then human G2 review/merge. F7 remains the owner's manual whole-app check; record its indicative aggregates in the PR or later. Local reports and PR text remain under `target/rnf02-*`.
 - Architecture wording is updated per memory.md section 13. Human-owned command-list and reviewer-checklist edits remain due, followed by `just agents-sync`. No spec, threshold, dependency or detection/extraction version change is proposed.
 
 **Blockers / questions for the human**
-- The protected-helper blocker is resolved by the owner's explicit authorization and `5060a3e`; full checks now pass. Corpus acceptance requires a specific exception for the command's external calibration outputs. The feature is not yet declared complete or merged.
+- None for implementation. The protected-helper and external-output authorization questions are resolved. Remote CI and human G2 remain pending; the branch has not been merged.
 
-**Next step:** obtain the specific corpus-acceptance write exception and permission to open the prepared PR.
+**Next step:** inspect final-head CI on #137, then the owner performs G2 review/merge.
 
 ## 2026-11-14 - RNF-02 ADR approved at G1
 
