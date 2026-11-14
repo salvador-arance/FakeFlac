@@ -2,7 +2,7 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
-## 2026-11-14 - RP-11 acceptance targets implemented (G2 pending)
+## 2026-11-14 - RP-11 acceptance targets implemented (PR #132, G2 pending)
 
 **Done**
 - G1 closed: spec PR #131 merged as `7999698`; feature branch `feat/RP-11` starts at `b36f69e`.
@@ -11,15 +11,16 @@
 - Fresh review agent found no blocking or improvement findings. Specs and protected tests were unchanged during implementation.
 - `just check` and final `just ci` passed (all Rust suites, 83 frontend files / 1430 tests, generated bindings and Tauri adapter checks). `just guard-tests`, `just lint-arch` and `git diff --check` passed; privacy check found 0 matches.
 - Traceability updated for the new executable scenarios. No new acceptance or calibration run on the local corpus.
+- With the owner's approval, published `feat/RP-11` and opened feature PR [#132](https://github.com/salvador-arance/FakeFlac/pull/132).
 
 **Pending**
-- Approval to publish the feature branch and open its PR (the `/feature` skill explicitly requires asking first). The proposed PR body is in ignored `target/rp11-pr-body.md`. G2 remains with the owner.
+- Owner's G2 review and merge of PR #132.
 - Carried over: `docs/release-0.2.0-record` (commits after #119).
 
 **Blockers / questions for the human**
 - None for implementation.
 
-**Next step:** obtain approval to publish `feat/RP-11` and open the feature PR.
+**Next step:** owner reviews and merges PR #132 (G2).
 
 ## 2026-11-14 - RP-11 acceptance-target spec: review fixes (PR #131, G1 pending)
 
