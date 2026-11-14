@@ -11,6 +11,11 @@ handles and the additional props/events for `Splitter`, `ColumnHeader`,
 `ResultsTable`, `MainLayout` and `AnalysisPage`. The existing contracts below are extended by the width behavior approved
 at G1 on 2026-11-02.
 
+Proposed extension (RF-17, G1 pending): `fake-evidence.md` section 5 adds the optional prop
+`evidence` to `VerdictCell` (the evidence of a `Fake` in its tooltip) and the optional prop
+`album` to `DetailPanel` (evidence lines, the gap-only sentence and the album note below the
+verdict line). The rows below are unchanged; "a `Fake` verdict has none" stays true of `reasons`.
+
 > Every component listed here gets a Storybook story per state and a component test before it is used in a page (S6). Presentational components receive data through props and emit events; only `AnalysisPage` touches stores and the API client. Styling only through tokens (`src/lib/tokens/tokens.css`).
 
 ## Atoms
