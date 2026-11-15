@@ -50,6 +50,8 @@ const NOT_A_FOLDER: &str = "error: census: the folder does not exist or is not a
 const NO_AUDIO: &str = "error: census: no supported audio files in the folder";
 const NO_REPOSITORY: &str =
     "error: census: run it from the repository (the report goes under target/)";
+const CONTAINS_REPORT: &str =
+    "error: census: the folder contains the report folder (target/census/ of the repository)";
 const INTERNAL: &str = "error: census: internal error";
 
 /// The header of `tracks.csv` (section 5).
@@ -581,9 +583,8 @@ fn margin_of(analysis: &TrackAnalysis, kind: EvidenceKind) -> String {
 /// the value is written as is (a 0 stays `0`, a missing value is empty).
 fn probed_field(error: bool, value: Option<u64>) -> String {
     match value {
-        Some(0) if error => String::new(),
-        Some(v) => v.to_string(),
-        None => String::new(),
+        Some(v) if !(error && v == 0) => v.to_string(),
+        _ => String::new(),
     }
 }
 
@@ -702,6 +703,34 @@ fn create_run_dir(parent: &Path, run: &str) -> std::io::Result<(String, PathBuf)
     }
 }
 
+/// The canonical form of the report folder `<repo>/target/census/` (section 2): that of its deepest
+/// part that exists, at least the repository root, followed by the parts that do not exist yet.
+/// `None` when not even the repository root can be put in canonical form.
+fn canonical_report_folder(repo: &Path) -> Option<PathBuf> {
+    let target = repo.join("target");
+    let report = target.join("census");
+    let candidates: [(&Path, &[&str]); 3] = [
+        (&report, &[]),
+        (&target, &["census"]),
+        (repo, &["target", "census"]),
+    ];
+    candidates.iter().find_map(|(existing, missing)| {
+        std::fs::canonicalize(existing)
+            .ok()
+            .map(|c| missing.iter().fold(c, |p, part| p.join(part)))
+    })
+}
+
+/// Whether the report folder lies inside `folder` or is it (section 2, D1), compared by components
+/// on the canonical forms of both. `false` when either cannot be put in canonical form: the check
+/// then does not refuse the run. Returns no error, so no path can reach a message.
+fn contains_report_folder(folder: &Path, repo: &Path) -> bool {
+    let Ok(folder) = std::fs::canonicalize(folder) else {
+        return false;
+    };
+    canonical_report_folder(repo).is_some_and(|report| report.starts_with(&folder))
+}
+
 /// The census of section 3: checks (exit 2, nothing written), one run of the app's use case, then
 /// `target/census/<run>/summary.md` and `tracks.csv`. Reads only `env.repo_root`.
 pub fn census(args: &CensusArgs, env: &Env) -> Result<Outcome, ToolError> {
@@ -730,6 +759,9 @@ pub fn census(args: &CensusArgs, env: &Env) -> Result<Outcome, ToolError> {
     let Some(repo) = &env.repo_root else {
         return Err(ToolError::input(NO_REPOSITORY));
     };
+    if contains_report_folder(&folder, repo) {
+        return Err(ToolError::input(CONTAINS_REPORT));
+    }
 
     // 2. The run: one call of the app's use case.
     let tracks: Mutex<Vec<CensusTrack>> = Mutex::new(Vec::new());

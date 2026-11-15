@@ -2,6 +2,24 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-15 - RP-12 closed in PR #157 (branch `feat/RP-12-folder-guard`)
+
+**Done**
+- #155 (`test-rust` timeout 30 min) and #156 (the guard spec) are merged on `main` (`275d51d`).
+- Guard: tests `845247f`, implementation `cf17bcd` in `tools/fakeflac-calibrate/src/census.rs` (`canonical_report_folder`, `contains_report_folder`): a `FOLDER` that contains `<repository root>/target/census/` is refused with exit 2, an empty stdout, nothing written and a fixed line. Review round 1: no blocking findings; the reviewer ran the real binary on synthetic repositories.
+- Everything left open about RP-12 is closed in this PR, with the owner's delegation: spec `5dc6ab3` and `9328467` (four refused cases in section 9, the redirected-`target` clause, C11 cases (a) to (d), "empty means not measured covers error tracks only", `@RNF-07` on the Windows examples); tests `43a605d` (five tests: `..` segment, other letter case, a missing repository root, a junction on `target`, plus the typed `pick` helper); `40c632b` (one empty arm in `probed_field`). Review round 2: no blocking findings.
+- `just check` and `just guard-tests` exit 0. `just ci` was not run locally, on the owner's instruction; the CI of the PR runs it. The initial `just check` before the test stage was also skipped.
+- RP-12 earlier: census #152, spec clarification #153, numeric blanking and tests #154, MC1 and MC2 passed on the owner's library (recorded in #152).
+
+**Pending**
+- G2 on #157 (the spec edits ride in this feat PR by the owner's delegation; keep that in the PR description). Then `just prune-branches`.
+- Nothing else is open for RP-12. Optional, not done: the C11 junction cases print a reason and pass when `mklink /J` cannot create the link, so a skip is silent unless the CI log is read; a dangling `target` junction makes the run fail later at `create_dir_all` (nothing is written).
+
+**Blockers / questions for the human**
+- None.
+
+**Next step:** Review #157 at G2.
+
 ## 2026-11-15 - Report-folder guard specified; CI timeout raised
 
 **Done**

@@ -222,18 +222,31 @@ Feature: Library census
   @RNF-05
   Scenario Outline: A folder that contains the report folder is refused before anything is written
     Given a stand-in repository root inside the temporary folder that also holds the sample folder
-    When "census" runs on <folder> with the stand-in as the repository root
+    When "census" runs on <folder> with <root> as the repository root
     Then it exits <exit>
     And stderr is "<stderr>"
     And <result>
 
     Examples:
-      | folder                                                                  | exit | stderr                                                                                    | result                                                                          |
-      | the temporary folder that holds the sample folder and the stand-in root | 2    | error: census: the folder contains the report folder (target/census/ of the repository) | stdout is empty and nothing is created under the temporary folder               |
-      | the stand-in root                                                       | 2    | error: census: the folder contains the report folder (target/census/ of the repository) | stdout is empty and nothing is created under the temporary folder               |
-      | the stand-in root's empty "target" folder                               | 2    | error: census: the folder contains the report folder (target/census/ of the repository) | stdout is empty and nothing is created under the temporary folder               |
-      | the sample folder                                                       | 0    |                                                                                           | one run folder is created under the stand-in's "target/census/"                 |
-      | a "fixtures" folder inside the stand-in root holding one WAV track      | 0    |                                                                                           | one run folder is created under the stand-in's "target/census/"                 |
+      | folder                                                                  | root                                | exit | stderr                                                                                  | result                                                                            |
+      | the temporary folder that holds the sample folder and the stand-in root | the stand-in                        | 2    | error: census: the folder contains the report folder (target/census/ of the repository) | stdout is empty and nothing is created under the temporary folder                 |
+      | the stand-in root                                                       | the stand-in                        | 2    | error: census: the folder contains the report folder (target/census/ of the repository) | stdout is empty and nothing is created under the temporary folder                 |
+      | the stand-in root's empty "target" folder                               | the stand-in                        | 2    | error: census: the folder contains the report folder (target/census/ of the repository) | stdout is empty and nothing is created under the temporary folder                 |
+      | the stand-in root's empty "target/census" folder                        | the stand-in                        | 2    | error: census: the folder contains the report folder (target/census/ of the repository) | stdout is empty and nothing is created under the temporary folder                 |
+      | the stand-in root spelled with a ".." segment                           | the stand-in                        | 2    | error: census: the folder contains the report folder (target/census/ of the repository) | stdout is empty and nothing is created under the temporary folder                 |
+      | the sample folder                                                       | the stand-in                        | 0    |                                                                                         | one run folder is created under the stand-in's "target/census/"                   |
+      | a "fixtures" folder inside the stand-in root holding one WAV track      | the stand-in                        | 0    |                                                                                         | one run folder is created under the stand-in's "target/census/"                   |
+      | the sample folder                                                       | a stand-in root that does not exist | 0    |                                                                                         | summary.md is the sample's and the run creates that root's "target/census/<run>/" |
+
+    # Windows only (RNF-07): letter case and a junction. The junction rows are skipped, with the
+    # reason printed, when the junction cannot be created (mklink /J). The scan does not follow
+    # the junction, so the stand-in root holds no audio.
+    @RNF-07
+    Examples: Windows
+      | folder                                               | root                                                                        | exit | stderr                                                                                  | result                                                            |
+      | the stand-in root spelled in a different letter case | the stand-in                                                                | 2    | error: census: the folder contains the report folder (target/census/ of the repository) | stdout is empty and nothing is created under the temporary folder |
+      | the folder "redirected" beside the stand-in root     | the stand-in, whose "target" is a junction to the empty folder "redirected" | 2    | error: census: the folder contains the report folder (target/census/ of the repository) | stdout is empty and nothing is created under the temporary folder |
+      | the stand-in root                                    | the stand-in, whose "target" is a junction to the empty folder "redirected" | 2    | error: census: no supported audio files in the folder                                   | stdout is empty and nothing is created under the temporary folder |
 
   # --- Wiring ---
 
