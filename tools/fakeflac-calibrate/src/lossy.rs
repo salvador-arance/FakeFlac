@@ -9,7 +9,7 @@ use crate::cache::{codec_name, Extracted};
 use crate::config::Config;
 use crate::evaluate::{verdict_name, ParamsRun, RowEval};
 use crate::extract::GroupResult;
-use crate::model::{LabelRow, RowMeta, Truth, CLASSES};
+use crate::model::{LabelRow, RowMeta, Truth, CLASSES, LOSSY_MASTER_CLASS};
 use crate::report::{
     ChainEntry, ChainReport, LossyChangedRow, LossyCounts, LossyEvaluation, LossyGroupRow,
     LossyMatrix, LossyVerdictChanges, LossyWatchEntry, SplitSel,
@@ -264,6 +264,7 @@ pub fn lossy_tables(
                 (Truth::Real, _) => add(&mut m.real_row, b),
                 (Truth::Fake, false) => add(&mut m.fake_row, b),
                 (Truth::Fake, true) => add(&mut m.weak_row, b),
+                (Truth::LossyMaster, _) => (),
             }
         }
         matrix.insert(sel, m);
@@ -282,7 +283,10 @@ pub fn lossy_tables(
             true,
         ));
     }
-    for class in CLASSES {
+    for class in CLASSES
+        .into_iter()
+        .filter(|&class| class != LOSSY_MASTER_CLASS)
+    {
         specs.push((
             format!("trusted {class}"),
             Box::new(move |r, _| r.origin == "trusted" && r.class == class),

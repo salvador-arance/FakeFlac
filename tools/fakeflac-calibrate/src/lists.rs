@@ -25,6 +25,8 @@ pub const ORIGINS: [(&str, &str); 9] = [
 ];
 
 const NOT_SUPPORTED: &str = "not a supported audio file (FLAC, WAV, MP3, M4A or Opus)";
+const LOSSY_MASTER: &str = "lossy-master";
+const LOSSY_MASTER_FORMAT: &str = "lossy-master applies to lossless files only";
 
 /// The attributes of the line that gives a track its label (lossy.md section 1.2).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -86,6 +88,14 @@ pub struct ConfirmedReal {
     pub attrs: Attrs,
 }
 
+/// An authentic release with a lossy master (`confirmed.txt`, kind `lossy-master`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConfirmedLossyMaster {
+    pub track: Track,
+    pub line: usize,
+    pub attrs: Attrs,
+}
+
 /// Both lists, resolved.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Lists {
@@ -95,6 +105,8 @@ pub struct Lists {
     pub fakes: Vec<ConfirmedFake>,
     /// Sorted by relative path.
     pub reals: Vec<ConfirmedReal>,
+    /// Sorted by relative path.
+    pub lossy_masters: Vec<ConfirmedLossyMaster>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -133,7 +145,7 @@ struct Parsed {
 #[derive(Clone)]
 struct Won {
     file: FileEntry,
-    /// `fake`, `real`, `false-positive` (confirmed) or empty (trusted).
+    /// Confirmed kind, or empty for trusted tracks.
     kind: String,
     class: String,
     origin: String,
@@ -167,6 +179,7 @@ pub fn load(calibration: &Path, corpus: &Path) -> Result<Lists, ToolError> {
 
     let mut fakes: Vec<ConfirmedFake> = Vec::new();
     let mut reals: Vec<ConfirmedReal> = Vec::new();
+    let mut lossy_masters = Vec::new();
     if let Ok(bytes) = std::fs::read(calibration.join("confirmed.txt")) {
         let lines_by_track: BTreeMap<PathBuf, usize> = trusted_tracks
             .iter()
@@ -182,7 +195,6 @@ pub fn load(calibration: &Path, corpus: &Path) -> Result<Lists, ToolError> {
         if !errors.is_empty() {
             return Err(ToolError::input_lines(errors));
         }
-        // Fakes, honest lossy files and watch tracks.
         let mut watch_lines: Vec<(usize, PathBuf)> = Vec::new();
         for won in &confirmed_tracks {
             match won.kind.as_str() {
@@ -192,6 +204,11 @@ pub fn load(calibration: &Path, corpus: &Path) -> Result<Lists, ToolError> {
                     attrs: won.attrs.clone(),
                 }),
                 "real" => reals.push(ConfirmedReal {
+                    track: to_track(&won.file, corpus),
+                    line: won.line,
+                    attrs: won.attrs.clone(),
+                }),
+                LOSSY_MASTER => lossy_masters.push(ConfirmedLossyMaster {
                     track: to_track(&won.file, corpus),
                     line: won.line,
                     attrs: won.attrs.clone(),
@@ -209,10 +226,12 @@ pub fn load(calibration: &Path, corpus: &Path) -> Result<Lists, ToolError> {
     trusted_list.sort_by(|a, b| a.track.rel.cmp(&b.track.rel));
     fakes.sort_by(|a, b| a.track.rel.cmp(&b.track.rel));
     reals.sort_by(|a, b| a.track.rel.cmp(&b.track.rel));
+    lossy_masters.sort_by(|a, b| a.track.rel.cmp(&b.track.rel));
     Ok(Lists {
         trusted: trusted_list,
         fakes,
         reals,
+        lossy_masters,
     })
 }
 
@@ -258,7 +277,7 @@ fn resolve(items: &[Item], take: impl Fn(&Item) -> bool) -> BTreeMap<PathBuf, Wo
             if winner.exclusion {
                 continue;
             }
-            let (class, origin) = if winner.field == "fake" || winner.field == "real" {
+            let (class, origin) = if is_confirmed_label(&winner.field) {
                 (winner.field.clone(), String::new())
             } else {
                 (class_of(&winner.field).to_string(), winner.field.clone())
@@ -319,21 +338,25 @@ fn finish(
         ListKind::Confirmed => {
             let fakes = resolve(&items, |i| i.field == "fake");
             let reals = resolve(&items, |i| i.field == "real");
-            // A track in both: the later line is the error.
-            for (path, real) in &reals {
-                if let Some(fake) = fakes.get(path) {
-                    let (first, later) = if fake.line <= real.line {
-                        (fake.line, real.line)
-                    } else {
-                        (real.line, fake.line)
-                    };
-                    errors.push((later, format!("already listed at line {first}")));
+            let lossy_masters = resolve(&items, |i| i.field == LOSSY_MASTER);
+            // Different kinds may overlap through folder entries. Report the later line.
+            for (a, b) in [
+                (&reals, &fakes),
+                (&lossy_masters, &fakes),
+                (&lossy_masters, &reals),
+            ] {
+                for (path, first_kind) in a {
+                    if let Some(second_kind) = b.get(path) {
+                        let first = first_kind.line.min(second_kind.line);
+                        let later = first_kind.line.max(second_kind.line);
+                        errors.push((later, format!("already listed at line {first}")));
+                    }
                 }
             }
-            // A confirmed fake or real that is also trusted.
+            // A confirmed label that is also trusted.
             if let Some(trusted) = trusted {
                 let mut reported: Vec<usize> = Vec::new();
-                for (path, won) in fakes.iter().chain(reals.iter()) {
+                for (path, won) in fakes.iter().chain(&reals).chain(&lossy_masters) {
                     if !reported.contains(&won.line) {
                         if let Some(tline) = trusted.get(path) {
                             reported.push(won.line);
@@ -345,16 +368,15 @@ fn finish(
                     }
                 }
             }
-            for (_, mut won) in fakes {
-                won.kind = "fake".to_string();
-                result.push(won);
-            }
-            for (path, mut won) in reals {
-                if result.iter().any(|w| w.file.path == path) {
-                    continue;
-                }
-                won.kind = "real".to_string();
-                result.push(won);
+            for (kind, tracks) in [
+                ("fake", fakes),
+                ("real", reals),
+                (LOSSY_MASTER, lossy_masters),
+            ] {
+                result.extend(tracks.into_values().map(|mut won| {
+                    won.kind = kind.to_string();
+                    won
+                }));
             }
             for item in items.iter().filter(|i| !i.exclusion) {
                 if item.field == "false-positive" {
@@ -394,7 +416,11 @@ fn finish(
 
 /// Whether an entry takes part in the "most specific line wins" contest of its file.
 fn contests(kind: ListKind, item: &Item) -> bool {
-    kind == ListKind::Trusted || item.field == "fake" || item.field == "real"
+    kind == ListKind::Trusted || is_confirmed_label(&item.field)
+}
+
+fn is_confirmed_label(field: &str) -> bool {
+    matches!(field, "fake" | "real" | LOSSY_MASTER)
 }
 
 fn class_of(origin: &str) -> &'static str {
@@ -625,6 +651,9 @@ fn parse_attrs(
                         ))
                     }
                 };
+                if word == LOSSY_MASTER && formats != Formats::Lossless {
+                    return Err(LOSSY_MASTER_FORMAT.to_string());
+                }
                 if !is_dir {
                     return Err("formats= applies to folders only".to_string());
                 }
@@ -707,11 +736,11 @@ fn check_field(kind: ListKind, word: &str) -> Result<(), String> {
         ListKind::Confirmed => {
             if word.is_empty() {
                 Err("missing kind".to_string())
-            } else if word == "fake" || word == "real" || word == "false-positive" {
+            } else if is_confirmed_label(word) || word == "false-positive" {
                 Ok(())
             } else {
                 Err(format!(
-                    "unknown kind '{word}' (expected fake, real or false-positive)"
+                    "unknown kind '{word}' (expected fake, real, false-positive or lossy-master)"
                 ))
             }
         }
@@ -762,6 +791,8 @@ fn entry_problem(
         return Some(NOT_SUPPORTED.to_string());
     } else if word == "real" && files.iter().any(|f| !is_lossy_format(f.format)) {
         return Some("real applies to lossy files only".to_string());
+    } else if word == LOSSY_MASTER && files.iter().any(|f| is_lossy_format(f.format)) {
+        return Some(LOSSY_MASTER_FORMAT.to_string());
     }
     let lossy_attrs = attrs.upstream.is_some() || attrs.source_max_kbps.is_some() || attrs.weak;
     if kind == ListKind::Confirmed

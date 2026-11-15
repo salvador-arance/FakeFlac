@@ -5,7 +5,7 @@ use crate::cache::{error_code, Extracted};
 use crate::config::Config;
 use crate::fmt;
 use crate::lists::ORIGINS;
-use crate::model::{LabelRow, Truth, CLASSES};
+use crate::model::{LabelRow, Truth, CLASSES, LOSSY_MASTER_CLASS};
 use crate::report::{
     ConfusionMatrix, Counts, Evaluation, FpRow, FullBandRow, SettingChange, SettingRow, SplitSel,
     TargetResult, VerdictChanges, WatchEntry,
@@ -386,6 +386,7 @@ pub fn evaluation(
                 Truth::Real => bump(&mut m.real_row, eval.verdict),
                 Truth::Fake if row.undetectable => m.fake_row.undetectable += 1,
                 Truth::Fake => bump(&mut m.fake_row, eval.verdict),
+                Truth::LossyMaster => (),
             }
         }
         matrix.insert(sel, m);
@@ -784,6 +785,7 @@ fn paired<'a>(
     let index: BTreeMap<String, usize> = base_rows
         .iter()
         .enumerate()
+        .filter(|(_, r)| r.in_evaluation_set())
         .map(|(i, r)| (r.identity(), i))
         .collect();
     rows.iter()
@@ -879,6 +881,7 @@ fn is_near_with(
     let by_margin = match row.truth {
         Truth::Real => nearest > 0.0 && nearest <= near_db,
         Truth::Fake => nearest > -near_db && nearest <= 0.0,
+        Truth::LossyMaster => return false,
     };
     // A negative kept from `Fake` only by the guard, at its threshold (v4: and no lossy step).
     let edge_step = edge.is_some_and(|e| e.edge_step);
@@ -910,6 +913,7 @@ fn is_near_with(
 pub fn margin_summary(run: &ParamsRun, rows: &[LabelRow], config: &Config) -> Vec<MarginSummary> {
     CLASSES
         .iter()
+        .filter(|&&class| class != LOSSY_MASTER_CLASS)
         .filter_map(|class| {
             let group: Vec<(&LabelRow, &RowEval)> = rows
                 .iter()

@@ -9,7 +9,7 @@ use crate::fsutil::write_atomic;
 use crate::grid::{self, GridFile, RowKind, SearchRow};
 use crate::hash::id16;
 use crate::lists::{self, Attrs, Lists, Track};
-use crate::model::{album_class_of, LabelRow, Truth};
+use crate::model::{album_class_of, LabelRow, Truth, LOSSY_MASTER_CLASS};
 use crate::render::{self, GridReport, ReportData};
 use crate::report::{CacheStats, Evaluation, GridOutcome, PointScore};
 use crate::split::{album_id, assign_class, Split};
@@ -431,12 +431,31 @@ fn build_items(
             line: r.line,
         });
     }
+    for r in &lists.lossy_masters {
+        labelled.push(Labelled {
+            track: &r.track,
+            truth: Truth::LossyMaster,
+            origin: "confirmed_lossy_master",
+            trust_origin: "",
+            class: LOSSY_MASTER_CLASS,
+            watch_id: "",
+            attrs: &r.attrs,
+            line: r.line,
+        });
+    }
     labelled.sort_by(|a, b| a.track.rel.cmp(&b.track.rel));
 
-    // Every album and every chain must resolve to one unit.
+    // Every album and chain must resolve to one unit. A lossy-master album has no other labels.
     let mut errors: Vec<String> = Vec::new();
-    // Per album, per unit: the first line (trusted.txt before confirmed.txt, then by number) giving it.
-    let mut album_units: BTreeMap<String, BTreeMap<String, (u8, usize)>> = BTreeMap::new();
+    // References sort with trusted.txt before confirmed.txt, then by line number.
+    type ListRef = (u8, usize);
+    #[derive(Default)]
+    struct AlbumLabels {
+        units: BTreeMap<String, ListRef>,
+        first_master: Option<ListRef>,
+        first_other: Option<ListRef>,
+    }
+    let mut albums: BTreeMap<String, AlbumLabels> = BTreeMap::new();
     let mut chain_units: BTreeMap<&str, BTreeSet<String>> = BTreeMap::new();
     for l in &labelled {
         let album = album_id(&l.track.rel, prefixes);
@@ -448,24 +467,32 @@ fn build_items(
                 .insert(unit.clone());
         }
         let at = (u8::from(l.origin != "trusted"), l.line);
-        let first = album_units
-            .entry(album)
-            .or_default()
-            .entry(unit)
-            .or_insert(at);
+        let labels = albums.entry(album).or_default();
+        let first = labels.units.entry(unit).or_insert(at);
         *first = (*first).min(at);
+        let first_by_kind = if l.truth == Truth::LossyMaster {
+            &mut labels.first_master
+        } else {
+            &mut labels.first_other
+        };
+        *first_by_kind = Some(first_by_kind.map_or(at, |first| first.min(at)));
     }
-    let mut album_errors: Vec<Vec<(u8, usize)>> = album_units
-        .values()
-        .filter(|u| u.len() > 1)
-        .map(|u| {
-            let mut refs: Vec<(u8, usize)> = u.values().copied().collect();
+    let mut album_errors = Vec::new();
+    for labels in albums.values() {
+        if labels.units.len() > 1 {
+            let mut refs: Vec<_> = labels.units.values().copied().collect();
             refs.sort_unstable();
-            refs
-        })
-        .collect();
+            album_errors.push((refs, "album has tracks in several split units"));
+        }
+        if let (Some(master), Some(other)) = (labels.first_master, labels.first_other) {
+            album_errors.push((
+                vec![master.min(other), master.max(other)],
+                "album has lossy-master and other labelled tracks",
+            ));
+        }
+    }
     album_errors.sort();
-    for refs in album_errors {
+    for (refs, message) in album_errors {
         let list: Vec<String> = refs
             .iter()
             .map(|(file, line)| {
@@ -479,10 +506,7 @@ fn build_items(
                 )
             })
             .collect();
-        errors.push(format!(
-            "album has tracks in several split units ({})",
-            list.join(", ")
-        ));
+        errors.push(format!("{message} ({})", list.join(", ")));
     }
     for (chain, units) in &chain_units {
         if units.len() > 1 {

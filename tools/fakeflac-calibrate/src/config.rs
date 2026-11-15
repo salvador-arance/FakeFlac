@@ -1,6 +1,7 @@
 //! `calibration.v1.toml` (data, not code): split, generation, report and targets.
 
 use crate::error::ToolError;
+use crate::model::{CLASSES, LOSSY_MASTER_CLASS};
 use serde::Deserialize;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -347,8 +348,12 @@ impl Config {
                 }
             }
             for c in t.classes.iter().flatten() {
-                if !["primary", "reviewed", "clean", "reference", "positive"].contains(&c.as_str())
-                {
+                if c == LOSSY_MASTER_CLASS {
+                    errors.push(format!(
+                        "targets '{}': class '{c}' is report only and cannot be selected",
+                        t.id
+                    ));
+                } else if !CLASSES.contains(&c.as_str()) {
                     errors.push(format!("targets '{}': unknown class '{c}'", t.id));
                 }
             }

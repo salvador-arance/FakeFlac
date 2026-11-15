@@ -29,7 +29,7 @@ use std::sync::Arc;
 pub struct CorpusItem {
     pub track: Track,
     pub truth: Truth,
-    /// `trusted`, `confirmed_fake` or `confirmed_real`.
+    /// `trusted` or the kind of confirmed label.
     pub origin: &'static str,
     pub trust_origin: String,
     pub class: String,
@@ -617,7 +617,7 @@ pub fn extract_group(
         let Some(extracted) = extracted else {
             continue;
         };
-        let lossy = is_lossy_domain(&item.track.rel, extracted);
+        let lossy = item.truth != Truth::LossyMaster && is_lossy_domain(&item.track.rel, extracted);
         if item.origin == "confirmed_real" && !lossy {
             // A `real` label on a lossless codec (ALAC): no row (lossy.md section 1.3).
             let codec = match extracted.as_ref() {

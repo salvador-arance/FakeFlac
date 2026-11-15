@@ -9,8 +9,8 @@ use crate::config::{Config, Target};
 use crate::env::Roots;
 use crate::evaluate::{
     changed_rows, class_totals, clean_fakes, edge_margins, edge_report, figure, is_near_in,
-    margin_summary, reason_name, small_sample_warning, verdict_name, ParamsRun, RowEval, Totals,
-    SPLITS,
+    margin_summary, reason_name, small_sample_warning, totals, verdict_name, ParamsRun, RowEval,
+    Totals, SPLITS,
 };
 use crate::extract::GroupResult;
 use crate::fmt;
@@ -673,11 +673,14 @@ fn matrix_table(md: &mut Md, m: &ConfusionMatrix) {
     md.blank();
 }
 
-fn fp_cells(label: &str, class: &str, t: &Totals, z: f64) -> Vec<String> {
-    let ci = match fmt::wilson(t.fake, t.tracks, z) {
+fn fake_interval(t: &Totals, z: f64) -> String {
+    match fmt::wilson(t.fake, t.tracks, z) {
         Some((lo, hi)) => format!("{}–{} %", fmt::pct_value(lo), fmt::pct_value(hi)),
         None => "n/a".to_string(),
-    };
+    }
+}
+
+fn fp_cells(label: &str, class: &str, t: &Totals, z: f64) -> Vec<String> {
     vec![
         label.to_string(),
         class.to_string(),
@@ -685,7 +688,7 @@ fn fp_cells(label: &str, class: &str, t: &Totals, z: f64) -> Vec<String> {
         t.albums.to_string(),
         t.fake.to_string(),
         fmt::rate(t.fake, t.tracks),
-        ci,
+        fake_interval(t, z),
         t.albums_fake.to_string(),
         t.suspicious.to_string(),
         fmt::rate(t.suspicious, t.tracks),
@@ -896,8 +899,9 @@ fn albums_by_class(
 fn warnings(data: &ReportData<'_>) -> Vec<String> {
     let mut out = Vec::new();
     let base = &data.groups[data.runs[0].group];
+    let by_class = albums_by_class(&base.rows);
     for class in CLASSES {
-        if let Some((_, tune, holdout)) = albums_by_class(&base.rows).get(class) {
+        if let Some((_, tune, holdout)) = by_class.get(class) {
             if (holdout.len() as u32) < data.config.split.min_holdout_albums {
                 out.push(format!(
                     "class {class}: {} albums in holdout (fewer than {}), {} in tune",
@@ -1423,7 +1427,7 @@ fn full_lists(md: &mut Md, data: &ReportData<'_>, idx: usize) {
     let mut list: Vec<(u8, String, String, Vec<String>)> = Vec::new();
     for (r, e) in rows.iter().zip(run.evals.iter()) {
         let kind: Option<(u8, &str)> = match (r.truth, e.verdict) {
-            (_, Verdict::Error) => Some((4, "error")),
+            (Truth::Real | Truth::Fake, Verdict::Error) => Some((4, "error")),
             (Truth::Real, Verdict::Fake) => Some((0, "FP")),
             (Truth::Real, Verdict::Suspicious) => Some((1, "soft FP")),
             (Truth::Fake, Verdict::Real) => Some((2, "FN")),
@@ -1741,6 +1745,193 @@ fn must_catch_real_at_baseline(md: &mut Md, data: &ReportData<'_>, grid: &GridRe
     md.table(&["path", "setting", "split", "G", "D", "fs", "fe"], &table);
 }
 
+/// The report-only class (evaluation.md section 10), for each params file in run order.
+fn lossy_master_section(md: &mut Md, data: &ReportData<'_>, full: bool) {
+    if !data
+        .groups
+        .iter()
+        .any(|g| g.rows.iter().any(|r| r.truth == Truth::LossyMaster))
+    {
+        return;
+    }
+    md.line("## Authentic releases with a lossy master");
+    md.blank();
+    let mut tracks = Vec::new();
+    for (order, run) in data.runs.iter().enumerate() {
+        let rows: Vec<_> = data.groups[run.group]
+            .rows
+            .iter()
+            .zip(&run.evals)
+            .filter(|(row, _)| row.truth == Truth::LossyMaster)
+            .collect();
+        lossy_master_table(md, data.config, run, &rows);
+        if full {
+            tracks.extend(rows.into_iter().map(|(row, eval)| (row, order, run, eval)));
+        }
+    }
+    if full {
+        md.line("### Authentic releases with a lossy master: tracks");
+        md.blank();
+        tracks.sort_by_key(|(row, order, _, _)| (&row.album_id, &row.path, *order));
+        let cells: Vec<_> = tracks
+            .into_iter()
+            .map(|(row, _, run, eval)| {
+                let m = eval.m.as_ref();
+                vec![
+                    row.path.clone(),
+                    row.album_id.clone(),
+                    row.split.as_str().to_string(),
+                    run.name.clone(),
+                    verdict_name(eval.verdict).to_string(),
+                    eval.reasons
+                        .iter()
+                        .map(|&reason| reason_name(reason))
+                        .collect::<Vec<_>>()
+                        .join(";"),
+                    eval.error
+                        .as_ref()
+                        .map(error_code)
+                        .unwrap_or_default()
+                        .to_string(),
+                    fmt::opt_db(m.map(|m| m.gap_db)),
+                    fmt::opt_db(m.and_then(step_db)),
+                    fmt::opt_hz(m.and_then(|m| m.step_hz)),
+                    fmt::opt_hz(m.map(|m| m.extent_hz)),
+                    fmt::opt_db(m.map(|m| m.high_frequency_db)),
+                    full_band_cell(run, m),
+                    m.and_then(|m| edge_margins(m, &run.params))
+                        .map(|edge| edge.edge_step.to_string())
+                        .unwrap_or_default(),
+                    fmt::opt_db(eval.margins.as_ref().map(|m| m.nearest_fake_margin_db)),
+                ]
+            })
+            .collect();
+        md.table(
+            &[
+                "path",
+                "album id",
+                "split",
+                "params file",
+                "verdict",
+                "reasons",
+                "TrackError",
+                "G",
+                "D",
+                "fs",
+                "fe",
+                "H",
+                "full_band",
+                "edge_step",
+                "nearest_fake_margin_db",
+            ],
+            &cells,
+        );
+    }
+}
+
+fn step_db(m: &Measurements) -> Option<f64> {
+    m.step_hz.map(|_| m.step_db)
+}
+
+fn lossy_master_table(
+    md: &mut Md,
+    config: &Config,
+    run: &ParamsRun,
+    rows: &[(&LabelRow, &RowEval)],
+) {
+    md.line(format!("### {}", run.name));
+    md.blank();
+    let z = config.report.z;
+    let cells = SPLITS.map(|split| {
+        let selected = rows.iter().copied().filter(|(r, _)| split.matches(r.split));
+        let t = totals(selected.clone());
+        let v3 = selected
+            .filter(|(_, e)| {
+                e.verdict == Verdict::Fake
+                    && e.m.as_ref().is_some_and(|m| {
+                        m.gap_db >= run.params.verdict.gap_fake_db && !is_full_band(m, &run.params)
+                    })
+            })
+            .count() as u32;
+        vec![
+            split.as_str().to_string(),
+            t.tracks.to_string(),
+            t.albums.to_string(),
+            t.real.to_string(),
+            t.suspicious.to_string(),
+            t.fake.to_string(),
+            v3.to_string(),
+            (t.fake - v3).to_string(),
+            t.error.to_string(),
+            t.albums_fake.to_string(),
+            fmt::rate(t.fake, t.tracks),
+            fake_interval(&t, z),
+        ]
+    });
+    md.table(
+        &[
+            "split",
+            "tracks",
+            "albums",
+            "Real",
+            "Suspicious",
+            "Fake",
+            "Fake by V3",
+            "Fake by V4",
+            "Error",
+            "albums with ≥ 1 Fake",
+            "Fake rate",
+            "95 % CI",
+        ],
+        &cells,
+    );
+    let all = totals(rows.iter().copied());
+    md.line(format!("- lossy_master Fake (all): {}", figure(&all, z)));
+    if let Some(warning) = small_sample_warning(&all, config) {
+        md.line(format!("- Warning: {warning}"));
+    }
+    for (prefix, fake_only) in [("", false), ("Fake rows, ", true)] {
+        let measurements = rows
+            .iter()
+            .filter(|(_, eval)| {
+                if fake_only {
+                    eval.verdict == Verdict::Fake
+                } else {
+                    eval.verdict != Verdict::Error
+                }
+            })
+            .filter_map(|(_, eval)| eval.m.as_ref());
+        distribution(
+            md,
+            &format!("{prefix}G (dB)"),
+            "",
+            measurements.clone().map(|m| m.gap_db).collect(),
+        );
+        distribution(
+            md,
+            &format!("{prefix}D (dB)"),
+            " with a step",
+            measurements.filter_map(step_db).collect(),
+        );
+    }
+    md.blank();
+}
+
+fn distribution(md: &mut Md, label: &str, qualifier: &str, mut values: Vec<f64>) {
+    values.sort_by(f64::total_cmp);
+    if let [min, ..] = values.as_slice() {
+        md.line(format!(
+            "- {label} over {} tracks{qualifier}: min {}, median {}, max {}",
+            values.len(),
+            fmt::db(*min),
+            fmt::db(values[values.len() / 2]),
+            fmt::db(values[values.len() - 1])
+        ));
+    } else {
+        md.line(format!("- {label} over 0 tracks{qualifier}: n/a"));
+    }
+}
+
 /// `summary.md` (`full = false`) or `report.md` (`full = true`).
 pub fn markdown(data: &ReportData<'_>, full: bool) -> String {
     let mut md = Md::default();
@@ -1754,6 +1945,7 @@ pub fn markdown(data: &ReportData<'_>, full: bool) -> String {
     for idx in 0..data.runs.len() {
         params_section(&mut md, data, idx, full);
     }
+    lossy_master_section(&mut md, data, full);
     if full {
         generation_lists(&mut md, data);
     }
