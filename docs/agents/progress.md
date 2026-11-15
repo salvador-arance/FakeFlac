@@ -2,6 +2,44 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-15 - RP-12 library census implemented (PR `feat/RP-12`)
+
+**Done**
+- #148 to #151 are merged on `origin/main` (`3689cd4`); `feat/RP-12` is based on it.
+- Test stage `7cd7618`: 35 tests in `tools/fakeflac-calibrate/tests/census.rs` (C1-C10 and every scenario of `census.feature` except MC1/MC2), plus the `shelf19k5` fixture in `tests/common/mod.rs`.
+- Implement stage `8091ad7`: new `tools/fakeflac-calibrate/src/census.rs` (report and CSV builders, the run through `analyze_folder`), the `census` command in `run.rs` (accept's params helpers made `pub(crate)`, behaviour unchanged) and the opt-in `census *args` recipe in `justfile`. No new dependency, no ADR, no change to core, adapters, app or specs.
+- Review round 1 (no blocking findings) improvements applied in `12fc3af`: the shared USAGE lists `census`; error tracks that could not be probed write empty `sample_rate`, `bit_depth`, `channels`, `declared_bitrate_kbps` and `duration_ms` in `tracks.csv`; `summary_md` is split into one builder per section with byte-identical output. Review round 2: no blocking findings.
+- `just check`, `just trace`, `just guard-tests` and `just ci` exit 0 (exit code of `just` itself, not of a pipe). On the synthetic sample the figures match section 8 of `census.md`.
+
+**Pending**
+- G2 on the PR (the owner merges).
+- MC1 and MC2 passed on 2026-11-15 and are recorded in a comment on the PR (aggregates only): `just census` on the library of 2026-11-14 gave 11 396 tracks (9 003 real, 1 173 suspicious, 1 156 fake, 64 errors), lossless `gapStep` 95, `cutoffStep` 188, both 218, in 345.8 s with no cache; the library's 13 203 files, sizes and modification times were identical before and after.
+- Owner's agent-configuration edit, then `just agents-sync`: the `census` line in the `CLAUDE.md` command list.
+- Needs a spec line first (G1): a guard for FOLDER being an ancestor of the repository, which would put the report inside FOLDER (D1). Also census.md section 5 / C2 should state that an empty measurement field means "not measured", and the blank lines of `summary.md` (between blocks and at the end, so `elapsed:` is not read as a table row) are unspecified.
+- Small round 2 improvements, not applied: a unit test in `census.rs` for the blanking of placeholder fields (the protected test checks only six columns), and deciding the blanking from the numeric fields instead of comparing the formatted string with `0`.
+- Spec bookkeeping for a `spec/` PR: `specs/requirements/RP-12.md` still says `status: draft` and "pending G1", and `census.md` says `proposed`.
+
+**Blockers / questions for the human**
+- None blocking. A probed `tooShort` track with a 0 ms duration also shows an empty `duration_ms`; the reviewer judged it acceptable.
+
+**Next step:** Review the PR at G2.
+
+## 2026-11-15 - Revised spectrogram reading and agent configuration
+
+**Done**
+- Recorded the revised RNF-02 M1 spectrogram reading in PR #151 (`5aa0b35`). In a fresh release session on `faa9fcf`, 11 332 of 11 396 tracks came from the cache and 64 returned errors. The peak increases were zero, and the upper bounds were 49 270 784 private bytes and 44 670 976 working-set bytes. Result: inconclusive. File counts, sizes and modification times matched before and after.
+- Opened agent configuration PR #150 (`9f39e0d`) with the memory recipe and review rule, the paired performance comparison, and regenerated Codex files. The census recipe is pending RP-12 implementation.
+- `just check` and `just trace` passed on both PR branches. `just agents-check` passed on #150, and the committed diff on #151 passed `just privacy-check --base origin/main`.
+
+**Pending**
+- Owner review of #150 and G1 review of #151.
+- RP-12 implementation after the census spec merged in #148.
+
+**Blockers / questions for the human**
+- The full-library M1 run had 64 cache misses after the preparatory pass. The reading documents that limitation.
+
+**Next step:** Review #151 at G1.
+
 ## 2026-11-15 - Census and manual-check specs opened for G1
 
 **Done**

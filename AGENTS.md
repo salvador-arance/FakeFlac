@@ -45,6 +45,7 @@ just accept       # acceptance on the local corpus (RP-11); just calibrate adds 
 just privacy-check --base main  # no corpus paths or names in the branch diff (ADR-022)
 just perf [FOLDER]  # RNF-01 timing harness, release build, opt-in (not in check or ci; ADR-0046)
 just memory       # RNF-02 long memory suite, release build, opt-in (not in check or ci; ADR-0050)
+just census FOLDER [--params FILE]  # RP-12 library census, aggregates in target/census/, opt-in (not in check or ci)
 just prune-branches  # delete merged branches and clean agent worktrees (after G2); --dry-run lists
 ```
 

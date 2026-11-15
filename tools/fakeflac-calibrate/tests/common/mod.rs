@@ -1,6 +1,7 @@
 //! Test support for the calibration tool (RP-11): the synthetic signals of `specs/detection/fixtures.md`
 //! (ADR-0022), the sample corpus of `specs/calibration/sample-corpus.md`, a fixture transcoder and
 //! small CSV and file-system helpers. Never real audio, never the real corpus, no ffmpeg.
+//! The census sample folder (`specs/calibration/census.md` section 8, @RP-12) adds `shelf19k5`.
 //!
 //! The signals follow `crates/fakeflac-audio/tests/common/mod.rs` (same seeds and recipes). That module
 //! needs `realfft`, which ADR-0036 does not list as a dev-dependency of the tool, so the inverse FFT
@@ -484,6 +485,14 @@ fn signal(name: &str) -> (Vec<f64>, u16, Option<u64>) {
         "sfb21_gaps" => gated_pink(sr, secs, 16_000.0, -20.0, 9),
         "sfb21_gaps_weak" => gated_pink(sr, secs, 16_000.0, -6.0, 10),
         "hf_bursts" => gated_pink(sr, secs, 8_000.0, -20.0, 11),
+        // Pink noise whose part from 19.5 kHz up is 15 dB down, no gate (fixtures.md; census.md
+        // section 8, @RP-12).
+        "shelf19k5" => shaped_noise(
+            sr,
+            secs,
+            |f| pink(f) * if f < 19_500.0 { 1.0 } else { db_to_gain(-15.0) },
+            12,
+        ),
         other => panic!("unknown fixture {other}"),
     };
     let level = if name == "lp16k_dither" { -40.0 } else { -12.0 };
