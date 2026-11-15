@@ -2,6 +2,31 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-15 - RP-11 lossy-master reporting implemented and checked
+
+**Done**
+- G1 correction #141 merged as `3d52977`. On `feat/RP-11`, tests `75050d7` and implementation `22dd47a` cover the `confirmed.txt` kind `lossy-master` and its dedicated §10 report. Errors appear there and in `tracks.csv`; the shared §8 list, acceptance targets and grid results exclude the new class.
+- Code review found no issues. `just check`, `just ci`, `just trace` and `just privacy-check --base origin/main` passed. All 13 new integration tests passed. A before/after run on the unmodified v2 synthetic corpus produced byte-identical CSVs and Markdown identical after normalizing run metadata.
+- L8 passed on the real corpus with config v5 and detection v8. Release executables from `3d52977` and PR #142 used the same scratch cache and current lists. CSVs were byte-identical and Markdown differed only in run ID and date. Adding the unlabelled verified release left the existing CSV rows and evaluation reports unchanged (including T1) and reported 10 Fake, 3 Real and 2 Suspicious tracks. A second verified release overlapped `trusted.txt` (13 reference tracks). A controlled comparison removed its entries in the scratch baseline before adding both releases and found the same invariance, with 12 Fake, 15 Real and 4 Suspicious tracks across 2 albums. All 31 PCM CRCs matched the database-verified rip logs. The real lists and audio were untouched.
+
+**Pending**
+- Implementation PR #142 is open for the owner's G2 review and merge.
+
+**Next step:** Review PR #142 at G2.
+
+## 2026-11-15 - RP-11 tests committed; error reporting needs G1 clarification
+
+**Done**
+- Spec PR #140 merged at `c3f1fa5`; baseline `just check` and `just trace` pass. On `feat/RP-11`, `75050d7` adds synthetic tests for the approved scenarios and updates the two approved unknown-kind expectations. The new tests are red as expected except the passing legacy compatibility case.
+
+**Pending**
+- Implementation, review, `just ci`, and the L8 real-corpus comparison. The implementation stage stopped before changing production code.
+
+**Blocker / question for the human**
+- `specs/calibration/evaluation.md` section 2 requires `lossy_master` errors in the shared section 8 error list. `specs/calibration/sample-corpus.md` section 6 requires every list in sections 3–9 to equal the baseline, and the protected test asserts that those errors are absent from the shared list. Both expect the errors in the dedicated section 10 track list.
+
+**Next step:** Resolve at G1 whether `lossy_master` errors also appear in the shared error list, then align the specs and tests before implementation resumes.
+
 ## 2026-11-14 - Library diagnosis; RF-17 and RP-11 lossy-master specs opened for G1
 
 **Done**

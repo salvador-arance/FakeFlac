@@ -8,6 +8,7 @@ use std::sync::Arc;
 pub enum Truth {
     Real,
     Fake,
+    LossyMaster,
 }
 
 impl Truth {
@@ -15,6 +16,7 @@ impl Truth {
         match self {
             Truth::Real => "real",
             Truth::Fake => "fake",
+            Truth::LossyMaster => LOSSY_MASTER_CLASS,
         }
     }
 }
@@ -48,10 +50,10 @@ pub struct LabelRow {
     /// Relative to the root, `/` separators.
     pub path: String,
     pub truth: Truth,
-    /// `trusted`, `generated` or `confirmed_fake`.
+    /// The label source, such as `trusted`, `generated` or `confirmed_lossy_master`.
     pub origin: &'static str,
     pub trust_origin: String,
-    /// `primary`, `reviewed`, `clean`, `reference` or `positive`.
+    /// The track's class from `CLASSES`, or `generated` for honest lossy encodes.
     pub class: String,
     pub encoder: String,
     pub setting: String,
@@ -77,9 +79,9 @@ impl LabelRow {
         )
     }
 
-    /// The evaluation set is every row except class `reference` (evaluation.md section 2).
+    /// The evaluation set excludes the report-only class and `reference` (evaluation.md section 2).
     pub fn in_evaluation_set(&self) -> bool {
-        self.class != "reference"
+        self.truth != Truth::LossyMaster && self.class != "reference"
     }
 
     pub fn sample_rate(&self) -> Option<u32> {
@@ -131,17 +133,23 @@ pub fn chain_key(path: &str) -> String {
         .collect()
 }
 
-/// Order of the classes in every table.
-pub const CLASSES: [&str; 5] = ["primary", "reviewed", "clean", "reference", "positive"];
+pub const LOSSY_MASTER_CLASS: &str = "lossy_master";
 
-/// Precedence of the classes for an album that holds tracks of several (the stronger class decides).
-const ALBUM_CLASS_ORDER: [&str; 4] = ["primary", "reviewed", "clean", "reference"];
+/// Album class precedence, also used to order the report header.
+pub const CLASSES: [&str; 6] = [
+    "primary",
+    "reviewed",
+    "clean",
+    "reference",
+    LOSSY_MASTER_CLASS,
+    "positive",
+];
 
 /// The class of an album for the stratified split, from the classes of its tracks: the strongest
-/// of primary, reviewed, clean, reference; `positive` when it holds only confirmed fakes.
+/// listed class, defaulting to `positive`.
 pub fn album_class_of<'a>(classes: impl Iterator<Item = &'a str>) -> &'static str {
     let best = classes
-        .filter_map(|c| ALBUM_CLASS_ORDER.iter().position(|x| *x == c))
+        .filter_map(|c| CLASSES.iter().position(|x| *x == c))
         .min();
-    best.map_or("positive", |i| ALBUM_CLASS_ORDER[i])
+    best.map_or("positive", |i| CLASSES[i])
 }
