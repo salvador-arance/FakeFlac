@@ -2,6 +2,18 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-15 - RF-17 implemented and verified
+
+**Done**
+- G1 approved in #139, #143 and #144. Protected tests are in `6a30140`; Rust, generated v9 bindings and cache compatibility are in `35984e1`; the English and Spanish UI is in `34994c7` and `faa9fcf`. Both independent reviews found no issues after the layout adjustment.
+- `just check ci`, `just check-app`, `just trace`, `just privacy-check --base origin/main` and `just build` passed. `just perf` passed with T1 medians 165/196 ms and T2 medians 535/546 ms (cache off/cold), within the reference bound. The full performance report is saved under `target/`.
+- X3: same local corpus, calibration v5 and detection v8. Both CSV outputs are byte-identical and both Markdown reports match after removing run metadata. The production browser check at 900 × 500 passed in both languages with the detail panel at 260 and 160 px. The Windows release executable and installers are available under `target/release/`.
+
+**Pending**
+- Approval to open the feature PR at G2, per `/feature`. The PR body and full performance report are ready under `target/`. Owner walkthrough M1 and real library app CSV comparison M2 remain pending.
+
+**Next step:** Open the RF-17 feature PR when the owner authorizes it.
+
 ## 2026-11-15 - RF-17 evidence representation needs G1 clarification
 
 **Done**
