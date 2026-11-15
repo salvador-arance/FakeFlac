@@ -2,6 +2,25 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-15 - RP-12 follow-up: tests and numeric blanking (branch `feat/RP-12-census-empty-fields`)
+
+**Done**
+- The spec clarification merged as #153 (`37d06c6`). Decision taken for G1 (delegated by the owner): "empty means not measured" covers error tracks only; a 0 on a track that is not an error is written as `0`.
+- Test stage `24496da`: 7 new tests in `tools/fakeflac-calibrate/tests/census.rs` (the new scenario on the sample folder, the rule from given analyses, one blank line after every block of `summary.md`) and the header comment of the file updated. All 42 census tests pass.
+- Implement stage `52e3a7b`: the blanking of the five probe columns of `tracks.csv` is decided from the numeric values (`probed_field`) instead of comparing the formatted string with `0`. Output unchanged; mutation checks fail the tests as expected.
+- Review: no blocking findings. `just check`, `just guard-tests`, `just ci` and `just privacy-check --base origin/main` exit 0.
+
+**Pending**
+- G2 on the PR of this branch.
+- Review improvements not applied: the "error tracks only" decision is not written in census.md section 5 (one sentence in a `spec/` PR would make it explicit); the `as` casts of the `pick` helper in the zero-from-probe test; the two equal arms of `probed_field`.
+- Not specified: a guard for FOLDER being an ancestor of the repository (D1). Consider raising `timeout-minutes` of `test-rust` in `ci.yml` if it is cancelled again (owner's decision).
+- Run `just prune-branches` after the merges.
+
+**Blockers / questions for the human**
+- None.
+
+**Next step:** Review the PR at G2.
+
 ## 2026-11-15 - RP-12 merged; spec clarification opened for G1
 
 **Done**
