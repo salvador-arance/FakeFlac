@@ -184,9 +184,18 @@ When `FAKEFLAC_PERF_FOLDER` is set, the timed suite times only that folder (no s
 2. **Per track:** one sequential pass on the reference path with `workers = 1`, cache off; per-track times grouped by `TrackInfo.format`.
 A folder the run refuses ends the folder mode with `perf: <CODE>` (the `AppError` code only, for example `perf: NO_AUDIO_FOUND`; the message is not printed because it may hold the path, D8) and a failure. The harness writes nothing into the folder (RNF-05): no cache, no export.
 
-### 5.4 Regression guard (Q13)
+### 5.4 Regression guard (Q13; revised, section 14)
 
-Once the baseline is recorded (section 10), the gates T1 and T2 are the guard. The code-reviewer asks for a fresh `just perf` report in every PR whose diff touches the paths listed in Q13, and flags a gated median more than 20 % above the reference figures of section 10.1 (indicative). The gate itself stays absolute: a median at or above the budget fails.
+The gates T1 and T2 stay absolute: a median at or above the budget fails. The regression guard is a **paired comparison**:
+
+- **Two reports.** A PR whose diff touches the paths listed in Q13 carries two `just perf` reports made on the same machine, one right after the other, with nothing else changed between them:
+  1. the **base report**, on the PR's merge base with `main`;
+  2. the **head report**, on the PR's head.
+
+  Each is recorded with its commit and the machine line the recipe prints. How the base commit is built is free (a second worktree, or checking the base out before the head); each report uses the harness and the fixtures of its own commit.
+- **The flag.** The code-reviewer flags for G2 each gated median of the head report (T1 `off`, T1 `cold`, T2 `off`, T2 `cold`) that is more than **10 %** above the same median of the base report. The comparison is in whole milliseconds: a row is flagged when `10 × head > 11 × base`. The flag is indicative: it starts a discussion at G2 and fails nothing.
+- **Without a base report** (for example when the base cannot be built), the PR says so, and the reviewer compares the head report with the most recent report recorded on the same machine, naming its date. A difference there is weaker evidence (section 14).
+- **Section 10.1** stays as the record of #94 and of the owner's machine. It is no longer what a PR is compared with.
 
 ## 6. The report
 
@@ -403,3 +412,21 @@ Outcome: **meets T1 and T2 in both modes** (about 11× under 3 s, about 23× und
 - **An empty argument (5.2 step 1, T14, M3):** `just perf ""` used to set `FAKEFLAC_PERF_FOLDER` to the empty string and run folder mode on an empty path (it failed with `perf: <CODE>` and printed nothing private). An argument that is empty or only whitespace is now a usage error, like two arguments. Scenario "just perf refuses an empty folder argument" (new, manual).
 - **The `hires` level floor (2.3):** −45 dBFS was both the floor and, with `flacenc` 0.5.1, the only level that fits the window (41 289 467 bytes, near its top), so a `flacenc` upgrade that made the file bigger would have had no allowed level and needed G1. The floor is now −50 dBFS, still 10 dB above `silence_dbfs`, and the indicative −39 dBFS (about 51 MB, wrong) is replaced by the measured figures. `typical`'s floor (2.1) does not change. The harness keeps −45 dBFS, which is inside the new range, so no fixture and no figure of section 10 changes.
 - **Layers (after G1):** a feature PR whose implement stage changes the `perf` recipe in `justfile` only, and whose test stage updates the comment on `HIRES_LEVEL_DBFS` in `perf.rs` to the new floor (no check changes). T14 checks the recipe's text and already requires `usage: just perf [FOLDER]`; the behaviour is manual (M3). No production code, bindings or `commands.md` change.
+
+## 14. Revision: a paired comparison instead of a fixed reference (draft 2026-11-15, G1 pending)
+
+- **What changes.** Section 5.4, and with it the bound of Q13 and the rule of `.claude/agents/code-reviewer.md`. Scenario "A performance-sensitive change is compared with its own base" of `performance.feature` (new, manual).
+- **Why.** The guard compared a PR's report with the figures of section 10.1, taken on 2026-10-31. Later reports on the same machine and the same harness moved together, by more than a change in the code explains and by less than the 20 % bound:
+
+  | Gated median | 10.1 (2026-10-31) | 2026-11-14 | 2026-11-15 |
+  |---|---|---|---|
+  | T1 `off` | 162 ms | 170 ms (+4.9 %) | 165 ms (+1.9 %) |
+  | T1 `cold` | 186 ms | 198 ms (+6.5 %) | 196 ms (+5.4 %) |
+  | T2 `off` | 519 ms | 563 ms (+8.5 %) | 535 ms (+3.1 %) |
+  | T2 `cold` | 564 ms | 594 ms (+5.3 %) | 546 ms (−3.2 %) |
+
+  The report of 2026-11-14 was slower on all four medians, and the one of the next day, on later code, was faster again. A figure taken weeks earlier cannot tell the state of the machine (system updates, background work, temperature) from a change in the code, so a real regression of 5 to 15 % could hide in that noise, and a slow day could look like one.
+- **The revised guard.** Two reports from one session, base then head. What differs between them is the code. The bound drops from 20 % to 10 % because the day-to-day part of the noise is gone; within one report the five measured runs of a gated row are within about 7 % of each other (10.1: T2 `cold` 542 to 580 ms).
+- **Open question for G1 (Q15).** The bound of the paired comparison. Default: **10 %**. Alternatives: (a) keep 20 %, which is safe against noise but lets through what the pairing was added to catch; (b) 5 %, which is inside the spread of a single report and would flag noise.
+- **Not added.** No recipe and no tool: the reviewer reads two tables of four rows. No timing in CI (Q8 and ADR-0046 stand). The harness, the fixtures, the gates T0 to T5 and T12 to T14, the report format and M1 to M3 do not change, so no test and no code changes.
+- **Outside `specs/`, for the human** (agent configuration; then `just agents-sync`, ADR-0048): the rule in `.claude/agents/code-reviewer.md` that asks for the `just perf` report asks for the base and the head report and uses the 10 % bound.

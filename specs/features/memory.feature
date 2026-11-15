@@ -290,10 +290,16 @@ Feature: Streaming decode with a bounded working set per track (H1)
   # --- The whole app (manual, indicative) ---
 
   Scenario: The app's peak memory on a real folder is reported
-    Checked by hand (memory.md M1); aggregates only (ADR-0022). The targets
-    are indicative and never fail.
+    Checked by hand (memory.md M1, revised after F7: section 14); aggregates
+    only (ADR-0022). The targets are indicative and never fail. A lifetime
+    peak cannot show what a spectrogram adds below the analysis peak, so the
+    spectrogram is read in a fresh session as an upper bound.
     Given the release app has just started and its peaks P0 are read with Get-Process
     When the owner clears the result cache and analyses a real folder holding a 15-track album and a track of at least 40 minutes
-    And reads the peaks P1, then opens the spectrogram of the longest track and reads the peaks P2
-    Then the worker count, the track count, the folder size, P1 − P0 and P2 − P1 are recorded in the feature PR
-    And P1 − P0 is compared with workers × 32 MiB + 64 MiB and P2 − P1 with 32 MiB
+    And reads the peaks P1
+    And restarts the app, analyses the same folder from the result cache and reads the peaks and the current figures P2a
+    And opens the spectrogram of the longest track and reads the peaks P2b
+    Then the worker count, the track count, the folder size and P1 − P0 are recorded
+    And the spectrogram's peak increase (P2b peak − P2a peak) and upper bound (P2b peak − P2a current) are recorded for both metrics
+    And P1 − P0 is compared with workers × 32 MiB + 64 MiB and the upper bound with 32 MiB
+    And an upper bound above 32 MiB with a peak increase of 0 is recorded as inconclusive
