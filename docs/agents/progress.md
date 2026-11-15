@@ -9,9 +9,9 @@
 - Before the runs, all 13,203 library paths, sizes and modification times matched the November 14 snapshot. The same inventory matched after the two exports. Private CSVs remain under `target/`; the PR draft records aggregates only.
 
 **Pending**
-- Authorization to open the RF-17 feature PR at G2.
+- [PR #145](https://github.com/salvador-arance/FakeFlac/pull/145) is open for the owner's G2 review and merge.
 
-**Next step:** Open the RF-17 feature PR when the owner authorizes it.
+**Next step:** Review PR #145 at G2.
 
 ## 2026-11-15 - RF-17 native walkthrough completed
 
