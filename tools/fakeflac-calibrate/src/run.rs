@@ -128,7 +128,8 @@ pub fn run(command: &Command, env: &Env, transcoder: &dyn Transcoder) -> Outcome
 const USAGE: &str = "usage:
   fakeflac-calibrate accept [--params FILE]... [--config FILE] [--no-generate]
   fakeflac-calibrate calibrate [--grid FILE] [--config FILE]
-  fakeflac-calibrate privacy-check [--base REF]";
+  fakeflac-calibrate privacy-check [--base REF]
+  fakeflac-calibrate census FOLDER [--params FILE]";
 
 fn usage_error(message: String) -> ToolError {
     let mut lines = vec![format!("error: {message}")];

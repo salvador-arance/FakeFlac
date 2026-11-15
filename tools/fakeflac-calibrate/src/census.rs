@@ -16,7 +16,7 @@ use fakeflac_core::{
     EvidenceKind, ProgressEvent, SuspicionReason, TrackAnalysis, TrackError, Verdict,
 };
 use fakeflac_fs::WalkDirScanner;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Mutex;
@@ -192,19 +192,22 @@ fn evidence_name(kind: EvidenceKind) -> &'static str {
     }
 }
 
-/// The album strata of a run: from the given album summaries, or, for an index without one (never
-/// the case in a run), from the tracks of that index.
-fn strata(
+/// The `(f, n)` of every distinct album index of the tracks: the single source of the album count
+/// of 4.1 and the strata of 4.4, 4.5 and `tracks.csv`. Taken from the album summary of the index,
+/// or, for an index without one (never the case in a run), counted from the tracks of that index.
+fn album_table(
     tracks: &[CensusTrack],
     albums: &BTreeMap<u32, AlbumSummary>,
 ) -> BTreeMap<u32, (u32, u32)> {
-    let mut counts: BTreeMap<u32, (u32, u32)> = albums
-        .iter()
-        .map(|(index, s)| (*index, album_counts(s)))
-        .collect();
-    let mut missing: BTreeMap<u32, (u32, u32)> = BTreeMap::new();
-    for t in tracks.iter().filter(|t| !albums.contains_key(&t.album)) {
-        let c = missing.entry(t.album).or_default();
+    let mut counts: BTreeMap<u32, (u32, u32)> = BTreeMap::new();
+    for t in tracks {
+        if let Some(summary) = albums.get(&t.album) {
+            counts
+                .entry(t.album)
+                .or_insert_with(|| album_counts(summary));
+            continue;
+        }
+        let c = counts.entry(t.album).or_default();
         match t.analysis.verdict {
             Verdict::Fake => {
                 c.0 += 1;
@@ -214,8 +217,30 @@ fn strata(
             Verdict::Error => {}
         }
     }
-    counts.extend(missing);
     counts
+}
+
+/// The stratum of an album index of the album table.
+fn stratum_in(table: &BTreeMap<u32, (u32, u32)>, album: u32) -> Option<Stratum> {
+    table.get(&album).and_then(|(f, n)| stratum_of(*f, *n))
+}
+
+/// The row of a codec in `CODEC_ROWS` (`unknown`, the last one, for a track without a codec).
+fn codec_row(codec: Option<AudioCodec>) -> usize {
+    CODEC_ROWS
+        .iter()
+        .position(|c| *c == codec)
+        .unwrap_or(CODEC_ROWS.len() - 1)
+}
+
+/// Whether the analysis has an evidence item of `kind`.
+fn has_evidence(analysis: &TrackAnalysis, kind: EvidenceKind) -> bool {
+    analysis.evidence.iter().any(|e| e.kind == kind)
+}
+
+/// The tracks of a run with the given verdict.
+fn with_verdict(tracks: &[CensusTrack], verdict: Verdict) -> impl Iterator<Item = &CensusTrack> {
+    tracks.iter().filter(move |t| t.analysis.verdict == verdict)
 }
 
 /// The largest margin among the `gapStep` and `cutoffStep` items, widened to `f64` (section 4.5).
@@ -251,23 +276,8 @@ fn table_row(out: &mut String, key: &[&str], values: &[u32]) {
     let _ = writeln!(out, "| {} |", cells.join(" | "));
 }
 
-/// `summary.md` (section 4) from the tracks of a run (any order) and the summary of the last
-/// `TrackDone` of every album index. Counts and fixed words only: no path or name.
-pub fn summary_md(
-    header: &CensusHeader,
-    tracks: &[CensusTrack],
-    albums: &BTreeMap<u32, AlbumSummary>,
-) -> String {
-    let mut out = String::new();
-    let strata_counts = strata(tracks, albums);
-    let stratum_of_album = |album: u32| {
-        strata_counts
-            .get(&album)
-            .and_then(|(f, n)| stratum_of(*f, *n))
-    };
-
-    // 4.1 Header.
-    let album_indexes: BTreeSet<u32> = tracks.iter().map(|t| t.album).collect();
+/// 4.1 Header: title, run, detection, then tracks, albums and size, each followed by a blank line.
+fn section_header(out: &mut String, header: &CensusHeader, tracks: &[CensusTrack], albums: usize) {
     let size: u64 = tracks.iter().map(|t| t.analysis.info.size_bytes).sum();
     let params = match &header.params_id {
         None => "default".to_string(),
@@ -282,13 +292,15 @@ pub fn summary_md(
     );
     let _ = writeln!(
         out,
-        "tracks {} | albums {} | {:.1} MB\n",
+        "tracks {} | albums {albums} | {:.1} MB\n",
         tracks.len(),
-        album_indexes.len(),
         size as f64 / BYTES_PER_MB
     );
+}
 
-    // 4.2 Verdicts by codec: tracks, real, suspicious, fake, error.
+/// 4.2 Verdicts by codec: tracks, real, suspicious, fake, error, for every codec with a track, then
+/// the total.
+fn section_verdicts(out: &mut String, tracks: &[CensusTrack]) {
     let verdict_column = |v: Verdict| match v {
         Verdict::Real => 1,
         Verdict::Suspicious => 2,
@@ -298,63 +310,50 @@ pub fn summary_md(
     let mut by_codec: Vec<[u32; 5]> = vec![[0; 5]; CODEC_ROWS.len()];
     let mut total = [0u32; 5];
     for t in tracks {
-        let row = CODEC_ROWS
-            .iter()
-            .position(|c| *c == t.analysis.info.codec)
-            .unwrap_or(CODEC_ROWS.len() - 1);
-        for counts in [&mut by_codec[row], &mut total] {
+        for counts in [&mut by_codec[codec_row(t.analysis.info.codec)], &mut total] {
             counts[0] += 1;
             counts[verdict_column(t.analysis.verdict)] += 1;
         }
     }
     table_header(
-        &mut out,
+        out,
         &["codec", "tracks", "real", "suspicious", "fake", "error"],
     );
     for (codec, counts) in CODEC_ROWS.iter().zip(&by_codec) {
         if counts[0] > 0 {
-            table_row(&mut out, &[codec_label(*codec)], counts);
+            table_row(out, &[codec_label(*codec)], counts);
         }
     }
-    table_row(&mut out, &["total"], &total);
+    table_row(out, &["total"], &total);
     out.push('\n');
+}
 
-    // 4.3 Evidence of the Fake verdicts: lossless gap, cutoff, both, other; lossy pair, other.
+/// 4.3 Evidence of the Fake verdicts: lossless gap, cutoff, both, other; lossy pair, other.
+fn section_evidence(out: &mut String, tracks: &[CensusTrack]) {
     let mut evidence = [0u32; 6];
-    for t in tracks
-        .iter()
-        .filter(|t| t.analysis.verdict == Verdict::Fake)
-    {
-        let kinds: BTreeSet<&str> = t
-            .analysis
-            .evidence
-            .iter()
-            .map(|e| evidence_name(e.kind))
-            .collect();
-        let has = |k: EvidenceKind| kinds.contains(evidence_name(k));
-        let (gap, step, short) = (
-            has(EvidenceKind::GapStep),
-            has(EvidenceKind::CutoffStep),
-            has(EvidenceKind::Shortfall),
-        );
-        match group_of(t.analysis.info.codec) {
-            Some(Group::Lossless) => {
-                let row = match (gap, step, short) {
-                    (true, false, false) => 0,
-                    (false, true, false) => 1,
-                    (true, true, false) => 2,
-                    _ => 3,
-                };
-                evidence[row] += 1;
-            }
+    for t in with_verdict(tracks, Verdict::Fake) {
+        let gap = has_evidence(&t.analysis, EvidenceKind::GapStep);
+        let step = has_evidence(&t.analysis, EvidenceKind::CutoffStep);
+        let short = has_evidence(&t.analysis, EvidenceKind::Shortfall);
+        let row = match group_of(t.analysis.info.codec) {
+            Some(Group::Lossless) => match (gap, step, short) {
+                (true, false, false) => 0,
+                (false, true, false) => 1,
+                (true, true, false) => 2,
+                _ => 3,
+            },
             Some(Group::Lossy) => {
-                let row = if !gap && step && short { 4 } else { 5 };
-                evidence[row] += 1;
+                if !gap && step && short {
+                    4
+                } else {
+                    5
+                }
             }
-            None => {}
-        }
+            None => continue,
+        };
+        evidence[row] += 1;
     }
-    table_header(&mut out, &["group", "evidence", "tracks"]);
+    table_header(out, &["group", "evidence", "tracks"]);
     for (key, count) in [
         ["lossless", "gapStep"],
         ["lossless", "cutoffStep"],
@@ -366,14 +365,17 @@ pub fn summary_md(
     .iter()
     .zip(evidence)
     {
-        table_row(&mut out, key, &[count]);
+        table_row(out, key, &[count]);
     }
     out.push('\n');
+}
 
-    // 4.4 Albums with a Fake: albums, fake tracks, lossless, lossy per stratum.
+/// 4.4 Albums with a Fake: albums, fake tracks, lossless, lossy per stratum, the total, then the
+/// line of the albums with exactly one Fake.
+fn section_albums(out: &mut String, tracks: &[CensusTrack], table: &BTreeMap<u32, (u32, u32)>) {
     let mut by_stratum = [[0u32; 4]; 3];
     let mut one_fake = 0u32;
-    for (f, n) in strata_counts.values() {
+    for (f, n) in table.values() {
         let Some(s) = stratum_of(*f, *n) else {
             continue;
         };
@@ -384,68 +386,63 @@ pub fn summary_md(
             one_fake += 1;
         }
     }
-    // 4.5 Margins of the lossless fakes: band (and `none`) × whole, mixed, isolated, total.
-    let mut margins = [[0u32; 4]; MARGIN_BAND_LABELS.len() + 1];
-    for t in tracks
-        .iter()
-        .filter(|t| t.analysis.verdict == Verdict::Fake)
-    {
-        let stratum = stratum_of_album(t.album);
-        let group = group_of(t.analysis.info.codec);
-        if let Some(s) = stratum {
-            match group {
-                Some(Group::Lossless) => by_stratum[s.column()][2] += 1,
-                Some(Group::Lossy) => by_stratum[s.column()][3] += 1,
-                None => {}
-            }
-        }
-        if group != Some(Group::Lossless) {
+    for t in with_verdict(tracks, Verdict::Fake) {
+        let Some(s) = stratum_in(table, t.album) else {
             continue;
+        };
+        match group_of(t.analysis.info.codec) {
+            Some(Group::Lossless) => by_stratum[s.column()][2] += 1,
+            Some(Group::Lossy) => by_stratum[s.column()][3] += 1,
+            None => {}
         }
-        let band = lossless_margin(&t.analysis).map_or(MARGIN_BAND_LABELS.len(), margin_band);
-        if let Some(s) = stratum {
-            margins[band][s.column()] += 1;
-        }
-        margins[band][3] += 1;
     }
     table_header(
-        &mut out,
+        out,
         &["stratum", "albums", "fake tracks", "lossless", "lossy"],
     );
-    let mut albums_total = [0u32; 4];
+    let mut total = [0u32; 4];
     for s in Stratum::ALL {
         let row = by_stratum[s.column()];
-        for (sum, v) in albums_total.iter_mut().zip(row) {
+        for (sum, v) in total.iter_mut().zip(row) {
             *sum += v;
         }
-        table_row(&mut out, &[s.name()], &row);
+        table_row(out, &[s.name()], &row);
     }
-    table_row(&mut out, &["total"], &albums_total);
+    table_row(out, &["total"], &total);
     out.push('\n');
     let _ = writeln!(
         out,
         "albums with exactly one Fake among 2 or more analysed tracks: {one_fake}\n"
     );
+}
 
-    table_header(
-        &mut out,
-        &["margin dB", "whole", "mixed", "isolated", "total"],
-    );
+/// 4.5 Margins of the lossless fakes: band (and `none`) × whole, mixed, isolated, total.
+fn section_margins(out: &mut String, tracks: &[CensusTrack], table: &BTreeMap<u32, (u32, u32)>) {
+    let mut margins = [[0u32; 4]; MARGIN_BAND_LABELS.len() + 1];
+    for t in with_verdict(tracks, Verdict::Fake)
+        .filter(|t| group_of(t.analysis.info.codec) == Some(Group::Lossless))
+    {
+        let band = lossless_margin(&t.analysis).map_or(MARGIN_BAND_LABELS.len(), margin_band);
+        if let Some(s) = stratum_in(table, t.album) {
+            margins[band][s.column()] += 1;
+        }
+        margins[band][3] += 1;
+    }
+    table_header(out, &["margin dB", "whole", "mixed", "isolated", "total"]);
     for (label, counts) in MARGIN_BAND_LABELS
         .iter()
         .chain(["none"].iter())
         .zip(&margins)
     {
-        table_row(&mut out, &[label], counts);
+        table_row(out, &[label], counts);
     }
     out.push('\n');
+}
 
-    // 4.6 Reasons of the Suspicious verdicts: lossless, lossy.
+/// 4.6 Reasons of the Suspicious verdicts: lossless, lossy, one row per reason then `none`.
+fn section_reasons(out: &mut String, tracks: &[CensusTrack]) {
     let mut reasons = [[0u32; 2]; REASON_ROWS.len() + 1];
-    for t in tracks
-        .iter()
-        .filter(|t| t.analysis.verdict == Verdict::Suspicious)
-    {
+    for t in with_verdict(tracks, Verdict::Suspicious) {
         let column = match group_of(t.analysis.info.codec) {
             Some(Group::Lossless) => 0,
             Some(Group::Lossy) => 1,
@@ -462,25 +459,22 @@ pub fn summary_md(
             reasons[REASON_ROWS.len()][column] += 1;
         }
     }
-    table_header(&mut out, &["reason", "lossless", "lossy"]);
+    table_header(out, &["reason", "lossless", "lossy"]);
     for (row, counts) in reasons.iter().enumerate() {
         let label = REASON_ROWS.get(row).map_or("none", |r| reason_name(*r));
-        table_row(&mut out, &[label], counts);
+        table_row(out, &[label], counts);
     }
     out.push('\n');
+}
 
-    // 4.7 Errors: unreadable, corruptStream, unsupportedFormat, tooShort.
-    let mut errors: Vec<[u32; 4]> = vec![[0; 4]; CODEC_ROWS.len()];
-    let mut any_error = false;
-    for t in tracks
-        .iter()
-        .filter(|t| t.analysis.verdict == Verdict::Error)
-    {
-        any_error = true;
-        let row = CODEC_ROWS
-            .iter()
-            .position(|c| *c == t.analysis.info.codec)
-            .unwrap_or(CODEC_ROWS.len() - 1);
+/// 4.7 Errors: unreadable, corruptStream, unsupportedFormat, tooShort for every codec of 4.2 with an
+/// error track, in the order of 4.2; `errors: none` when no track has an error.
+fn section_errors(out: &mut String, tracks: &[CensusTrack]) {
+    let mut error_tracks = [0u32; CODEC_ROWS.len()];
+    let mut errors = [[0u32; 4]; CODEC_ROWS.len()];
+    for t in with_verdict(tracks, Verdict::Error) {
+        let row = codec_row(t.analysis.info.codec);
+        error_tracks[row] += 1;
         let column = match &t.analysis.error {
             Some(TrackError::Unreadable(_)) => Some(0),
             Some(TrackError::CorruptStream(_)) => Some(1),
@@ -492,26 +486,43 @@ pub fn summary_md(
             errors[row][c] += 1;
         }
     }
-    if any_error {
-        table_header(
-            &mut out,
-            &[
-                "codec",
-                "unreadable",
-                "corruptStream",
-                "unsupportedFormat",
-                "tooShort",
-            ],
-        );
-        // One row for each codec of 4.2 with at least one error track, in the order of 4.2.
-        for ((codec, verdicts), kinds) in CODEC_ROWS.iter().zip(&by_codec).zip(&errors) {
-            if verdicts[4] > 0 {
-                table_row(&mut out, &[codec_label(*codec)], kinds);
-            }
-        }
-    } else {
+    if error_tracks.iter().all(|n| *n == 0) {
         out.push_str("errors: none\n");
+        return;
     }
+    table_header(
+        out,
+        &[
+            "codec",
+            "unreadable",
+            "corruptStream",
+            "unsupportedFormat",
+            "tooShort",
+        ],
+    );
+    for ((codec, n), kinds) in CODEC_ROWS.iter().zip(error_tracks).zip(&errors) {
+        if n > 0 {
+            table_row(out, &[codec_label(*codec)], kinds);
+        }
+    }
+}
+
+/// `summary.md` (section 4) from the tracks of a run (any order) and the summary of the last
+/// `TrackDone` of every album index. Counts and fixed words only: no path or name.
+pub fn summary_md(
+    header: &CensusHeader,
+    tracks: &[CensusTrack],
+    albums: &BTreeMap<u32, AlbumSummary>,
+) -> String {
+    let table = album_table(tracks, albums);
+    let mut out = String::new();
+    section_header(&mut out, header, tracks, table.len());
+    section_verdicts(&mut out, tracks);
+    section_evidence(&mut out, tracks);
+    section_albums(&mut out, tracks, &table);
+    section_margins(&mut out, tracks, &table);
+    section_reasons(&mut out, tracks);
+    section_errors(&mut out, tracks);
     // A closing blank line, so the `elapsed:` line that follows on stdout is not read as a table row.
     out.push('\n');
     out
@@ -570,26 +581,32 @@ pub fn tracks_csv(
     albums: &BTreeMap<u32, AlbumSummary>,
     root: &Path,
 ) -> String {
-    let strata_counts = strata(tracks, albums);
+    let table = album_table(tracks, albums);
     let mut rows: Vec<Vec<String>> = tracks
         .iter()
         .map(|t| {
             let a = &t.analysis;
             let i = &a.info;
-            let stratum = strata_counts
-                .get(&t.album)
-                .and_then(|(f, n)| stratum_of(*f, *n))
-                .map_or("", Stratum::name);
+            let stratum = stratum_in(&table, t.album).map_or("", Stratum::name);
+            // An error track whose file could not be probed carries the placeholder 0 in these
+            // columns: it is written as a missing value (an empty field). Real values are kept.
+            let measured = |v: String| {
+                if a.verdict == Verdict::Error && v == "0" {
+                    String::new()
+                } else {
+                    v
+                }
+            };
             vec![
                 relative_path(&i.path, root),
                 t.album.to_string(),
                 stratum.to_string(),
                 i.codec.map_or("", codec_name).to_string(),
-                i.sample_rate.to_string(),
-                opt(i.bit_depth),
-                i.channels.to_string(),
-                opt(i.declared_bitrate_kbps),
-                i.duration_ms.to_string(),
+                measured(i.sample_rate.to_string()),
+                measured(opt(i.bit_depth)),
+                measured(i.channels.to_string()),
+                measured(opt(i.declared_bitrate_kbps)),
+                measured(i.duration_ms.to_string()),
                 i.size_bytes.to_string(),
                 verdict_name(a.verdict).to_string(),
                 a.reasons
