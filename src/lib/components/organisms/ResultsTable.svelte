@@ -281,6 +281,7 @@
           <VerdictCell
             verdict={row.analysis.verdict}
             reasons={row.analysis.reasons}
+            evidence={row.analysis.evidence}
           />
         </div>
         <div class="cell file-cell" role="gridcell" title={getFileName(row.analysis.info.path)}>

@@ -1,15 +1,17 @@
 <script lang="ts">
   import Icon from '../atoms/Icon.svelte'
   import type { IconName } from '../atoms/icons'
+  import { formatEvidence } from '../../format-evidence'
   import { t } from '../../i18n'
-  import type { SuspicionReason, Verdict } from '../../model'
+  import type { FakeEvidence, SuspicionReason, Verdict } from '../../model'
 
   type Props = {
     verdict: Verdict
     reasons?: SuspicionReason[]
+    evidence?: FakeEvidence[]
   }
 
-  let { verdict, reasons }: Props = $props()
+  let { verdict, reasons, evidence }: Props = $props()
 
   const iconName: Record<Verdict, IconName> = {
     real: 'verdict-real',
@@ -21,6 +23,7 @@
   let text = $derived(t(`verdict.${verdict}`))
 
   let tooltip = $derived.by(() => {
+    if (verdict === 'fake' && evidence?.length) return evidence.map(formatEvidence).join('\n')
     if (!reasons || reasons.length === 0) return undefined
     return reasons.map((r) => t(`reason.${r}`)).join('\n')
   })
