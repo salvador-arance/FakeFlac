@@ -2,6 +2,20 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-15 - RF-17 evidence representation needs G1 clarification
+
+**Done**
+- The shortfall margin correction merged in #143 (`bd6353f`). Rebased `feat/RF-17` on it and started the test stage. Baseline probes matched all 25 default rule-level cases and the specified fixture evidence kinds.
+- Captured the pre-feature v5/v8 corpus acceptance in repository scratch storage (run `20261115T133313Z`). The original corpus and calibration data were read only.
+
+**Blocker / question for the human**
+- The evidence spec §2.4 and contract v9 require finite `f32` fields. The existing validator accepts finite v8 `gap_suspicious_db` and `gap_fake_db` values of `-1e40`. The gap-only FLAC measurement still returns `Fake`, but a direct `f32` conversion produces `-inf` for the threshold and `inf` for the margin. A proposed G1 resolution is to saturate evidence fields to the finite `f32` range after the margin calculation in `f64`. The detector and params validation would retain their existing behavior.
+
+**Pending**
+- The test stage is paused with its drafts uncommitted. No implementation or spec changes were made in this stage.
+
+**Next step:** Resolve the evidence conversion rule at G1, then finish the drafted RF-17 tests.
+
 ## 2026-11-15 - RF-17 lossy shortfall margin needs G1 clarification
 
 **Done**
