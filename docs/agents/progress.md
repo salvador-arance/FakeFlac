@@ -7,10 +7,10 @@
 **Done**
 - G1 correction #141 merged as `3d52977`. On `feat/RP-11`, tests `75050d7` and implementation `22dd47a` cover the `confirmed.txt` kind `lossy-master` and its dedicated §10 report. Errors appear there and in `tracks.csv`; the shared §8 list, acceptance targets and grid results exclude the new class.
 - Code review found no issues. `just check`, `just ci`, `just trace` and `just privacy-check --base origin/main` passed. All 13 new integration tests passed. A before/after run on the unmodified v2 synthetic corpus produced byte-identical CSVs and Markdown identical after normalizing run metadata.
+- L8 passed on the real corpus with config v5 and detection v8. Release executables from `3d52977` and PR #142 used the same scratch cache and current lists. CSVs were byte-identical and Markdown differed only in run ID and date. Adding the unlabelled verified release left the existing CSV rows and evaluation reports unchanged (including T1) and reported 10 Fake, 3 Real and 2 Suspicious tracks. A second verified release overlapped `trusted.txt` (13 reference tracks). A controlled comparison removed its entries in the scratch baseline before adding both releases and found the same invariance, with 12 Fake, 15 Real and 4 Suspicious tracks across 2 albums. All 31 PCM CRCs matched the database-verified rip logs. The real lists and audio were untouched.
 
 **Pending**
 - Implementation PR #142 is open for the owner's G2 review and merge.
-- L8 on the real corpus is pending. `just accept` requires an output directory outside the repository, and the owner supplies the verified releases for `confirmed.txt`.
 
 **Next step:** Review PR #142 at G2.
 
