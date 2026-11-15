@@ -574,6 +574,19 @@ fn margin_of(analysis: &TrackAnalysis, kind: EvidenceKind) -> String {
         .map(|e| e.margin))
 }
 
+/// One of the five probe columns of `tracks.csv` (`sample_rate`, `bit_depth`, `channels`,
+/// `declared_bitrate_kbps`, `duration_ms`), decided per column from its numeric value.
+/// census.md section 5, "Empty means not measured": for an error track a 0 or a missing value is
+/// empty (an unprobed placeholder, or a 0 that is not a valid measurement); for any other verdict
+/// the value is written as is (a 0 stays `0`, a missing value is empty).
+fn probed_field(error: bool, value: Option<u64>) -> String {
+    match value {
+        Some(0) if error => String::new(),
+        Some(v) => v.to_string(),
+        None => String::new(),
+    }
+}
+
 /// `tracks.csv` (section 5): one row per track sorted by the bytes of its `path`, paths relative to
 /// `root`, UTF-8 without a byte-order mark, LF line ends.
 pub fn tracks_csv(
@@ -588,25 +601,17 @@ pub fn tracks_csv(
             let a = &t.analysis;
             let i = &a.info;
             let stratum = stratum_in(&table, t.album).map_or("", Stratum::name);
-            // An error track whose file could not be probed carries the placeholder 0 in these
-            // columns: it is written as a missing value (an empty field). Real values are kept.
-            let measured = |v: String| {
-                if a.verdict == Verdict::Error && v == "0" {
-                    String::new()
-                } else {
-                    v
-                }
-            };
+            let error = a.verdict == Verdict::Error;
             vec![
                 relative_path(&i.path, root),
                 t.album.to_string(),
                 stratum.to_string(),
                 i.codec.map_or("", codec_name).to_string(),
-                measured(i.sample_rate.to_string()),
-                measured(opt(i.bit_depth)),
-                measured(i.channels.to_string()),
-                measured(opt(i.declared_bitrate_kbps)),
-                measured(i.duration_ms.to_string()),
+                probed_field(error, Some(u64::from(i.sample_rate))),
+                probed_field(error, i.bit_depth.map(u64::from)),
+                probed_field(error, Some(u64::from(i.channels))),
+                probed_field(error, i.declared_bitrate_kbps.map(u64::from)),
+                probed_field(error, Some(i.duration_ms)),
                 i.size_bytes.to_string(),
                 verdict_name(a.verdict).to_string(),
                 a.reasons
