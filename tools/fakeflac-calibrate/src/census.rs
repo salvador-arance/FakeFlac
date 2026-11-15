@@ -583,9 +583,8 @@ fn margin_of(analysis: &TrackAnalysis, kind: EvidenceKind) -> String {
 /// the value is written as is (a 0 stays `0`, a missing value is empty).
 fn probed_field(error: bool, value: Option<u64>) -> String {
     match value {
-        Some(0) if error => String::new(),
-        Some(v) => v.to_string(),
-        None => String::new(),
+        Some(v) if !(error && v == 0) => v.to_string(),
+        _ => String::new(),
     }
 }
 
