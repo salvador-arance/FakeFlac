@@ -641,6 +641,7 @@ Feature: Calibration and acceptance against a labelled corpus
     And targets T1 and T2 are "PASS"
     And target T1 counts 0 on split "all"
     And the near-threshold list and the margin summary have no row of class "lossy_master"
+    And the "### Errors and misclassifications" list in report.md has no row of class "lossy_master"
 
   @RP-11 @RNF-04 @RNF-09
   Scenario: The lossy-master section of the report
