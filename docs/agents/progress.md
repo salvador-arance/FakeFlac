@@ -2,6 +2,17 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-15 - RF-17 full-library CSV comparison passed
+
+**Done**
+- M2 passed. The 2026-11-14 export was unavailable locally, so rebuilt the same release revision (`2f800f2`) and exported directly from both native apps with isolated cache and WebView2 profiles. Both exports have 11,396 rows and are byte-identical (4,427,958 bytes, SHA-256 `6cc29a063bd825d980e570481f1c28e9c6ff348df029b9f195134a286f7af1d2`). Both apps reported 9,003 real, 1,173 suspicious, 1,156 fake and 64 errors.
+- Before the runs, all 13,203 library paths, sizes and modification times matched the November 14 snapshot. The same inventory matched after the two exports. Private CSVs remain under `target/`; the PR draft records aggregates only.
+
+**Pending**
+- Authorization to open the RF-17 feature PR at G2.
+
+**Next step:** Open the RF-17 feature PR when the owner authorizes it.
+
 ## 2026-11-15 - RF-17 native walkthrough completed
 
 **Done**
