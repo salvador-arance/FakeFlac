@@ -15,11 +15,14 @@
 
 mod common;
 
+use common::cache::Behaviour;
 use common::cache::{file_name_of, DecoderSpy};
 use common::{
     count, mtime, open, put_file, read_only, run_store, set_mtime, stored_paths, tag, TempDir,
 };
+use fakeflac_core::domain::{EvidenceKind, FakeEvidence};
 use fakeflac_core::ports::FileEntry;
+use fakeflac_core::ports::FileScanner;
 use fakeflac_core::{
     AudioCodec, AudioFormat, BitrateMode, CacheStatus, CutoffEstimate, DetectionParams,
     ResultStore, SuspicionReason, TrackAnalysis, TrackError, TrackInfo, Verdict,
@@ -257,6 +260,7 @@ fn stubbed(e: &FileEntry, i: usize) -> TrackAnalysis {
         cutoff: None,
         estimated_source_bitrate_kbps: None,
         reasons: vec![],
+        evidence: vec![],
         error: None,
         algorithm_version: 7,
     };
@@ -268,6 +272,12 @@ fn stubbed(e: &FileEntry, i: usize) -> TrackAnalysis {
         1 => TrackAnalysis {
             verdict: Verdict::Fake,
             cutoff: cutoff(19_999.998, 1e-7, -90.0),
+            evidence: vec![FakeEvidence {
+                kind: EvidenceKind::GapStep,
+                value: 9.6,
+                threshold: 6.0,
+                margin: 3.6000004,
+            }],
             ..base
         },
         2 => TrackAnalysis {
@@ -322,6 +332,20 @@ fn stubbed(e: &FileEntry, i: usize) -> TrackAnalysis {
                 verdict: Verdict::Fake,
                 cutoff: cutoff(1e-7, 16_000.4, -101.94),
                 estimated_source_bitrate_kbps: Some(96),
+                evidence: vec![
+                    FakeEvidence {
+                        kind: EvidenceKind::Shortfall,
+                        value: 3450.0,
+                        threshold: 2500.0,
+                        margin: 950.0,
+                    },
+                    FakeEvidence {
+                        kind: EvidenceKind::CutoffStep,
+                        value: 10.0,
+                        threshold: 10.0,
+                        margin: 1e-7,
+                    },
+                ],
                 ..base
             }
         }
@@ -344,6 +368,117 @@ fn stubbed(e: &FileEntry, i: usize) -> TrackAnalysis {
                 ..base
             }
         }
+    }
+}
+
+// @RF-17 @RF-11 A stored row without the evidence key parses with an empty evidence.
+#[test]
+fn rf17_sqlite_reads_a_pre_evidence_row() {
+    let t = TempDir::new("rf17-legacy-real");
+    let album = t.path().join("Album A");
+    put_file(&album, "a.flac", 300, 1);
+    let entry = common::DirScanner.scan(&album).unwrap().remove(0);
+    let cache = t.cache_file();
+    let store = open(&cache);
+    let expected = stubbed(&entry, 0);
+    store.put(&entry, &p(), &expected).unwrap();
+    omit_evidence(&cache);
+    let actual = store.get(&entry, &p()).unwrap().expect("old row is a hit");
+    assert_eq!(actual, expected);
+    assert!(actual.evidence.is_empty());
+}
+
+fn omit_evidence(cache: &Path) {
+    let db = rusqlite::Connection::open(cache).unwrap();
+    let before: u32 = db.query_row(
+        "SELECT COUNT(*) FROM track_result WHERE json_type(analysis_json, '$.evidence') = 'array'",
+        [],
+        |row| row.get(0),
+    ).unwrap();
+    assert!(before > 0);
+    assert_eq!(
+        db.execute(
+            "UPDATE track_result SET analysis_json = json_remove(analysis_json, '$.evidence')",
+            [],
+        )
+        .unwrap(),
+        before as usize
+    );
+}
+
+// @RF-17 @RF-11 @RNF-09 A warm run over rows written before RF-17 analyses only the fake tracks again.
+// Exercise real SQLite with synthetic probes. App tests also exercise the same verdicts on FLAC.
+#[test]
+fn rf17_sqlite_warm_run_replaces_only_legacy_fake_row() {
+    let t = TempDir::new("rf17-warm");
+    let album = t.path().join("Álbum ″Ñandú″");
+    let fake = "01 – Canción ‘x’.flac";
+    let real = "02 – Ñandú.flac";
+    put_file(&album, fake, 300, 1);
+    put_file(&album, real, 300, 2);
+    let cache = t.cache_file();
+    let spy = DecoderSpy::new();
+    spy.on(fake, Behaviour::Cliff16k);
+    let cold = run_store(&cache, tag(), &p(), &spy, &album);
+    assert_eq!(spy.count(), 2);
+    assert_eq!(cold.done()[0].1.verdict, Verdict::Fake);
+    assert!(!cold.done()[0].1.evidence.is_empty());
+    assert_eq!(cold.done()[1].1.verdict, Verdict::Real);
+
+    omit_evidence(&cache);
+    let spy = DecoderSpy::new();
+    spy.on(fake, Behaviour::Cliff16k);
+    let warm = run_store(&cache, tag(), &p(), &spy, &album);
+    assert_eq!(spy.names(), [fake]);
+    assert_eq!(warm.summary.from_cache, 1);
+    assert_eq!(warm.summary.cache, CacheStatus::Ok);
+    assert_eq!(warm.done(), cold.done());
+    let rows: u32 = read_only(&cache)
+        .query_row(
+            "SELECT COUNT(*) FROM track_result
+         WHERE json_extract(analysis_json, '$.verdict') = 'fake'
+           AND json_type(analysis_json, '$.evidence') = 'array'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(rows, 1);
+}
+
+// @RF-17 @RF-11 Evidence round-trips exactly through the cache.
+#[test]
+fn rf17_sqlite_evidence_round_trips_bit_for_bit() {
+    let t = TempDir::new("rf17-bits");
+    let album = t.path().join("Album A");
+    for (index, ext) in [(1, "flac"), (6, "mp3")] {
+        let path = put_file(&album, &format!("{index}.{ext}"), 400, 2);
+        let entry = common::DirScanner
+            .scan(&album)
+            .unwrap()
+            .into_iter()
+            .find(|entry| entry.path == path)
+            .expect("fixture entry");
+        let expected = stubbed(&entry, index);
+        assert!(!expected.evidence.is_empty());
+        let store = open(&t.cache_file());
+        store.put(&entry, &p(), &expected).unwrap();
+        drop(store);
+        let actual = open(&t.cache_file())
+            .get(&entry, &p())
+            .unwrap()
+            .expect("cache hit");
+        assert_eq!(actual, expected);
+        let bits = |item: &FakeEvidence| {
+            [
+                item.value.to_bits(),
+                item.threshold.to_bits(),
+                item.margin.to_bits(),
+            ]
+        };
+        assert_eq!(
+            actual.evidence.iter().map(bits).collect::<Vec<_>>(),
+            expected.evidence.iter().map(bits).collect::<Vec<_>>(),
+        );
     }
 }
 

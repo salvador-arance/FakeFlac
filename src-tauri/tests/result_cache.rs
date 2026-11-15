@@ -88,8 +88,14 @@ fn noise(seed: u64, seconds: u32) -> Vec<f64> {
 
 /// `noise` through a windowed-sinc low-pass (Blackman-Harris, 511 taps) at `cutoff_hz`:
 /// nothing above the transition band but the 16-bit rounding floor.
+const LOWPASS_TAPS: usize = 511;
+
 fn lowpassed(seed: u64, seconds: u32, cutoff_hz: f64) -> Vec<f64> {
-    const TAPS: usize = 511;
+    lowpass(&noise(seed, seconds), cutoff_hz)
+}
+
+fn lowpass(x: &[f64], cutoff_hz: f64) -> Vec<f64> {
+    const TAPS: usize = LOWPASS_TAPS;
     let fc = cutoff_hz / f64::from(RATE);
     let mid = (TAPS / 2) as f64;
     let mut h: Vec<f64> = (0..TAPS)
@@ -108,9 +114,8 @@ fn lowpassed(seed: u64, seconds: u32, cutoff_hz: f64) -> Vec<f64> {
         .collect();
     let gain: f64 = h.iter().sum();
     h.iter_mut().for_each(|v| *v /= gain);
-    let x = noise(seed, seconds);
     let mut padded = vec![0.0; TAPS - 1];
-    padded.extend_from_slice(&x);
+    padded.extend_from_slice(x);
     padded
         .windows(TAPS)
         .map(|w| w.iter().zip(&h).map(|(a, b)| a * b).sum::<f64>())
@@ -168,6 +173,48 @@ fn put_garbage(dir: &Path, file: &str, seed: u64) -> PathBuf {
     let p = dir.join(file);
     std::fs::write(&p, bytes).unwrap();
     p
+}
+
+// Synthetic sfb21 fixture split with the test's FIR filter. Complementary samples keep the
+// full-band signal during the last half-second of each two-second gate.
+fn put_gap_only_flac(dir: &Path, file: &str) -> PathBuf {
+    let full = noise(9, 8);
+    let low = lowpass(&full, 16_000.0);
+    let delayed = std::iter::repeat_n(0.0, LOWPASS_TAPS / 2).chain(full);
+    let gated: Vec<_> = delayed
+        .zip(low)
+        .enumerate()
+        .map(|(i, (full, low))| {
+            let t = i as f64 / f64::from(RATE) % 2.0;
+            let gain = if t >= 1.5 { 1.0 } else { 0.1 };
+            low + gain * (full - low)
+        })
+        .collect();
+    put_flac(dir, file, &gated)
+}
+
+fn put_flac(dir: &Path, file: &str, samples: &[f64]) -> PathBuf {
+    use flacenc::component::BitRepr;
+    use flacenc::error::Verify;
+
+    let samples: Vec<_> = samples
+        .iter()
+        .map(|s| (s * 10_000.0).round() as i32)
+        .collect();
+    std::fs::create_dir_all(dir).expect("create album");
+    let path = dir.join(file);
+    let config = flacenc::config::Encoder::default()
+        .into_verified()
+        .expect("flacenc config");
+    // Use only full fixed blocks so min/max block size agree in STREAMINFO.
+    let end = samples.len() / config.block_size * config.block_size;
+    let source = flacenc::source::MemSource::from_samples(&samples[..end], 1, 16, RATE as usize);
+    let stream = flacenc::encode_with_fixed_block_size(&config, source, config.block_size)
+        .expect("flacenc encode");
+    let mut sink = flacenc::bitsink::ByteSink::new();
+    stream.write(&mut sink).expect("flacenc write");
+    std::fs::write(&path, sink.as_slice()).expect("write synthetic FLAC");
+    path
 }
 
 /// Sets the modification time of a generated test file.
@@ -335,6 +382,77 @@ fn rf11_a_warm_run_gives_the_cold_runs_events_and_csv() {
     assert_eq!(warm.summary.cache, CacheStatus::Ok);
     let csv2 = csv_of(&slot, &state2, &t.path().join("warm.csv"));
     assert_eq!(csv2, csv1, "the CSV documents are byte-identical");
+}
+
+// @RF-17 @RNF-09 @RNF-05 @RNF-04 @RF-10 A gap-only fake in a real run with Unicode names,
+// an error track and its album.
+#[test]
+fn rf17_gap_only_fake_in_a_real_unicode_run() {
+    let dir = TempDir::new("rf17-real-run");
+    let root = dir.path().join("Álbum ″Ñandú″");
+    let names = [
+        "01 – Canción ‘x’.flac",
+        "02 – Ópera «Ça va» 🎵.flac",
+        "03 – Ñandú.flac",
+        "04 – Roto.flac",
+    ];
+    let files = [
+        put_gap_only_flac(&root, names[0]),
+        put_flac(&root, names[1], full_band_samples()),
+        put_flac(&root, names[2], full_band_samples()),
+        put_garbage(&root, names[3], 99),
+    ];
+    let before = files.each_ref().map(|file| snapshot(file));
+    let run = cached_run(&dir.cache_file(), &root);
+    assert_eq!(run.summary.done, 4);
+    for (index, analysis) in run.done() {
+        let path = &files[index as usize];
+        assert_eq!(analysis.info.path, path.to_str().unwrap());
+        assert_eq!(analysis.algorithm_version, 8);
+    }
+    let fake = run.of(names[0]);
+    assert_eq!(fake.verdict, Verdict::Fake, "{fake:?}");
+    assert!(fake.reasons.is_empty());
+    assert_eq!(fake.cutoff.as_ref().unwrap().frequency_hz, 22050.0);
+    let real = [run.of(names[1]), run.of(names[2])];
+    for track in &real {
+        assert_eq!(track.verdict, Verdict::Real);
+    }
+    let error = run.of(names[3]);
+    assert_eq!(error.verdict, Verdict::Error);
+    assert_eq!(error_kind(&error), Some("corruptStream"));
+    let album = run
+        .events
+        .iter()
+        .rev()
+        .find_map(|event| match event {
+            ProgressEvent::TrackDone { album, .. } => Some(album),
+            _ => None,
+        })
+        .expect("final album update");
+    assert_eq!(album.name, "Álbum ″Ñandú″");
+    assert_eq!(album.files, 4);
+    let summary = &album.summary;
+    assert_eq!(
+        (
+            summary.real,
+            summary.suspicious,
+            summary.fake,
+            summary.errors
+        ),
+        (2, 0, 1, 1)
+    );
+    assert_eq!(summary.verdict, Verdict::Fake);
+    assert_eq!(files.each_ref().map(|file| snapshot(file)), before);
+
+    let fake_json = serde_json::to_value(fake).expect("serialize fake track");
+    let items = fake_json["evidence"].as_array().expect("evidence array");
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0]["kind"], "gapStep");
+    for track in real.into_iter().chain([error]) {
+        let track_json = serde_json::to_value(track).expect("serialize track");
+        assert_eq!(track_json["evidence"], serde_json::json!([]));
+    }
 }
 
 // @RF-11 Scenario: The cache, not the decoder, gives a warm run's verdict

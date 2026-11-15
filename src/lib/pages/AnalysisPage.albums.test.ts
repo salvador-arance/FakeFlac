@@ -327,6 +327,86 @@ describe('Albums panel: after the analysis', () => {
   })
 })
 
+describe('@RF-17 album context for a fake track', () => {
+  const evidenceText =
+    'Sharp cutoff where lossy encoders cut: step 13.2 dB, 3.2 dB over the Fake threshold (10.0 dB)'
+  const only = (n: number) =>
+    `The only Fake of the ${n} analysed tracks in this album. Transcodes usually affect whole albums: check its spectrogram.`
+
+  function fakeTrack(run: Run, album: AlbumSpec, index: number, real: number) {
+    run.emit({
+      kind: 'trackDone',
+      index,
+      analysis: makeTrack({
+        path: `${folderOf(album)}/01.flac`,
+        verdict: 'fake',
+        cutoffHz: 16_000,
+        evidence: [{ kind: 'cutoffStep', value: 13.2, threshold: 10, margin: 3.2 }],
+      }),
+      album: makeAlbum({
+        index: album.index,
+        name: album.name,
+        folder: folderOf(album),
+        files: album.files,
+        real,
+        fake: 1,
+      }),
+    })
+  }
+
+  // @RF-17 @RF-07 @RF-10 The album note follows the album's latest update during a run.
+  it('updates the detail for the same selected track after a later album update', async () => {
+    const run = fakeRun()
+    const album = { index: 1, name: 'Album A', files: 2 }
+    await mountPage()
+    await openFolder()
+    run.scanned(3)
+    feed(run, { index: 0, name: 'Album B', files: 1 }, 0, ['real'])
+    fakeTrack(run, album, 1, 0)
+    const fakeFile = await screen.findByText('01.flac')
+    await userEvent.click(fakeFile)
+    await screen.findByText(evidenceText)
+    expect(screen.queryByText(only(2))).toBeNull()
+    const selected = selectedRows().map(fileOf)
+    expect(selected).toEqual(['01.flac'])
+    feed(run, album, 2, ['real'], ['fake'])
+    expect(await screen.findByText(only(2))).not.toBeNull()
+    expect(selectedRows().map(fileOf)).toEqual(selected)
+    run.finish(makeSummary({ total: 3, done: 3, real: 2, fake: 1 }))
+  })
+
+  // @RF-17 @RF-07 Empty state: with no row selected there is no evidence and no note.
+  // @RF-17 @RF-07 @RF-08 Filters and sort do not change the album note.
+  // @RF-17 @RF-10 The Albums panel does not change.
+  it('uses complete album counts after filtering and sorting, and keeps evidence out of the album item', async () => {
+    const run = fakeRun()
+    const album = { index: 0, name: 'Artist\\Album 1', files: 14 }
+    await mountPage()
+    await openFolder()
+    run.scanned(14)
+    const next = feed(run, album, 0, Array<Verdict>(13).fill('real'))
+    fakeTrack(run, album, next, 13)
+    run.finish(makeSummary({ total: 14, done: 14, real: 13, fake: 1 }))
+    await vi.waitFor(() => expect(dataRows()).toHaveLength(14))
+    expect(selectedRows()).toHaveLength(0)
+    expect(screen.queryByText(evidenceText)).toBeNull()
+    expect(screen.queryByText(only(14))).toBeNull()
+
+    const option = item(album.name)
+    expect(within(option).getByText('Fake')).not.toBeNull()
+    expect(within(option).getByText('14 tracks · 13 real · 1 fake')).not.toBeNull()
+    expect(option.querySelector('.verdict-cell')?.getAttribute('title')).toBeNull()
+
+    await userEvent.click(within(screen.getByRole('group', { name: 'Filter by verdict' }))
+      .getByRole('button', { name: 'Show fake tracks' }))
+    await userEvent.click(screen.getByRole('button', { name: /Cutoff/ }))
+    await vi.waitFor(() => expect(dataRows().map(fileOf)).toEqual(['01.flac']))
+    await userEvent.click(screen.getByText('01.flac'))
+    expect(await screen.findByText(only(14))).not.toBeNull()
+    expect(screen.getByText(evidenceText)).not.toBeNull()
+  })
+})
+
 describe('Albums panel: while the analysis runs', () => {
   // @RF-10 Scenario: Albums appear in path order, whatever order they arrive in
   it('lists an album that arrives later above the albums already shown', async () => {

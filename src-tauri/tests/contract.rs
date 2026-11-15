@@ -35,6 +35,16 @@ fn track(verdict: core::Verdict, error: Option<core::TrackError>) -> core::Track
         cutoff: None,
         estimated_source_bitrate_kbps: None,
         reasons: vec![],
+        evidence: if verdict == core::Verdict::Fake {
+            vec![core::domain::FakeEvidence {
+                kind: core::domain::EvidenceKind::GapStep,
+                value: 9.5,
+                threshold: 6.0,
+                margin: 3.5,
+            }]
+        } else {
+            vec![]
+        },
         error,
         algorithm_version: 1,
     }
@@ -124,6 +134,7 @@ fn track_analysis_json_matches_the_contract() {
         "cutoff": { "frequencyHz": 16000.0, "steepnessDbPerKhz": 40.5, "noiseFloorDb": -90.0 },
         "estimatedSourceBitrateKbps": null,
         "reasons": ["gradualRolloff"],
+        "evidence": [{"kind":"gapStep","value":9.5,"threshold":6.0,"margin":3.5}],
         "error": null,
         "algorithmVersion": 1
     });
@@ -383,4 +394,69 @@ fn track_done_json_carries_the_album_update() {
     assert_eq!(keys, ["album", "analysis", "index", "kind"]);
     assert_eq!(v["album"], album_json());
     assert_eq!(v["album"]["summary"]["folder"], json!(r"C:\Music\Album A"));
+}
+
+// @RF-17 Scenario: The contract of version 9.
+#[test]
+fn rf17_v9_dto_and_bindings_carry_evidence() {
+    let mut fake = track(core::Verdict::Fake, None);
+    fake.algorithm_version = 8;
+    fake.evidence.push(core::domain::FakeEvidence {
+        kind: core::domain::EvidenceKind::CutoffStep,
+        value: 13.25,
+        threshold: 10.0,
+        margin: 3.25,
+    });
+    let mut real = track(core::Verdict::Real, None);
+    real.algorithm_version = 8;
+    let fake = track_json(&fake);
+    let real = track_json(&real);
+    assert_eq!(
+        fake["evidence"],
+        json!([
+            {"kind": "gapStep", "value": 9.5, "threshold": 6.0, "margin": 3.5},
+            {"kind": "cutoffStep", "value": 13.25, "threshold": 10.0, "margin": 3.25}
+        ])
+    );
+    assert_eq!(real["evidence"], json!([]));
+    for row in [fake, real] {
+        assert_eq!(row["reasons"], json!([]));
+        assert_eq!(row.get("cutoff"), Some(&Value::Null));
+        assert_eq!(row.get("estimatedSourceBitrateKbps"), Some(&Value::Null));
+        assert_eq!(row.get("error"), Some(&Value::Null));
+        assert_eq!(row["algorithmVersion"], 8);
+    }
+
+    let bindings = include_str!("../../src/lib/api/bindings.ts");
+    let decl = |name: &str| {
+        let (_, tail) = bindings
+            .split_once(&format!("export type {name} = "))
+            .unwrap_or_else(|| panic!("missing {name}"));
+        tail.split_once(';').expect("generated declaration").0
+    };
+    assert_eq!(
+        decl("EvidenceKind"),
+        "\"gapStep\" | \"cutoffStep\" | \"shortfall\""
+    );
+    for field in [
+        "kind: EvidenceKind",
+        "value: number",
+        "threshold: number",
+        "margin: number",
+    ] {
+        assert!(
+            decl("FakeEvidence")
+                .lines()
+                .any(|line| line.trim().trim_end_matches(',') == field),
+            "missing evidence field {field}"
+        );
+    }
+    assert!(decl("TrackAnalysis").contains("evidence: FakeEvidence[]"));
+    assert_eq!(
+        decl("SuspicionReason"),
+        concat!(
+            "\"lowHighFrequencyContent\" | \"gradualRolloff\" | \"ambiguousCutoff\" | ",
+            "\"highBandGaps\" | \"cutoffBelowDeclared\" | \"streamingSampleRate\""
+        )
+    );
 }

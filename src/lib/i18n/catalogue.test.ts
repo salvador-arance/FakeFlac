@@ -16,6 +16,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import translations from '../../../specs/ui/translations.md?raw'
 import resizeSpec from '../../../specs/ui/resizable-widths.md?raw'
+import evidenceSpec from '../../../specs/ui/fake-evidence.md?raw'
 import { getLocale, setLocale, t } from './index'
 
 afterEach(() => setLocale('en'))
@@ -23,7 +24,12 @@ afterEach(() => setLocale('en'))
 type Row = { key: string; en: string; es: string }
 
 // @RF-06 @RF-10 approved supplement: resizable-widths.md section 4.
-const catalogue = translations + '\n' + resizeSpec.split('## 4. Exact new translations')[1].split('## 5. Acceptance')[0]
+// @RF-17 approved supplement: fake-evidence.md section 6.
+const catalogue = [
+  translations,
+  resizeSpec.split('## 4. Exact new translations')[1].split('## 5. Acceptance')[0],
+  evidenceSpec.split('## 6. Exact new translations')[1].split('## 7. Acceptance')[0],
+].join('\n')
 const ROWS: Row[] = catalogue
   .split(/\r?\n/)
   .map((line) => line.match(/^\|\s*`([^`]+)`\s*\|(.*)\|(.*)\|\s*$/))
@@ -53,6 +59,13 @@ describe('the normative tables of translations.md', () => {
       'layout.resizeColumn',
       'layout.resizeHelp',
       'layout.widthPixels',
+      'evidence.gapStep',
+      'evidence.cutoffStep',
+      'evidence.shortfall',
+      'evidence.gapOnly',
+      'evidence.albumOnly',
+      'evidence.albumSome',
+      'evidence.audioNote',
     ]) {
       expect(keys).toContain(key)
     }

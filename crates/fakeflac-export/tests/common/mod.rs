@@ -137,6 +137,7 @@ pub fn track(path: &str) -> TrackAnalysis {
         cutoff: None,
         estimated_source_bitrate_kbps: None,
         reasons: vec![],
+        evidence: vec![],
         error: None,
         algorithm_version: 6,
     }

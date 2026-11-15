@@ -41,6 +41,29 @@ export const WithRows: Story = {
   },
 }
 
+// @RF-17 State cell with an evidence tooltip alongside a suspicious reason.
+export const EvidenceTooltip: Story = {
+  args: {
+    rows: [
+      makeRow(0, {
+        path: 'C:/Music/Mixed/a.flac',
+        verdict: 'fake',
+        evidence: [
+          { kind: 'gapStep', value: 12, threshold: 6, margin: 6 },
+          { kind: 'cutoffStep', value: 24.7, threshold: 10, margin: 14.7 },
+        ],
+      }),
+      makeRow(1, {
+        path: 'C:/Music/Mixed/b.flac',
+        verdict: 'suspicious',
+        reasons: ['ambiguousCutoff'],
+      }),
+    ],
+    selectedIndex: null,
+    sort: { column: 'file', direction: 'asc' },
+  },
+}
+
 export const LossyRows: Story = {
   args: {
     rows: [

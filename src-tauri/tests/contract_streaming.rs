@@ -39,6 +39,7 @@ fn flagged() -> core::TrackAnalysis {
         }),
         estimated_source_bitrate_kbps: None,
         reasons: vec![core::SuspicionReason::StreamingSampleRate],
+        evidence: vec![],
         error: None,
         algorithm_version: 7,
     }
