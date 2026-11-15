@@ -129,6 +129,40 @@ Feature: Explain a Fake verdict (evidence and album context)
     And the shortfall margin is strictly positive and bit-for-bit f32(2450.0_f64 - 2449.9999999995_f64)
     And the cutoffStep evidence is "cutoffStep 40.00/10.00/30.00"
 
+  @RF-17 @RF-04
+  Scenario Outline: Evidence fields saturate independently after the margin calculation
+    M denotes the exact f64 representation of f32::MAX. Signed infinities
+    are the IEEE 754 values. Expected evidence fields are compared bit for bit.
+    Given a lossless track with codec "flac" and sample rate 44100 Hz
+    And the measurements H = -20 dB, G = <G> dB, D = 5 dB, fs = 16050 Hz, fe = 22050 Hz, U = -90 dB, B = 0.2 dB, D_Q = 0 dB and R = 0 dB
+    And the parameters of specs/detection/detection-params.v8.toml with verdict.gap_suspicious_db and verdict.gap_fake_db both set to <threshold>
+    And those parameters pass the existing validation
+    When the verdict rules and the evidence of those parameters are applied
+    Then the verdict is "fake" with no reasons and a reported cutoff of 22050 Hz
+    And the evidence is one gapStep item with value <value>, threshold <represented threshold> and margin <margin>
+    And all three evidence fields are finite f32 numbers and the margin is nonnegative
+
+    Examples:
+      | case                             | G        | threshold | value     | represented threshold | margin   |
+      | finite threshold outside f32     | 9.6      | -1e40     | f32(9.6)  | -f32::MAX             | f32::MAX |
+      | positive values outside f32      | 2 * M    | M         | f32::MAX  | f32::MAX              | f32::MAX |
+      | negative values outside f32      | -2 * M   | -3 * M    | -f32::MAX | -f32::MAX             | f32::MAX |
+      | exact upper bound                | M        | M         | f32::MAX  | f32::MAX              | +0.0     |
+      | exact lower bound                | -M       | -M        | -f32::MAX | -f32::MAX             | +0.0     |
+      | finite operands overflow f64     | f64::MAX | -f64::MAX | f32::MAX  | -f32::MAX             | f32::MAX |
+      | accepted infinite threshold      | 9.6      | -infinity | f32(9.6)  | -f32::MAX             | f32::MAX |
+      | equal positive infinities        | infinity | infinity  | f32::MAX  | f32::MAX              | +0.0     |
+      | equal negative infinities        | -infinity| -infinity | -f32::MAX | -f32::MAX             | +0.0     |
+
+  @RF-17 @RF-04
+  Scenario: Evidence saturation follows the original verdict comparison
+    Given a lossless track with codec "flac" and sample rate 44100 Hz
+    And the measurements H = -20 dB, G = f64(f32::MAX) dB, D = 5 dB, fs = 16050 Hz, fe = 22050 Hz, U = -90 dB, B = 0.2 dB, D_Q = 0 dB and R = 0 dB
+    And the parameters of specs/detection/detection-params.v8.toml with verdict.gap_suspicious_db and verdict.gap_fake_db both set to 2 * f64(f32::MAX)
+    When the verdict rules and the evidence of those parameters are applied
+    Then the verdict is "real" with no reasons and an empty evidence
+    And the reported cutoff is 22050 Hz
+
   # --- Fixtures ----------------------------------------------------------------
 
   @RF-04

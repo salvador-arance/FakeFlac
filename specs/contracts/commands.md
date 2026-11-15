@@ -86,9 +86,9 @@ type CutoffEstimate = { frequencyHz: number; steepnessDbPerKhz: number; noiseFlo
 type EvidenceKind = 'gapStep' | 'cutoffStep' | 'shortfall' // version 9 (RF-17)
 type FakeEvidence = {                                      // version 9 (RF-17); specs/detection/fake-evidence.md section 2
   kind: EvidenceKind
-  value: number       // gapStep: G (dB); cutoffStep: D (dB); shortfall: s = c_exp − fc (Hz)
-  threshold: number   // the DetectionParams value the rule compared it with
-  margin: number      // f64 difference cast to f32; shortfall uses max(0, difference), section 2.4
+  value: number       // G or D (dB), or s = c_exp − fc (Hz), saturated to finite f32
+  threshold: number   // configured DetectionParams value, saturated to finite f32
+  margin: number      // f64 margin, saturated to finite f32; calculation in fake-evidence.md 2.4
 }
 
 type TrackError =
@@ -335,7 +335,7 @@ Version 9 (RF-17, proposed for G1; rule: `specs/detection/fake-evidence.md`; UI:
 - **New field** `TrackAnalysis.evidence: FakeEvidence[]`: what made a `fake` verdict, and how strong it is. It is **not empty exactly when `verdict` is `'fake'`**, and empty for `real`, `suspicious` and `error` tracks.
   - A lossless `fake` (codec `pcm`, `flac` or `alac`) lists `gapStep` when rule V3's condition holds and `cutoffStep` when rule V4's does, in that order, one or both (`specs/detection/rules.md` section 3).
   - A lossy `fake` (codec `mp3`, `aac` or `opus`) lists `shortfall` then `cutoffStep` (rule L3, `specs/detection/lossy-source.md` section 4).
-- **New types** `EvidenceKind` (`'gapStep' | 'cutoffStep' | 'shortfall'`) and `FakeEvidence` (`kind`, `value`, `threshold`, `margin`). `value` is the measurement the rule compared (`G` or `D` in dB, the shortfall `s` in Hz). `threshold` is the configured `DetectionParams` value. From these original `f64` values, `margin` is `value − threshold` for `gapStep` and `cutoffStep`, and `max(0, value − threshold)` for `shortfall`. A shortfall accepted below the configured threshold by L3's existing `1e-9 Hz` tolerance carries positive zero as its margin. Each field is independently converted to `f32` after this calculation, so a positive margin can survive when the converted value and threshold are equal (`specs/detection/fake-evidence.md` section 2.4). All three fields are finite, and the margin is nonnegative.
+- **New types** `EvidenceKind` (`'gapStep' | 'cutoffStep' | 'shortfall'`) and `FakeEvidence` (`kind`, `value`, `threshold`, `margin`). The source `value` is the measurement the rule compared (`G` or `D` in dB, the shortfall `s` in Hz), and the source `threshold` is the configured `DetectionParams` value. Equal source operands give positive zero as the margin, including equal signed infinities. Otherwise the margin is calculated in `f64` as `value − threshold` for `gapStep` and `cutoffStep`, and `max(0, value − threshold)` for `shortfall`. A shortfall accepted below the configured threshold by L3's existing `1e-9 Hz` tolerance therefore carries a positive-zero margin. Each field is then independently bounded to `[-f64(f32::MAX), f64(f32::MAX)]` and converted to `f32`. Signed infinities, including subtraction overflow, saturate to the corresponding finite bound. A positive margin can survive when the represented value and threshold are equal (`specs/detection/fake-evidence.md` section 2.4). All three represented fields are finite, and the margin is nonnegative.
 - **`reasons` does not change.** A `fake` still carries no reason; `SuspicionReason` has no new member; `streamingSampleRate` still never appears on a `fake`.
 - **Nothing else changes.** For the same file the verdict, reasons, error, cutoff, `estimatedSourceBitrateKbps` and `algorithmVersion` (8 with the defaults) are those of version 8. `DetectionParams` gets no new section, so the result cache's engine does not change.
 - **CSV export:** `evidence` is not exported; the file and `csv_format_version` 1 do not change (fake-evidence.md Q8).
