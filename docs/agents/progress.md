@@ -2,6 +2,43 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-15 - RP-12 library census implemented (branch `feat/RP-12`, no PR yet)
+
+**Done**
+- #148 to #151 are merged on `origin/main` (`3689cd4`); `feat/RP-12` is based on it and nothing is pushed.
+- Test stage `7cd7618`: 35 tests in `tools/fakeflac-calibrate/tests/census.rs` (C1-C10 and every scenario of `census.feature` except MC1/MC2), plus the `shelf19k5` fixture in `tests/common/mod.rs`.
+- Implement stage `8091ad7`: new `tools/fakeflac-calibrate/src/census.rs` (report and CSV builders, the run through `analyze_folder`), the `census` command in `run.rs` (accept's params helpers made `pub(crate)`, behaviour unchanged) and the opt-in `census *args` recipe in `justfile`. No new dependency, no ADR, no change to core, adapters, app or specs.
+- Review round 1: no blocking findings. `just check`, `just trace`, `just guard-tests` and `just ci` exit 0 (checked by exit code of `just` itself, not of a pipe). On the synthetic sample the figures match section 8 of `census.md`.
+
+**Pending**
+- Open the PR `feat/RP-12` (ask the owner first; template: RP-12, `census.md`, checks run). Never merge: G2 is the owner's.
+- MC1 and MC2 (owner, release build, aggregates only in the PR): `just census` on the library of 2026-11-14, with `summary.md` and the elapsed time recorded in the PR; the totals must be 11 396 tracks (9 003 real, 1 173 suspicious, 1 156 fake, 64 errors).
+- Owner's agent-configuration edit, then `just agents-sync`: the `census` line in the `CLAUDE.md` command list.
+- Review improvements left for the owner to accept or spec (none blocks): (1) `census FOLDER --help` prints the shared USAGE, which does not list `census`, and exits 0; (2) an error track whose file could not be probed writes `0` in `sample_rate`, `channels` and `duration_ms` of `tracks.csv`, where census.md section 5 and C2 say empty measurement fields (the test checks only six columns); (3) if FOLDER is an ancestor of the repository the report would land inside FOLDER (D1), and the spec has no guard; (4) `summary_md` is one function of about 260 lines.
+- Spec bookkeeping for a `spec/` PR: `specs/requirements/RP-12.md` still says `status: draft` and "pending G1", and `census.md` says `proposed`.
+
+**Blockers / questions for the human**
+- Is `0` in the three CSV columns of an unprobed error track acceptable, or should the implementation emit empty fields (improvement 2)?
+- The summary has blank lines between blocks and one at the end, so that the `elapsed:` line is not read as a table row; the tests ignore blank lines and census.md is silent. Confirm or specify.
+
+**Next step:** Decide on improvements 1 and 2, then open the PR for `feat/RP-12`.
+
+## 2026-11-15 - Revised spectrogram reading and agent configuration
+
+**Done**
+- Recorded the revised RNF-02 M1 spectrogram reading in PR #151 (`5aa0b35`). In a fresh release session on `faa9fcf`, 11 332 of 11 396 tracks came from the cache and 64 returned errors. The peak increases were zero, and the upper bounds were 49 270 784 private bytes and 44 670 976 working-set bytes. Result: inconclusive. File counts, sizes and modification times matched before and after.
+- Opened agent configuration PR #150 (`9f39e0d`) with the memory recipe and review rule, the paired performance comparison, and regenerated Codex files. The census recipe is pending RP-12 implementation.
+- `just check` and `just trace` passed on both PR branches. `just agents-check` passed on #150, and the committed diff on #151 passed `just privacy-check --base origin/main`.
+
+**Pending**
+- Owner review of #150 and G1 review of #151.
+- RP-12 implementation after the census spec merged in #148.
+
+**Blockers / questions for the human**
+- The full-library M1 run had 64 cache misses after the preparatory pass. The reading documents that limitation.
+
+**Next step:** Review #151 at G1.
+
 ## 2026-11-15 - Census and manual-check specs opened for G1
 
 **Done**
