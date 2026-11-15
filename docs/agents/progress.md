@@ -2,6 +2,18 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-15 - RP-11 lossy-master reporting implemented and checked
+
+**Done**
+- G1 correction #141 merged as `3d52977`. On `feat/RP-11`, tests `75050d7` and implementation `22dd47a` cover the `confirmed.txt` kind `lossy-master` and its dedicated §10 report. Errors appear there and in `tracks.csv`; the shared §8 list, acceptance targets and grid results exclude the new class.
+- Code review found no issues. `just check`, `just ci`, `just trace` and `just privacy-check --base origin/main` passed. All 13 new integration tests passed. A before/after run on the unmodified v2 synthetic corpus produced byte-identical CSVs and Markdown identical after normalizing run metadata.
+
+**Pending**
+- Ask before opening the implementation PR, as required by `/feature`. The human merges at G2.
+- L8 on the real corpus is pending. `just accept` requires an output directory outside the repository, and the owner supplies the verified releases for `confirmed.txt`.
+
+**Next step:** With the owner's go-ahead, publish `feat/RP-11` and open the implementation PR citing #140 and #141.
+
 ## 2026-11-15 - RP-11 tests committed; error reporting needs G1 clarification
 
 **Done**
