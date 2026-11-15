@@ -50,11 +50,20 @@ pub struct PrivacyArgs {
     pub base: String,
 }
 
+/// `census FOLDER [--params FILE]` (RP-12, `specs/calibration/census.md` section 2). Both paths are
+/// used as given; without `params` the census uses `DetectionParams::default()`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CensusArgs {
+    pub folder: PathBuf,
+    pub params: Option<PathBuf>,
+}
+
 #[derive(Debug, Clone)]
 pub enum Command {
     Accept(AcceptArgs),
     Calibrate(CalibrateArgs),
     PrivacyCheck(PrivacyArgs),
+    Census(CensusArgs),
 }
 
 /// Everything a run produces besides the files it writes.
@@ -103,6 +112,8 @@ pub fn run(command: &Command, env: &Env, transcoder: &dyn Transcoder) -> Outcome
             transcoder,
         ),
         Command::PrivacyCheck(args) => crate::privacy::check(args, env),
+        // Reads only `env.repo_root` and never calls the transcoder (census.md D2).
+        Command::Census(args) => crate::census::census(args, env),
     };
     match result {
         Ok(outcome) => outcome,
@@ -131,6 +142,10 @@ pub fn parse_args(args: &[String]) -> Result<Command, ToolError> {
     let Some((command, flags)) = args.split_first() else {
         return Err(usage_error("missing command".to_string()));
     };
+    // The census has its own command line and single usage line (census.md section 2).
+    if command == "census" {
+        return crate::census::parse(flags).map(Command::Census);
+    }
     // `--flag value` and `--flag=value`, in order.
     let mut parsed: Vec<(String, Option<String>)> = Vec::new();
     let mut i = 0;
@@ -230,11 +245,11 @@ struct Job<'a> {
     no_generate: bool,
 }
 
-struct Loaded {
-    name: String,
-    text: String,
-    params: DetectionParams,
-    hash: String,
+pub(crate) struct Loaded {
+    pub(crate) name: String,
+    pub(crate) text: String,
+    pub(crate) params: DetectionParams,
+    pub(crate) hash: String,
 }
 
 fn file_name(path: &Path) -> String {
@@ -320,7 +335,7 @@ fn load_params_text(name: &str, text: &str) -> Result<DetectionParams, ToolError
     }
 }
 
-fn load_params(paths: &[PathBuf]) -> Result<Vec<Loaded>, ToolError> {
+pub(crate) fn load_params(paths: &[PathBuf]) -> Result<Vec<Loaded>, ToolError> {
     let mut loaded: Vec<Loaded> = Vec::new();
     let mut errors: Vec<String> = Vec::new();
     for path in paths {
@@ -611,14 +626,14 @@ fn utc_parts(secs: i64) -> (i64, u32, u32, u32, u32, u32) {
     )
 }
 
-fn now_secs() -> i64 {
+pub(crate) fn now_secs() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_secs() as i64)
 }
 
 /// `YYYYMMDDTHHMMSSZ` and `YYYY-MM-DD HH:MM:SS`.
-fn run_stamp(secs: i64) -> (String, String) {
+pub(crate) fn run_stamp(secs: i64) -> (String, String) {
     let (y, mo, d, h, mi, s) = utc_parts(secs);
     (
         format!("{y:04}{mo:02}{d:02}T{h:02}{mi:02}{s:02}Z"),

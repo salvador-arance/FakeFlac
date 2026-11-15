@@ -117,6 +117,14 @@ calibrate *args:
     const r = require('node:child_process').spawnSync('cargo', ['run', '--release', '-q', '-p', 'fakeflac-calibrate', '--', 'calibrate', ...process.argv.slice(2)], { stdio: 'inherit' })
     process.exit(r.status ?? 1)
 
+# Library census (RP-12, specs/calibration/census.md): the detector's verdicts on a whole folder, in
+# aggregates. Opt-in: not part of check, ci or any workflow. census FOLDER [--params FILE]
+[positional-arguments]
+[script("node")]
+census *args:
+    const r = require('node:child_process').spawnSync('cargo', ['run', '--release', '-q', '-p', 'fakeflac-calibrate', '--', 'census', ...process.argv.slice(2)], { stdio: 'inherit' })
+    process.exit(r.status ?? 1)
+
 # RNF-01 performance harness (specs/contracts/performance.md). Release build, opt-in: not part of
 # check, ci or any workflow. With FOLDER, also times that folder and reports aggregates only.
 [positional-arguments]
