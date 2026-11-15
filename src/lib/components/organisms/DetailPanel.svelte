@@ -51,7 +51,7 @@
   })
 </script>
 
-<section class="detail-panel">
+<section class={['detail-panel', { 'with-evidence': !!evidence?.length }]}>
   {#if track}
     {#if track.verdict === 'error' || track.error}
       <p class="error-text">
@@ -95,6 +95,12 @@
     background: var(--color-surface);
     color: var(--color-text);
     font-size: var(--font-size);
+  }
+
+  .with-evidence {
+    padding-block: var(--space-1);
+    gap: calc(var(--space-1) / 2);
+    line-height: calc(var(--font-size) + var(--space-1) / 2);
   }
 
   .summary,
