@@ -2,6 +2,19 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-15 - RP-11 tests committed; error reporting needs G1 clarification
+
+**Done**
+- Spec PR #140 merged at `c3f1fa5`; baseline `just check` and `just trace` pass. On `feat/RP-11`, `75050d7` adds synthetic tests for the approved scenarios and updates the two approved unknown-kind expectations. The new tests are red as expected except the passing legacy compatibility case.
+
+**Pending**
+- Implementation, review, `just ci`, and the L8 real-corpus comparison. The implementation stage stopped before changing production code.
+
+**Blocker / question for the human**
+- `specs/calibration/evaluation.md` section 2 requires `lossy_master` errors in the shared section 8 error list. `specs/calibration/sample-corpus.md` section 6 requires every list in sections 3–9 to equal the baseline, and the protected test asserts that those errors are absent from the shared list. Both expect the errors in the dedicated section 10 track list.
+
+**Next step:** Resolve at G1 whether `lossy_master` errors also appear in the shared error list, then align the specs and tests before implementation resumes.
+
 ## 2026-11-14 - Library diagnosis; RF-17 and RP-11 lossy-master specs opened for G1
 
 **Done**
