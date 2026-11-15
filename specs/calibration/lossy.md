@@ -63,6 +63,8 @@ Field 2 of an entry is a **word** (the origin in `trusted.txt`, the kind in `con
 | `source_max_kbps=` | `confirmed.txt` `fake` lines | an integer from 8 to 640 | An **upper bound** of the source bitrate: the source is at most this (chains may have had 3 or more lossy stages) |
 | `weak` | `confirmed.txt` `fake` lines | flag | The provenance is uncertain (for example a bootleg tape compilation); reported in its own row, never gated |
 
+**Addition (calibration.md OQ-32, OQ-36):** a `lossy-master` line of `confirmed.txt` takes the attributes of a `real` line (`formats=`, `group=`, `chain=`), with `formats=lossless` only (inputs.md section 2.1).
+
 An **id** is 1 to 16 characters among `A–Z`, `a–z`, `0–9`, `_` and `-`. Ids appear in `summary.md` (section 6.6), so they must be opaque (`C1`, `G7`), never names.
 
 `upstream=`, `source_max_kbps=` and `weak` apply only to the lossy tracks of the line; a `fake` line that covers no lossy file and carries one of them is an error. This check runs when the file is parsed, so it goes by extension: `.mp3`, `.m4a` and `.opus` count as lossy.
@@ -76,8 +78,9 @@ Errors, reported on the line like every other error of these files (inputs.md se
 | `fake` | folder or file, lossless **or lossy** | Lossless: as today (inputs.md section 2). Lossy: the content comes from a lower bitrate than declared. Label `truth = fake`, `origin = confirmed_fake`, `class = positive`, plus the attributes of 1.2 |
 | `real` (new, C2) | folder or file, **lossy only** | An honest lossy file: its content matches its declared bitrate (for example a stream copied without re-encoding). Label `truth = real`, `origin = confirmed_real`, `class = reviewed` |
 | `false-positive` | file only | As today, for a trusted track of either domain. A lossy watch track is listed with the lossy measurements (section 6.7) |
+| `lossy-master` (calibration.md OQ-32) | folder or file, **lossless only** (OQ-36) | An authentic release whose own master carries lossy traces. inputs.md section 2.1. It never appears in the lossy tables of section 6 |
 
-- `unknown kind 'x' (expected fake, real or false-positive)` (C11).
+- `unknown kind 'x' (expected fake, real, false-positive or lossy-master)` (C11, then calibration.md OQ-32).
 - A track included by a `real` line that is also included by `trusted.txt`: `also trusted (trusted.txt line N)`. A track included by both a `real` and a `fake` line: `already listed at line N` on the later line.
 - A `real` line whose track turns out to be lossless after extraction (an ALAC `.m4a`) is not an input error (the codec is not known when the file is parsed): the track gets no label row and is listed in the report header as `confirmed.txt line N: real applies to lossy files; the track holds ALAC (excluded)`.
 

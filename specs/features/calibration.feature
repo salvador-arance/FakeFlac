@@ -44,6 +44,12 @@ Feature: Calibration and acceptance against a labelled corpus
   conditions the tool has always applied. No earlier scenario changes its
   expectations: none sets max_rate_pct or both classes and settings, and in
   each of them the undetectable fx128 row is Fake, so no target count changes.
+  Changed for authentic releases with a lossy master (calibration.md OQ-32 to
+  OQ-39): confirmed.txt has a fourth kind, lossy-master, so the unknown-kind
+  message of "Errors in confirmed.txt" names it. "The lossy-master variant" is
+  the corpus of sample-corpus.md section 6 (the base corpus plus tracks 12 to
+  15 and line 4 of confirmed.txt). No other earlier scenario changes its
+  expectations: none has a lossy-master line.
   Lossy rows: calibration-lossy.feature.
 
   # --- Environment -------------------------------------------------------
@@ -597,7 +603,127 @@ Feature: Calibration and acceptance against a labelled corpus
       | Revisión\Ørsted\01 – Tres.wav \| fake                       | also trusted (trusted.txt line 7)               |
       | Sueltas\Mixto\06 – Falso.flac \| false-positive             | not a trusted track                             |
       | Sueltas\Mixto \| false-positive                             | must be a file                                  |
-      | Sueltas\Mixto\06 – Falso.flac \| dudoso                     | unknown kind 'dudoso' (expected fake, real or false-positive) |
+      | Sueltas\Mixto\06 – Falso.flac \| dudoso                     | unknown kind 'dudoso' (expected fake, real, false-positive or lossy-master) |
+
+  # --- Authentic releases with a lossy master (calibration.md OQ-32 to OQ-39)
+  # The lossy-master variant: sample-corpus.md section 6. Track 12 (lp16k_dither)
+  # is Fake, track 13 (full_band) Real and track 14 (corrupt) Error with
+  # detection-params.v2.toml; track 15 is an .mp3 that no line includes.
+
+  @RP-11 @RNF-09
+  Scenario: A lossy-master folder line labels the lossless tracks of the release
+    When "accept" runs on the lossy-master variant
+    Then the exit code is 0
+    And labels.csv has 36 rows
+    And the rows of "Reediciones/Ætheria – Edición ’98/01 – Única.flac", "Reediciones/Ætheria – Edición ’98/02 – Otra.flac" and "Reediciones/Ætheria – Edición ’98/03 – Rota.flac" have truth "lossy_master", origin "confirmed_lossy_master", class "lossy_master", an empty trust_origin, encoder "none" and album_id "Reediciones/Ætheria – Edición ’98"
+    And reading labels.csv back as RFC 4180 gives those paths unchanged
+    And labels.csv has no row for "Reediciones/Ætheria – Edición ’98/04 – Extra.mp3"
+    And labels.csv has the same columns as for the base sample corpus
+
+  @RP-11
+  Scenario: Lossy-master tracks are never transcode sources
+    When "accept" runs on the lossy-master variant
+    Then labels.csv has 24 generated rows
+    And no generated row has a source_path under "Reediciones/"
+    And the cold run decodes 36 files: 12 corpus files and 24 generated
+
+  @RP-11 @RNF-04
+  Scenario: Lossy-master tracks stay out of every negative figure and of T1
+    The Fake of track 12 and the Error of track 14 are counted in no table of
+    evaluation.md sections 3 to 9.
+    When "accept" runs on the lossy-master variant
+    Then the global confusion matrix for split "all" is:
+      | truth | Real | Suspicious | Fake | Error | total |
+      | real  | 4    | 1          | 0    | 2     | 7     |
+      | fake  | 0    | 6          | 19   | 0     | 25    |
+    And the false-positive table for split "all" has the rows of "False positives by origin and the primary figure" and no other
+    And the primary figure is "0/2 tracks (0.0 %, 95 % CI 0.0–65.8 %), 0/1 albums"
+    And targets T1 and T2 are "PASS"
+    And target T1 counts 0 on split "all"
+    And the near-threshold list and the margin summary have no row of class "lossy_master"
+
+  @RP-11 @RNF-04 @RNF-09
+  Scenario: The lossy-master section of the report
+    When "accept" runs on the lossy-master variant
+    Then the exit code is 0
+    And summary.md has a section "## Authentic releases with a lossy master" whose row for split "all" is:
+      | tracks | albums | Real | Suspicious | Fake | Error | albums with ≥ 1 Fake | Fake rate | 95 % CI     |
+      | 2      | 1      | 1    | 0          | 1    | 1     | 1                    | 50.0 %    | 9.5–90.5 %  |
+    And in that row "Fake by V3" plus "Fake by V4" is 1
+    And its row for split "holdout" has 0 tracks and a Fake rate "n/a"
+    And summary.md has the line "- lossy_master Fake (all): 1/2 tracks (50.0 %, 95 % CI 9.5–90.5 %), 1/1 albums" followed by the small-sample warning
+    And summary.md has, after that line, one line starting with each of "- G (dB) over 2 tracks: min ", "- D (dB) over ", "- Fake rows, G (dB) over 1 tracks: min " and "- Fake rows, D (dB) over "
+    And the report header lists class "lossy_master" with 1 album, in "tune"
+    And no target line of summary.md names "lossy_master"
+    And report.md lists under "### Authentic releases with a lossy master: tracks" exactly the 3 tracks, "Reediciones/Ætheria – Edición ’98/03 – Rota.flac" with verdict "Error" and TrackError "corruptStream"
+    And summary.md does not contain "Reediciones", "Ætheria – Edición ’98" or any file stem of the variant
+
+  @RP-11
+  Scenario: The grid search never reads lossy-master tracks
+    Given split.holdout_fraction is 0.0
+    And the grid of sample-corpus.md section 5
+    When "calibrate" runs on the lossy-master variant
+    Then the baseline costs 1.1 and the point "gap_fake_db = 4.0" costs 0.5
+    And the proposal is detection-params.v9.toml with gap_fake_db 4.0, as without the variant
+    And the report has the section "Authentic releases with a lossy master" for the baseline and for the proposal
+
+  @RP-11
+  Scenario: Adding a lossy-master release moves no other album
+    When "accept" runs on the sample corpus and on the lossy-master variant
+    Then every album of the sample corpus has the same split in both runs
+    And the album "Reediciones/Ætheria – Edición ’98" is counted once, in class "lossy_master"
+
+  @RP-11
+  Scenario Outline: Errors of lossy-master lines
+    Given line 4 of the lossy-master variant's confirmed.txt is replaced by "<line>"
+    When "accept" runs on the lossy-master variant
+    Then the exit code is 2
+    And the error output is "confirmed.txt:4: <message>"
+    And nothing is written in FAKEFLAC_CALIBRATION
+
+    Examples:
+      | line                                                                       | message                                                       |
+      | Compras\Ñandú – Ácido, Vol. 1 (2024) \| lossy-master                       | also trusted (trusted.txt line 4)                             |
+      | Sueltas\Mixto\06 – Falso.flac \| lossy-master                              | already listed at line 2                                      |
+      | Reediciones\Ætheria – Edición ’98 \| lossy-master formats=all              | lossy-master applies to lossless files only                   |
+      | Reediciones\Ætheria – Edición ’98 \| lossy-master formats=lossy            | lossy-master applies to lossless files only                   |
+      | Reediciones\Ætheria – Edición ’98\04 – Extra.mp3 \| lossy-master           | lossy-master applies to lossless files only                   |
+      | Reediciones\Ætheria – Edición ’98 \| lossy-master upstream=aac             | upstream=, source_max_kbps= and weak apply to fake lines only |
+
+  @RP-11
+  Scenario: A lossy-master track cannot be a watch track
+    Given the line "Reediciones\Ætheria – Edición ’98\01 – Única.flac | false-positive" is added to the lossy-master variant's confirmed.txt as line 5
+    When "accept" runs on the lossy-master variant
+    Then the exit code is 2
+    And the error output is "confirmed.txt:5: not a trusted track"
+
+  @RP-11
+  Scenario: An album with lossy-master and trusted tracks is an error
+    Given line 4 of the lossy-master variant's confirmed.txt is "Reediciones\Ætheria – Edición ’98\01 – Única.flac | lossy-master"
+    And the line "Reediciones\Ætheria – Edición ’98\02 – Otra.flac | accuraterip" is added to trusted.txt as line 9
+    When "accept" runs on the lossy-master variant
+    Then the exit code is 2
+    And the error output is "album has lossy-master and other labelled tracks (trusted.txt:9, confirmed.txt:4)"
+    And nothing is written in FAKEFLAC_CALIBRATION
+
+  @RP-11
+  Scenario: A target cannot select the lossy_master class
+    Given the sample config with target T1 changed: classes = ["lossy_master"]
+    When "accept" runs on the lossy-master variant
+    Then the exit code is 2
+    And the error output says "targets 'T1': class 'lossy_master' is report only and cannot be selected"
+    And nothing is written anywhere
+
+  @RP-11
+  Scenario: Without lossy-master lines the outputs do not change
+    The sample confirmed.txt has no lossy-master line, so every earlier
+    scenario keeps its expectations; this one checks that nothing of the new
+    class leaks into the outputs.
+    When "accept" runs on the sample corpus
+    Then labels.csv, tracks.csv, summary.md and report.md contain neither "lossy_master" nor "lossy-master"
+    And summary.md and report.md have no heading "Authentic releases with a lossy master"
+    And the header rows of labels.csv and tracks.csv have exactly the columns of inputs.md section 3, lossy.md section 2 and evaluation.md section 8 (no new column)
+    And the report header names no class "lossy_master"
 
   # --- Unicode, privacy and read-only corpus ------------------------------
 

@@ -2,6 +2,29 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-14 - Library diagnosis; RF-17 and RP-11 lossy-master specs opened for G1
+
+**Done**
+- Read-only diagnosis of the F7 run from a copy of the app's result cache and a throwaway probe built on `fakeflac-core` and `fakeflac-audio`; the probe reproduces the cached lossless verdicts exactly (501 fake, 337 suspicious, 3,395 real). Aggregates only here; private lists are in ignored `target/review-2026-11-14/`.
+- The 64 F7 track errors are real corruption (55 FLAC, 9 MP3): ffmpeg fails on all 64. The interface already reports them as a corrupt stream. No change needed.
+- Lossless fakes: 218 by V3 and V4, 188 by V4 only, 95 by V3 only. 223 lie in 24 albums that are at least 75 % fake; 142 are isolated in 92 albums under 25 % fake. 54 of the isolated ones are within 3-4 dB of a threshold, against 7 of the whole-album ones.
+- Threshold trade-off on the latest acceptance `tracks.csv` (run `20261114T153457Z`, offline, nothing written to the calibration directory): `step_fake_db` 12 would move 30 isolated and 1 whole-album fake to suspicious but costs 2.29 pp on `opus128`, above the 0.5 pp E6 gate. Only "12 dB below 17 kHz" stays inside the gate, and it moves 12 tracks. No rule change is proposed.
+- Rip-log check: 6 of the 135 albums with a lossless fake have a rip log. 35 fake tracks in 5 albums match the log's copy CRC bit for bit, and 8 of them (2 albums) are database-verified. A fake verdict describes the audio, not the file's history.
+- Independent labelling by a second agent (177 of 501 fakes): 3 real (database-verified rips, all V3 only), 0 fake, 174 undecided. The 133 suspicious M4A are AAC 320 from one streaming platform with a uniform 17 kHz edge. Of the 277 `streamingSampleRate` MP3, 149 are probable rips, 83 plausible direct 48 kHz downloads and 45 unresolved.
+- Opened spec [PR #139](https://github.com/salvador-arance/FakeFlac/pull/139) (RF-17, explain a Fake verdict: `evidence` field with margins, album note, audio note, contract version 9, no detection version change) and spec [PR #140](https://github.com/salvador-arance/FakeFlac/pull/140) (RP-11 follow-up: kind `lossy-master` in `confirmed.txt`, own class outside T1, report only). The owner decided the separate class on 2026-11-14. `just check`, `just trace` and `just privacy-check --base main` pass on both branches.
+
+**Pending**
+- G1 on #139 (Q1-Q16) and #140 (OQ-32 to OQ-39). After each: `/feature RF-17`, `/feature RP-11`. The owner lists the verified releases in `confirmed.txt` only after the tool supports the kind.
+- Not specified yet: a repeatable library census recipe, the F7 spectrogram check (lifetime peaks cannot show a 32 MiB increase below the analysis peak) and a fixed performance reference (the last `just perf` was 5-8 % slower on all four medians).
+- Encoder-specific AAC cutoffs (lossy-source.md section 10) for the 17 kHz platform edge, and the share of legitimate 48 kHz files under L6a, are measured but not proposed.
+- Carried over: the owner's agent-configuration edits from memory.md section 13, then `just agents-sync`. Local branch `docs/RNF-02-g2-handoff` is merged as #138 and can be pruned.
+
+**Blockers / questions for the human**
+- None beyond G1. `just trace` reports one requirement pending a scenario on `main` as well; not caused by these PRs.
+- This session wrote throwaway scripts and a cache copy to the session's temporary folder outside the repository before the write guard flagged it; later temporaries are under ignored `target/`.
+
+**Next step:** the owner reviews #139 and #140 at G1.
+
 ## 2026-11-14 - RNF-02 merged at G2
 
 **Done**
