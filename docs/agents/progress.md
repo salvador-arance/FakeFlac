@@ -2,6 +2,24 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-15 - RP-12 merged; spec clarification opened for G1
+
+**Done**
+- The owner merged the census as #152 (`5404294`). MC1 and MC2 passed (aggregates in a comment on #152). The `census` line is in `CLAUDE.md` and `AGENTS.md` (`cd97640`).
+- Spec PR [#153](https://github.com/salvador-arance/FakeFlac/pull/153) (`spec/RP-12-census-clarifications`, `3ecdfce`): statuses `specified` and `approved`, the blank lines of `summary.md` as layout, "empty means not measured" for unprobed error tracks in `tracks.csv`, and a new scenario for it. `just check-fast`, `just trace` and `just privacy-check --base origin/main` pass.
+- On #152 the `test-rust` job was cancelled once at its 20-minute limit (the `nextest` step takes 12 to 17 minutes on `main`); a rerun was in progress when it merged. Not investigated further.
+
+**Pending**
+- G1 on #153.
+- After G1, a new `feat` branch with a test stage: the test for the new scenario in `tools/fakeflac-calibrate/tests/census.rs` (and its header comment about blank lines), then two small code improvements: decide the blanking from the numeric fields instead of the formatted string, with a unit test.
+- Not specified: a guard for FOLDER being an ancestor of the repository (D1). Consider raising `timeout-minutes` of `test-rust` in `ci.yml` if it is cancelled again (owner's decision).
+- Run `just prune-branches` after the merges.
+
+**Blockers / questions for the human**
+- None blocking. The empty-field rule covers error tracks only, as the code does; extending it to every track would be a code change.
+
+**Next step:** Review #153 at G1.
+
 ## 2026-11-15 - RP-12 library census implemented (PR `feat/RP-12`)
 
 **Done**
