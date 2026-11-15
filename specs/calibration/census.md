@@ -27,7 +27,7 @@ Decided at G1 (#148) with the defaults below; the rest of this spec is written w
 | CQ9 | **Rows by codec.** Tables group tracks by `TrackInfo.codec` (`flac`, `pcm`, `alac`, `mp3`, `aac`, `opus`), not by container, because an M4A file is lossless (`alac`) or lossy (`aac`) and the rules differ. A track without a codec (an M4A that could not be probed) is `unknown` | By codec | 4 |
 
 **Decided defaults (not questions).**
-- **D1. Read-only (RNF-05).** The census opens audio files for reading only. It creates, changes and deletes nothing in `FOLDER`.
+- **D1. Read-only (RNF-05).** The census opens audio files for reading only. It creates, changes and deletes nothing in `FOLDER`. A `FOLDER` that contains the report folder is refused (section 2), so the report is never written inside `FOLDER`.
 - **D2. No environment.** The census does not need `FAKEFLAC_CORPUS` or `FAKEFLAC_CALIBRATION` and does not read `trusted.txt` or `confirmed.txt`.
 - **D3. Opt-in.** The recipe is not part of `check`, `check-fast`, `test`, `check-app` or `ci`, and no workflow calls it. Its tests run in `just test` on synthetic fixtures.
 - **D4. No detection change.** `DetectionParams`, `algorithm_version`, `EXTRACTION_VERSION`, `commands.md` and the app do not change.
@@ -47,7 +47,8 @@ The recipe passes its arguments unchanged (positional arguments through Node, li
 
 - `FOLDER` is required and is used as given. `--params FILE` may appear once, before or after `FOLDER`.
 - **Output folder.** `<repository root>/target/census/<run>/`, where `<run>` is the UTC start time `YYYYMMDDTHHMMSSZ`, with `-2`, `-3`… appended if that folder already exists ([inputs.md](inputs.md) section 1 uses the same rule). The repository root is found as the tool already finds it (calibration.md section 3). Outside a repository the census exits 2.
-- **Order.** The output folder is created only after the run has finished, so a refused run writes nothing.
+- **The folder must not contain the report folder (D1, CQ5).** The run is refused when the report folder `<repository root>/target/census/` would lie inside `FOLDER` or be `FOLDER` itself: `FOLDER` is the repository root, an ancestor of it, `<repository root>/target` or `<repository root>/target/census` (for example `just census .`, since the binary runs from the repository root). A path lies inside another when the other's components are its first components, so `D:\Música 2` is not inside `D:\Música`. Both paths are compared in their canonical forms: symbolic links and junctions resolved, and the letter case and the `\\?\` prefix of Windows treated the same way on both sides, so that two spellings of one folder compare equal. The canonical form of the report folder is that of its deepest part that already exists (at least the repository root) followed by the parts that do not exist yet, so the check holds before the first census has created `target/census/`. A `FOLDER` inside the repository that does not contain `target/census/` (for example a fixtures folder) is allowed. When `FOLDER` or the repository root cannot be put in canonical form, this check does not refuse the run; the other checks still apply (a folder that does not exist is refused as such).
+- **Order.** The output folder is created only after the run has finished, so a refused run writes nothing. The report-folder check comes after the repository is found and before the run starts: nothing is created before it (no `target/census/<run>/`, and no `target/census/` either), and `FOLDER` is not scanned.
 
 ### Exit codes and messages
 
@@ -59,9 +60,10 @@ The recipe passes its arguments unchanged (positional arguments through Node, li
 | 2 | The scan finds no supported audio file | – | `error: census: no supported audio files in the folder` |
 | 2 | The params file cannot be read or is invalid | – | the message `accept` gives for the same file |
 | 2 | The tool is not run inside a repository | – | `error: census: run it from the repository (the report goes under target/)` |
+| 2 | `FOLDER` contains the report folder or is it: the repository root, an ancestor of it, `target/` or `target/census/` of the repository (canonical forms, above) | – | `error: census: the folder contains the report folder (target/census/ of the repository)` |
 | 1 | Internal error | – | `error: census: internal error` and the detail |
 
-No census message of its own contains `FOLDER` or any path under it. A decoding error on a track never stops the run (RNF-04): the track is counted as an error.
+No census message of its own contains `FOLDER` or any path under it; the report-folder message names no path at all (`target/census/` is fixed text). A decoding error on a track never stops the run (RNF-04): the track is counted as an error.
 
 ## 3. The run
 
@@ -194,6 +196,7 @@ path,album_index,album_stratum,codec,sample_rate,bit_depth,channels,declared_bit
 
 - `summary.md` and stdout hold counts and the fixed words of section 4 only: no path, no folder name, no file name, not `FOLDER` itself. They can be pasted into a PR.
 - `tracks.csv` holds relative paths. It stays under `target/` (ignored by git) and is never pasted or committed.
+- The message of the report-folder check (section 2) names no path: not `FOLDER`, not the repository root, only the fixed text `target/census/`.
 - `just privacy-check` does not change. It still guards the branch diff when the labelled corpus is configured.
 
 ## 7. Determinism
@@ -243,7 +246,7 @@ If the test stage finds that a fixture's verdict or evidence with the defaults d
   census *args   (positional arguments, a Node script like `accept`)
   ```
 
-- **Reds at the `test(RP-12)` commit:** the compile (the census entry points do not exist) and the wiring check (the recipe is missing). Nothing else may be red.
+- **Reds at the `test(RP-12)` commit:** the compile (the census entry points do not exist) and the wiring check (the recipe is missing). Nothing else may be red. At the later `test(RP-12)` commit of the report-folder check (C11), only its three refused cases may be red; its two allowed cases pass on the code without the check.
 - **Unchanged:** `fakeflac-core`, `fakeflac-audio`, `fakeflac-fs`, `fakeflac-store`, `src-tauri`, the frontend, the bindings, every existing command of the tool and its outputs. No new dependency.
 - **Outside `specs/`, for the human** (agent configuration, then `just agents-sync`, ADR-0048): the `census` recipe in the command list of `CLAUDE.md`.
 
@@ -266,9 +269,10 @@ If the test stage finds that a fixture's verdict or evidence with the defaults d
   - with no error track, the line `errors: none`.
 - **C6 (determinism).** Two censuses of the sample folder give byte-identical `tracks.csv` files and `summary.md` files equal in every line but `run:`. Two runs started in the same second get the folders `<run>` and `<run>-2`.
 - **C7 (other params).** With `--params` set to a copy of the shipped params file, `summary.md` says `params custom <id>` with the 16-character hash of that file and has the same tables as C1. With a params file whose `gap_fake_db` is 100, tracks 2, 4 and 11 are not `Fake` and the `gapStep` row of 4.3 is 0.
-- **C8 (refused runs).** Each case of the exit-code table of section 2 with code 2 gives its exact stderr line, an empty stdout and no new folder under `target/census/`: no argument, two folders, `--params` without a value, `--params` twice, an unknown option, a folder that does not exist, a file given as the folder, and a folder holding only `notas.txt`.
+- **C8 (refused runs).** Each case of the exit-code table of section 2 with code 2 gives its exact stderr line, an empty stdout and no new folder under `target/census/`: no argument, two folders, `--params` without a value, `--params` twice, an unknown option, a folder that does not exist, a file given as the folder, and a folder holding only `notas.txt`. The case of a folder that contains the report folder is C11.
 - **C9 (a corrupt track never stops the run, RNF-04).** Covered by C1: tracks 13 and 14 are counted as errors and the run exits 0.
 - **C10 (wiring).** The test reads `justfile` as text and checks that a `census` recipe exists, that its body holds `fakeflac-calibrate` and `census`, that none of the recipes `ci`, `check`, `check-fast`, `test` and `check-app` names `census` as a whole word, and that neither `.github/workflows/ci.yml` nor `release.yml` contains `just census`.
+- **C11 (the folder must not contain the report folder, RNF-05).** The test makes a stand-in repository root (`Env.repo_root`, as the other tests do) inside the temporary folder `<base>` that also holds the sample folder `<base>/Biblioteca ″Ñandú″ & co`. Each of these `FOLDER`s exits 2 with exactly the stderr line `error: census: the folder contains the report folder (target/census/ of the repository)`, an empty stdout, and the same files and folders under `<base>` before and after the call (no `target/census/<run>/`, and no `target/census/` where there was none): `<base>` (an ancestor of the stand-in root, which also holds the sample's audio), the stand-in root itself, and its `target/` (created empty by the test before the call). Two `FOLDER`s are not refused by this check, and neither stderr holds that line: the sample folder itself (outside the stand-in root) exits 0 as in C1, and a folder `fixtures` inside the stand-in root (beside `target/`, so it does not contain `target/census/`) that holds a copy of `Sueltas/01 – Onda.wav` exits 0.
 
 **Manual** (owner, release build, aggregates only in the PR):
 - **MC1 (the owner's library).** `just census` on the library of the 2026-11-14 diagnosis. Record `summary.md` and the elapsed time in the feature PR. With detection v8 and an unchanged library, the totals equal the app's run of that day (11 396 tracks: 9 003 real, 1 173 suspicious, 1 156 fake, 64 errors) and the lossless rows of 4.3 equal the diagnosis (95 `gapStep`, 188 `cutoffStep`, 218 both). The strata of 4.4 are not compared with the diagnosis, which counted lossless tracks only.

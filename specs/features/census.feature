@@ -219,6 +219,22 @@ Feature: Library census
     Then it exits 2 with the message "accept" gives for that file
     And no folder is created under "target/census/"
 
+  @RNF-05
+  Scenario Outline: A folder that contains the report folder is refused before anything is written
+    Given a stand-in repository root inside the temporary folder that also holds the sample folder
+    When "census" runs on <folder> with the stand-in as the repository root
+    Then it exits <exit>
+    And stderr is "<stderr>"
+    And <result>
+
+    Examples:
+      | folder                                                                  | exit | stderr                                                                                    | result                                                                          |
+      | the temporary folder that holds the sample folder and the stand-in root | 2    | error: census: the folder contains the report folder (target/census/ of the repository) | stdout is empty and nothing is created under the temporary folder               |
+      | the stand-in root                                                       | 2    | error: census: the folder contains the report folder (target/census/ of the repository) | stdout is empty and nothing is created under the temporary folder               |
+      | the stand-in root's empty "target" folder                               | 2    | error: census: the folder contains the report folder (target/census/ of the repository) | stdout is empty and nothing is created under the temporary folder               |
+      | the sample folder                                                       | 0    |                                                                                           | one run folder is created under the stand-in's "target/census/"                 |
+      | a "fixtures" folder inside the stand-in root holding one WAV track      | 0    |                                                                                           | one run folder is created under the stand-in's "target/census/"                 |
+
   # --- Wiring ---
 
   Scenario: The census is opt-in and never runs in CI
