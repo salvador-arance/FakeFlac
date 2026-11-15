@@ -241,6 +241,7 @@ Feature: Library census
     # Windows only (RNF-07): letter case and a junction. The junction rows are skipped, with the
     # reason printed, when the junction cannot be created (mklink /J). The scan does not follow
     # the junction, so the stand-in root holds no audio.
+    @RNF-07
     Examples: Windows
       | folder                                               | root                                                                        | exit | stderr                                                                                  | result                                                            |
       | the stand-in root spelled in a different letter case | the stand-in                                                                | 2    | error: census: the folder contains the report folder (target/census/ of the repository) | stdout is empty and nothing is created under the temporary folder |
