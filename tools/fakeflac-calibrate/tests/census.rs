@@ -43,15 +43,27 @@
 //!
 //! # How `summary.md` is compared
 //!
-//! Section 4 gives the blocks of `summary.md` and their order but no blank lines between them, so the
-//! tests compare the non-blank lines (blank lines are layout). A table line is compared cell by cell
-//! with the cells trimmed (column padding is layout); every other line is compared exactly.
+//! Section 4 ("Blocks and blank lines") makes `summary.md` a sequence of blocks (each header line of
+//! 4.1, each table, the one-Fake line of 4.4, and `errors: none` or the error table of 4.7) with one
+//! blank line after every block, the last one included, and no blank line inside a block. Blank lines
+//! are layout: the tests compare the non-blank lines, a table line cell by cell with the cells trimmed
+//! (column padding is layout) and every other line exactly. One test checks the blank lines
+//! themselves (`rp12_c1_one_blank_line_follows_every_block_of_the_summary`).
+//!
+//! # How `tracks.csv` is checked
+//!
+//! Section 5 ("Empty means not measured"): an error track writes an empty field, never `0`, in
+//! `sample_rate`, `bit_depth`, `channels`, `declared_bitrate_kbps` and `duration_ms` where the value
+//! was not measured (the unprobed placeholders 0 / no value, or a 0 reported by the probe), and keeps
+//! the real values of a probed file. The rule is stated for error tracks only, so a track that is not
+//! an error writes its values as they are, `0` included. Checked on the sample folder (C2) and on the
+//! pure `tracks_csv` with given analyses.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod common;
 
 use common::*;
-use fakeflac_calibrate::census::{summary_md, CensusHeader, CensusTrack};
+use fakeflac_calibrate::census::{summary_md, tracks_csv, CensusHeader, CensusTrack};
 use fakeflac_calibrate::error::ExitKind;
 use fakeflac_calibrate::hash::id16;
 use fakeflac_calibrate::run::{parse_args, run, CensusArgs, Command, Outcome, DEFAULT_PARAMS};
@@ -242,6 +254,16 @@ const SAMPLE: [SampleFile; 15] = [
 const TRACK_9: &str = "Álbum B, aislado/05 – Falsa.flac";
 /// Track 13: the corrupt one.
 const TRACK_13: &str = "Álbum C/CD2/02 – Roto.flac";
+/// Track 14: the short one (probed, then `tooShort`).
+const TRACK_14: &str = "Álbum C/CD2/03 – Corto.flac";
+/// The five columns of `tracks.csv` that hold values of the probe (census.md section 5).
+const PROBE_COLUMNS: [&str; 5] = [
+    "sample_rate",
+    "bit_depth",
+    "channels",
+    "declared_bitrate_kbps",
+    "duration_ms",
+];
 /// The file that is not audio.
 const NOTES: &str = "Sueltas/notas.txt";
 
@@ -789,14 +811,14 @@ fn rp12_c2_per_track_file_is_sorted_quoted_and_relative() {
     let r13 = csv.find("path", TRACK_13).unwrap();
     assert_eq!(csv.get(r13, "verdict"), "error");
     assert_eq!(csv.get(r13, "error"), "corruptStream");
-    for column in [
+    for column in PROBE_COLUMNS.into_iter().chain([
         "reasons",
         "evidence",
         "gap_step_margin_db",
         "cutoff_step_margin_db",
         "shortfall_margin_hz",
         "cutoff_hz",
-    ] {
+    ]) {
         assert_eq!(csv.get(r13, column), "", "{column} of the corrupt track");
     }
 
@@ -872,6 +894,117 @@ fn rp12_c2_sample_rows_have_the_section_8_verdicts() {
     let indexes: BTreeSet<&String> = by_folder.values().flatten().collect();
     assert!(by_folder.values().all(|i| i.len() == 1), "{by_folder:?}");
     assert_eq!(indexes.len(), 5, "one index per album: {by_folder:?}");
+}
+
+/// Scenario: An empty field of the per-track file means the value was not measured (@RP-12 @RNF-04).
+/// Acceptance C2 (census.md section 5, "Empty means not measured"): the corrupt track 13 could not be
+/// probed, so its five probe fields are empty; the short track 14 was probed and then failed
+/// `tooShort`, so it keeps its real sample rate, channels and duration.
+#[test]
+fn rp12_c2_an_empty_field_of_the_per_track_file_means_not_measured() {
+    let s = shared();
+    let csv = Table::read(&s.dir().join("tracks.csv"));
+
+    let r13 = csv.find("path", TRACK_13).unwrap();
+    for column in PROBE_COLUMNS {
+        assert_eq!(
+            csv.get(r13, column),
+            "",
+            "{column} of the corrupt track is not measured"
+        );
+    }
+
+    let r14 = csv.find("path", TRACK_14).unwrap();
+    assert_eq!(csv.get(r14, "verdict"), "error");
+    assert_eq!(csv.get(r14, "error"), "tooShort");
+    for column in ["sample_rate", "channels", "duration_ms"] {
+        let v = csv.get(r14, column);
+        assert!(
+            !v.is_empty() && v != "0",
+            "{column} of the short track is its real value, not {v:?}"
+        );
+    }
+}
+
+/// The blocks of `summary.md` (census.md section 4, "Blocks and blank lines"): the text is the blocks,
+/// each followed by one blank line, the last one included, with no blank line inside a block. Returns
+/// the blocks, each as its lines.
+fn blocks(text: &str) -> Vec<Vec<&str>> {
+    assert!(!text.is_empty(), "an empty summary.md");
+    let body = text.strip_suffix("\n\n").unwrap_or_else(|| {
+        panic!("summary.md ends with its last line and one blank line: {text:?}")
+    });
+    body.split("\n\n")
+        .map(|block| {
+            let lines: Vec<&str> = block.split('\n').collect();
+            assert!(
+                lines.iter().all(|l| !l.trim().is_empty()),
+                "one blank line between two blocks and none inside a block: {block:?} in\n{text}"
+            );
+            lines
+        })
+        .collect()
+}
+
+/// The blocks of section 4 in order: the four header lines, the tables of 4.2 to 4.4, the one-Fake
+/// line, the tables of 4.5 and 4.6, and the errors block.
+fn assert_blocks(text: &str, errors_table: bool) {
+    let b = blocks(text);
+    assert_eq!(b.len(), 11, "the eleven blocks of section 4:\n{text}");
+    for (i, prefix) in [TITLE, "run: ", "detection: ", "tracks "]
+        .iter()
+        .enumerate()
+    {
+        assert_eq!(
+            b[i].len(),
+            1,
+            "header line {i} is a block of its own:\n{text}"
+        );
+        assert!(b[i][0].starts_with(prefix), "{:?}", b[i]);
+    }
+    let is_table = |block: &[&str], header: &str| {
+        block.len() >= 3
+            && norm(block[0]) == norm(header)
+            && is_separator(block[1])
+            && block.iter().all(|l| is_table_line(l))
+    };
+    for (i, header) in [(4, H_CODEC), (5, H_EVIDENCE), (6, H_ALBUMS)] {
+        assert!(is_table(&b[i], header), "block {i} is {header}:\n{text}");
+    }
+    assert_eq!(b[7].len(), 1, "the one-Fake line is a block:\n{text}");
+    assert!(b[7][0].starts_with(ONE_FAKE), "{:?}", b[7]);
+    assert!(is_table(&b[8], H_MARGIN), "block 8 is {H_MARGIN}:\n{text}");
+    assert!(
+        is_table(&b[9], H_REASONS),
+        "block 9 is {H_REASONS}:\n{text}"
+    );
+    if errors_table {
+        assert!(is_table(&b[10], H_ERRORS), "the error table:\n{text}");
+    } else {
+        assert_eq!(b[10], [NO_ERRORS], "the line 'errors: none':\n{text}");
+    }
+}
+
+/// Section 4, "Blocks and blank lines": one blank line follows every block of `summary.md`, the last
+/// one included, and there is no blank line inside a block; stdout is `summary.md` and then the
+/// `elapsed:` line. On the sample folder (with its error table) and on given analyses (with `errors:
+/// none`). Scenario: A census of the sample folder reports its verdicts by codec (@RP-12 @RNF-04).
+/// Acceptance C1 and C5.
+#[test]
+fn rp12_c1_one_blank_line_follows_every_block_of_the_summary() {
+    let s = shared();
+    let summary = s.summary();
+    assert_blocks(&summary, true);
+    assert_stdout(&s.outcome.stdout, &summary);
+    assert!(
+        s.outcome.stdout.starts_with(&format!("{summary}elapsed: ")),
+        "the elapsed: line follows the closing blank line of summary.md"
+    );
+
+    assert_blocks(&report(&[real(1), real(2)]), false);
+    let mut error = track(3, Some(AudioCodec::Flac), Verdict::Error);
+    error.analysis.error = Some(TrackError::TooShort);
+    assert_blocks(&report(&[real(1), error]), true);
 }
 
 /// The names that must never appear in `summary.md` or stdout: the root's name, every folder and file
@@ -1796,6 +1929,172 @@ fn rp12_c5_the_report_lists_every_row_in_order_and_names_nothing() {
         text,
         "the order of the tracks does not matter"
     );
+}
+
+// ---------------------------------------------------------------------------------------------
+// tracks.csv from given analyses (section 5, "Empty means not measured")
+// ---------------------------------------------------------------------------------------------
+
+/// The five probe values of a track, in the order of `PROBE_COLUMNS`.
+fn set_probe(
+    t: &mut CensusTrack,
+    sample_rate: u32,
+    bit_depth: Option<u8>,
+    channels: u8,
+    declared_bitrate_kbps: Option<u32>,
+    duration_ms: u64,
+) {
+    let info = &mut t.analysis.info;
+    info.sample_rate = sample_rate;
+    info.bit_depth = bit_depth;
+    info.channels = channels;
+    info.declared_bitrate_kbps = declared_bitrate_kbps;
+    info.duration_ms = duration_ms;
+}
+
+/// The five probe fields of the single row of `tracks.csv` for one track, by column name.
+fn probe_fields(t: CensusTrack) -> BTreeMap<&'static str, String> {
+    let tracks = [t];
+    let text = tracks_csv(&tracks, &albums_of(&tracks), Path::new(""));
+    let mut rows = parse_csv(&text);
+    assert_eq!(rows.len(), 2, "the header and one row:\n{text}");
+    let header = rows.remove(0);
+    let csv = Table { header, rows };
+    assert_eq!(csv.header.join(","), CSV_HEADER, "header of section 5");
+    let r = &csv.rows[0];
+    PROBE_COLUMNS
+        .iter()
+        .map(|c| (*c, csv.get(r, c).to_string()))
+        .collect()
+}
+
+fn expect(values: [&str; 5]) -> BTreeMap<&'static str, String> {
+    PROBE_COLUMNS
+        .iter()
+        .zip(values)
+        .map(|(c, v)| (*c, v.to_string()))
+        .collect()
+}
+
+/// A flac error track of the given kind with the given probe values.
+fn error_track(
+    error: TrackError,
+    sample_rate: u32,
+    bit_depth: Option<u8>,
+    channels: u8,
+    declared_bitrate_kbps: Option<u32>,
+    duration_ms: u64,
+) -> CensusTrack {
+    let mut t = track(1, Some(AudioCodec::Flac), Verdict::Error);
+    t.analysis.error = Some(error);
+    set_probe(
+        &mut t,
+        sample_rate,
+        bit_depth,
+        channels,
+        declared_bitrate_kbps,
+        duration_ms,
+    );
+    t
+}
+
+/// Section 5, "Empty means not measured": an error track whose file could not be probed holds only
+/// the unprobed placeholders (0 for `sample_rate`, `channels` and `duration_ms`, no value for
+/// `bit_depth` and `declared_bitrate_kbps`), and the five fields are empty. Scenario: An empty field of
+/// the per-track file means the value was not measured (@RP-12 @RNF-04). Acceptance C2.
+#[test]
+fn rp12_c2_an_unprobed_error_track_has_five_empty_probe_fields() {
+    for error in [
+        TrackError::CorruptStream("synthetic".to_string()),
+        TrackError::Unreadable("synthetic".to_string()),
+        TrackError::UnsupportedFormat("synthetic".to_string()),
+    ] {
+        let fields = probe_fields(error_track(error.clone(), 0, None, 0, None, 0));
+        assert_eq!(fields, expect(["", "", "", "", ""]), "{error:?}");
+    }
+}
+
+/// Section 5: a track that was probed keeps its real values in the five fields even when it fails
+/// afterwards (`tooShort`). Scenario: An empty field of the per-track file means the value was not
+/// measured (@RP-12 @RNF-04). Acceptance C2.
+#[test]
+fn rp12_c2_a_probed_error_track_keeps_its_real_probe_values() {
+    let fields = probe_fields(error_track(
+        TrackError::TooShort,
+        48_000,
+        Some(24),
+        2,
+        Some(1411),
+        1_250,
+    ));
+    assert_eq!(fields, expect(["48000", "24", "2", "1411", "1250"]));
+    // A lossless probe without a declared bitrate: that field has no value, the others are kept.
+    let fields = probe_fields(error_track(
+        TrackError::TooShort,
+        44_100,
+        Some(16),
+        1,
+        None,
+        900,
+    ));
+    assert_eq!(fields, expect(["44100", "16", "1", "", "900"]));
+}
+
+/// Section 5: an error track whose probe reported 0 for one of the five fields has that field empty
+/// (0 is not a valid measurement of these fields) and keeps the others. Scenario: An empty field of
+/// the per-track file means the value was not measured (@RP-12 @RNF-04). Acceptance C2.
+#[test]
+fn rp12_c2_an_error_track_with_a_zero_from_the_probe_has_that_field_empty() {
+    let real = ["48000", "24", "2", "1411", "1250"];
+    for zero in 0..PROBE_COLUMNS.len() {
+        let pick = |i: usize, v: u64| if i == zero { 0 } else { v };
+        let t = error_track(
+            TrackError::TooShort,
+            pick(0, 48_000) as u32,
+            Some(pick(1, 24) as u8),
+            pick(2, 2) as u8,
+            Some(pick(3, 1411) as u32),
+            pick(4, 1_250),
+        );
+        let mut want = real;
+        want[zero] = "";
+        assert_eq!(
+            probe_fields(t),
+            expect(want),
+            "{} reported as 0",
+            PROBE_COLUMNS[zero]
+        );
+    }
+}
+
+/// Section 5 states the empty-field rule for error tracks only: a track that is not an error writes
+/// its values as they are, so a 0 there is written as `0`. Scenario: An empty field of the per-track
+/// file means the value was not measured (@RP-12 @RNF-04). Acceptance C2.
+#[test]
+fn rp12_c2_a_track_that_is_not_an_error_writes_a_zero_as_zero() {
+    for verdict in [Verdict::Real, Verdict::Suspicious, Verdict::Fake] {
+        let mut t = track(1, Some(AudioCodec::Flac), verdict);
+        set_probe(&mut t, 0, Some(0), 0, Some(0), 0);
+        assert_eq!(
+            probe_fields(t),
+            expect(["0", "0", "0", "0", "0"]),
+            "{verdict:?}"
+        );
+    }
+}
+
+/// Section 5: a track that is not an error keeps its real values in the five fields (a lossless track
+/// without a declared bitrate and a lossy one without a bit depth have those fields empty: no value).
+/// Scenario: An empty field of the per-track file means the value was not measured (@RP-12 @RNF-04).
+/// Acceptance C2.
+#[test]
+fn rp12_c2_a_track_that_is_not_an_error_keeps_its_real_probe_values() {
+    let mut t = real(1);
+    set_probe(&mut t, 96_000, Some(24), 2, None, 241_337);
+    assert_eq!(probe_fields(t), expect(["96000", "24", "2", "", "241337"]));
+    let mut t = track(1, Some(AudioCodec::Mp3), Verdict::Suspicious);
+    set_probe(&mut t, 44_100, None, 2, Some(320), 180_000);
+    assert_eq!(probe_fields(t), expect(["44100", "", "2", "320", "180000"]));
 }
 
 // ---------------------------------------------------------------------------------------------
