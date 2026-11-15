@@ -36,6 +36,41 @@ function setup(rows: ResultRow[], extra: Record<string, unknown> = {}) {
 }
 
 describe('ResultsTable: structure', () => {
+  // @RF-17 @RF-06 The State cell's tooltip of a fake row shows its evidence.
+  it('shows ordered evidence on a fake row and the reason on a suspicious row', () => {
+    setup([
+      makeRow(0, {
+        path: 'C:/Music/Mixed/a.flac',
+        verdict: 'fake',
+        evidence: [
+          { kind: 'gapStep', value: 12, threshold: 6, margin: 6 },
+          { kind: 'cutoffStep', value: 24.7, threshold: 10, margin: 14.7 },
+        ],
+      }),
+      makeRow(1, {
+        path: 'C:/Music/Mixed/b.flac',
+        verdict: 'suspicious',
+        reasons: ['ambiguousCutoff'],
+      }),
+    ])
+    expect(fileColumn()).toEqual(['a.flac', 'b.flac'])
+    const [fake, suspicious] = dataRows().map((row) => cells(row)[0])
+    for (const [cell, verdict, label] of [
+      [fake, 'fake', 'Fake'],
+      [suspicious, 'suspicious', 'Suspicious'],
+    ] as const) {
+      const verdictElement = cell.querySelector(`.verdict-cell.${verdict}`)
+      expect(verdictElement?.textContent?.trim()).toBe(label)
+      expect(verdictElement?.querySelector('svg')).not.toBeNull()
+    }
+    const tooltip = (cell: HTMLElement) => cell.querySelector('.verdict-cell')?.getAttribute('title')
+    expect(tooltip(fake)).toBe([
+      'Gaps above 16 kHz, as in an MP3: gap step 12.0 dB, 6.0 dB over the Fake threshold (6.0 dB)',
+      'Sharp cutoff where lossy encoders cut: step 24.7 dB, 14.7 dB over the Fake threshold (10.0 dB)',
+    ].join('\n'))
+    expect(tooltip(suspicious)).toBe('Sharp cutoff at a high frequency')
+  })
+
   // @RF-06 state: empty
   it('is a grid with the ten columns and no data rows when empty', () => {
     setup([])

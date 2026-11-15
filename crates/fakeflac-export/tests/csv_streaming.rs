@@ -11,10 +11,38 @@
 mod common;
 
 use common::{col, cutoff, read_csv, track, HEADER};
+use fakeflac_core::domain::{EvidenceKind, FakeEvidence};
 use fakeflac_core::{
     AudioCodec, AudioFormat, BitrateMode, SuspicionReason, TrackAnalysis, Verdict,
 };
 use fakeflac_export::build_document;
+
+// @RF-17 @RF-09 @RNF-09 The evidence of a fake track is not exported.
+#[test]
+fn rf17_fake_csv_is_byte_identical_with_and_without_evidence() {
+    let mut track = track(r"C:\Music\Álbum ″Ñandú″\01 – Canción ‘x’.flac");
+    track.info.duration_ms = 240_000;
+    track.info.size_bytes = 30_000_000;
+    track.cutoff = cutoff(22_050.0, 0.0, -95.0);
+    track.verdict = Verdict::Fake;
+    track.algorithm_version = 8;
+    let without = build_document(std::slice::from_ref(&track));
+    track.evidence = vec![FakeEvidence {
+        kind: EvidenceKind::GapStep,
+        value: 9.6,
+        threshold: 6.0,
+        margin: 3.6,
+    }];
+    let with = build_document(&[track]);
+    assert_eq!(with.as_bytes(), without.as_bytes());
+    assert_eq!(
+        with.split("\r\n").nth(1).expect("data record"),
+        r"fake,01 – Canción ‘x’.flac,C:\Music\Álbum ″Ñandú″,flac,44100,16,240000,22050,,,,,,,flac,2,30000000,0.0,-95.0,8,C:\Music\Álbum ″Ñandú″\01 – Canción ‘x’.flac"
+    );
+    assert!(read_csv(with.as_bytes())
+        .iter()
+        .all(|record| record.len() == 21));
+}
 
 /// The stubbed TrackAnalysis of the scenario.
 fn flagged() -> TrackAnalysis {

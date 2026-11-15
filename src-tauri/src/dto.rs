@@ -56,6 +56,27 @@ pub enum SuspicionReason {
     StreamingSampleRate,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub enum EvidenceKind {
+    GapStep,
+    CutoffStep,
+    Shortfall,
+}
+
+/// Contract version 9 (RF-17). The detector represents every field as a finite number.
+#[derive(Debug, Clone, PartialEq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct FakeEvidence {
+    pub kind: EvidenceKind,
+    #[specta(type = specta_typescript::Number)]
+    pub value: f32,
+    #[specta(type = specta_typescript::Number)]
+    pub threshold: f32,
+    #[specta(type = specta_typescript::Number)]
+    pub margin: f32,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct TrackInfo {
@@ -128,6 +149,7 @@ pub struct TrackAnalysis {
     pub cutoff: Option<CutoffEstimate>,
     pub estimated_source_bitrate_kbps: Option<u32>,
     pub reasons: Vec<SuspicionReason>,
+    pub evidence: Vec<FakeEvidence>,
     pub error: Option<TrackError>,
     pub algorithm_version: u32,
 }
@@ -338,6 +360,27 @@ impl From<&core::TrackInfo> for TrackInfo {
     }
 }
 
+impl From<core::EvidenceKind> for EvidenceKind {
+    fn from(kind: core::EvidenceKind) -> Self {
+        match kind {
+            core::EvidenceKind::GapStep => Self::GapStep,
+            core::EvidenceKind::CutoffStep => Self::CutoffStep,
+            core::EvidenceKind::Shortfall => Self::Shortfall,
+        }
+    }
+}
+
+impl From<&core::FakeEvidence> for FakeEvidence {
+    fn from(evidence: &core::FakeEvidence) -> Self {
+        Self {
+            kind: evidence.kind.into(),
+            value: evidence.value,
+            threshold: evidence.threshold,
+            margin: evidence.margin,
+        }
+    }
+}
+
 impl From<&core::CutoffEstimate> for CutoffEstimate {
     fn from(c: &core::CutoffEstimate) -> Self {
         CutoffEstimate {
@@ -369,6 +412,7 @@ impl From<&core::TrackAnalysis> for TrackAnalysis {
             cutoff: a.cutoff.as_ref().and_then(finite_cutoff),
             estimated_source_bitrate_kbps: a.estimated_source_bitrate_kbps,
             reasons: a.reasons.iter().copied().map(Into::into).collect(),
+            evidence: a.evidence.iter().map(Into::into).collect(),
             error: a.error.as_ref().map(Into::into),
             algorithm_version: a.algorithm_version,
         }

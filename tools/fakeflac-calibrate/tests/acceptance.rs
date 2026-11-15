@@ -161,6 +161,29 @@ fn rp11_target_filter_skips_run_ids() {
     assert!(has_token("T2: PASS (0)", "T2"));
 }
 
+// @RF-17 @RP-11 Scenario: The calibration reports do not change.
+#[test]
+fn rf17_default_calibration_reports_omit_evidence() {
+    let sample = Sample::new("rf17-reports");
+    let outcome = sample.accept(&[]);
+    assert_ok(&outcome);
+    let table = tracks(&outcome);
+    assert!(table.header.iter().all(|name| !name.contains("evidence")));
+    let fakes: Vec<_> = table
+        .rows
+        .iter()
+        .filter(|row| table.get(row, "verdict").eq_ignore_ascii_case("fake"))
+        .collect();
+    assert!(!fakes.is_empty(), "sample must have a fake row");
+    for row in fakes {
+        assert!(table.get(row, "reasons").is_empty());
+    }
+    let summary = report_text(&outcome, "summary.md");
+    for name in PRIVATE_NAMES {
+        assert!(!summary.contains(name), "summary.md contains '{name}'");
+    }
+}
+
 // Scenario: Watch list (@RP-11)
 #[test]
 fn rp11_watch_list() {

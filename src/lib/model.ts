@@ -11,6 +11,8 @@ export type {
   BitrateMode,
   CacheStatus,
   CutoffEstimate,
+  EvidenceKind,
+  FakeEvidence,
   Language,
   SettingsLoadStatus,
   Spectrogram,

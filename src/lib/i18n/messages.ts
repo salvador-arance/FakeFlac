@@ -42,6 +42,19 @@ export const EN: Record<string, string> = {
   'reason.cutoffBelowDeclared': 'Cutoff lower than expected for its bitrate',
   'reason.streamingSampleRate':
     'Full band at 48 kHz: possibly a streaming rip; genuine 48 kHz files look the same.',
+  'evidence.gapStep':
+    'Gaps above 16 kHz, as in an MP3: gap step {value} dB, {margin} dB over the Fake threshold ({threshold} dB)',
+  'evidence.cutoffStep':
+    'Sharp cutoff where lossy encoders cut: step {value} dB, {margin} dB over the Fake threshold ({threshold} dB)',
+  'evidence.shortfall':
+    'Content ends {value} kHz below what its bitrate keeps: {margin} kHz over the Fake threshold ({threshold} kHz)',
+  'evidence.gapOnly': 'The evidence is the gap pattern at 16 kHz, not the cutoff.',
+  'evidence.albumOnly':
+    'The only Fake of the {tracks} analysed tracks in this album. Transcodes usually affect whole albums: check its spectrogram.',
+  'evidence.albumSome':
+    '{fake} of the {tracks} analysed tracks in this album are Fake. Transcodes usually affect whole albums: check their spectrograms.',
+  'evidence.audioNote':
+    'These traces are in the audio itself. They cannot tell a converted file from a genuine release that was mastered from lossy audio.',
   'error.tooShort': 'Too short to analyse',
   'error.corruptStream': 'Corrupt stream',
   'error.unreadable': 'Cannot read the file',
@@ -170,6 +183,19 @@ export const ES: Record<string, string> = {
   'reason.cutoffBelowDeclared': 'Corte inferior al esperado para su tasa de bits',
   'reason.streamingSampleRate':
     'Banda completa a 48 kHz: posible ripeo de streaming; los archivos auténticos a 48 kHz se ven igual.',
+  'evidence.gapStep':
+    'Huecos por encima de 16 kHz, como en un MP3: escalón de huecos de {value} dB, {margin} dB por encima del umbral de Falso ({threshold} dB)',
+  'evidence.cutoffStep':
+    'Corte abrupto donde cortan los codificadores con pérdida: escalón de {value} dB, {margin} dB por encima del umbral de Falso ({threshold} dB)',
+  'evidence.shortfall':
+    'El contenido termina {value} kHz por debajo de lo que conserva su tasa de bits: {margin} kHz por encima del umbral de Falso ({threshold} kHz)',
+  'evidence.gapOnly': 'La prueba es el patrón de huecos a partir de 16 kHz, no el corte.',
+  'evidence.albumOnly':
+    'Es la única pista falsa de las {tracks} analizadas en este álbum. Las transcodificaciones suelen afectar a álbumes enteros: revisa su espectrograma.',
+  'evidence.albumSome':
+    '{fake} de las {tracks} pistas analizadas en este álbum son falsas. Las transcodificaciones suelen afectar a álbumes enteros: revisa sus espectrogramas.',
+  'evidence.audioNote':
+    'Estas huellas están en el propio audio. No distinguen un archivo convertido de una edición auténtica cuyo máster se hizo con audio con pérdida.',
   'error.tooShort': 'Demasiado corto para analizar',
   'error.corruptStream': 'Flujo de audio dañado',
   'error.unreadable': 'No se puede leer el archivo',

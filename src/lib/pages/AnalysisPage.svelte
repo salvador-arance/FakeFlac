@@ -193,6 +193,10 @@
   let selectedTrack = $derived(
     store.rows.find((row) => row.index === store.selectedIndex)?.analysis ?? null,
   )
+  let selectedAlbumSummary = $derived.by(() => {
+    if (currentAlbum === null) return null
+    return store.albums.find((album) => album.index === currentAlbum)?.summary ?? null
+  })
 
   function clearSpectrogram() {
     spectrogramRequest += 1
@@ -396,6 +400,7 @@
 {#snippet detailPanel()}
   <DetailPanel
     track={selectedTrack}
+    album={selectedAlbumSummary}
     {spectrogram}
     loading={spectrogramLoading}
     unavailable={spectrogramUnavailable}

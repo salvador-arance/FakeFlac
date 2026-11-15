@@ -21,8 +21,8 @@ pub use analyze_folder::{
     ResultCache,
 };
 pub use domain::{
-    AlbumSummary, AudioCodec, AudioFormat, BitrateMode, CutoffEstimate, SuspicionReason,
-    TrackAnalysis, TrackError, TrackInfo, Verdict,
+    AlbumSummary, AudioCodec, AudioFormat, BitrateMode, CutoffEstimate, EvidenceKind, FakeEvidence,
+    SuspicionReason, TrackAnalysis, TrackError, TrackInfo, Verdict,
 };
 pub use error::{AppError, AppErrorCode};
 pub use export_csv::export_csv;

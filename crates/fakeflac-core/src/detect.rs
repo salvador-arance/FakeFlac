@@ -3,7 +3,9 @@
 //! bitrate, with rule L6a of v7 (`specs/detection/lossy-source.md`). Pure functions: no I/O, every
 //! number comes from `DetectionParams`.
 
-use crate::domain::{AudioCodec, CutoffEstimate, SuspicionReason, TrackError, Verdict};
+use crate::domain::{
+    AudioCodec, CutoffEstimate, EvidenceKind, FakeEvidence, SuspicionReason, TrackError, Verdict,
+};
 use crate::params::{CutoffRow, DetectionParams, LossyParams, StreamingCodec, StreamingParams};
 use crate::spectrum::BandSpectra;
 
@@ -238,8 +240,8 @@ pub fn is_edge_step(m: &Measurements, params: &DetectionParams) -> bool {
 /// otherwise `fe` and 0. `noise_floor_db` is `F`. `params.fft.band_hz` must equal the `band_hz` of the spectra
 /// that produced `m` (the audio adapter builds them from it).
 pub fn cutoff_estimate(m: &Measurements, params: &DetectionParams) -> CutoffEstimate {
-    let (frequency_hz, steepness_db_per_khz) = match m.step_hz {
-        Some(fs) if m.step_db >= params.verdict.step_suspicious_db => {
+    let (frequency_hz, steepness_db_per_khz) = match reported_step_hz(m, params) {
+        Some(fs) => {
             let span_khz = f64::from(params.step.window_bands + 1) * params.fft.band_hz / 1000.0;
             (fs, m.step_db / span_khz)
         }
@@ -250,6 +252,11 @@ pub fn cutoff_estimate(m: &Measurements, params: &DetectionParams) -> CutoffEsti
         steepness_db_per_khz: steepness_db_per_khz as f32,
         noise_floor_db: m.noise_floor_db as f32,
     }
+}
+
+fn reported_step_hz(m: &Measurements, params: &DetectionParams) -> Option<f64> {
+    m.step_hz
+        .filter(|_| m.step_db >= params.verdict.step_suspicious_db)
 }
 
 /// Section 2, `FullBand`: the params have a `[full_band]` section, `U` and `B` are defined and
@@ -271,23 +278,36 @@ pub fn is_full_band(m: &Measurements, params: &DetectionParams) -> bool {
     }
 }
 
+fn in_lossy_range(m: &Measurements, params: &DetectionParams) -> bool {
+    let v = &params.verdict;
+    m.step_hz
+        .is_some_and(|fs| fs >= v.lossy_min_cutoff_hz && fs < v.fake_max_cutoff_hz)
+}
+
+/// The V3 and V4 conditions, in rule order.
+fn lossless_fake_rules(m: &Measurements, params: &DetectionParams, in_range: bool) -> (bool, bool) {
+    let v = &params.verdict;
+    let full_band = is_full_band(m, params);
+    (
+        !full_band && m.gap_db >= v.gap_fake_db,
+        !full_band && m.step_db >= v.step_fake_db && in_range && !is_edge_step(m, params),
+    )
+}
+
 /// Section 3, rows V2 to V10, evaluated in order (V1 is decided before the spectra exist).
 pub fn decide(m: &Measurements, params: &DetectionParams) -> (Verdict, Vec<SuspicionReason>) {
     let v = &params.verdict;
     let d = m.step_db;
     let fs = m.step_hz;
-    let full_band = is_full_band(m, params);
-    let edge_step = is_edge_step(m, params);
-    let in_range = fs.is_some_and(|f| f >= v.lossy_min_cutoff_hz && f < v.fake_max_cutoff_hz);
+    let in_range = in_lossy_range(m, params);
+    let (gap_fake, cutoff_fake) = lossless_fake_rules(m, params, in_range);
     if m.high_frequency_db < v.low_hf_threshold_db {
         // V2
         (
             Verdict::Suspicious,
             vec![SuspicionReason::LowHighFrequencyContent],
         )
-    } else if !full_band
-        && (m.gap_db >= v.gap_fake_db || (d >= v.step_fake_db && in_range && !edge_step))
-    {
+    } else if gap_fake || cutoff_fake {
         // V3, V4
         (Verdict::Fake, vec![])
     } else if m.gap_db >= v.gap_suspicious_db {
@@ -382,6 +402,22 @@ pub fn expected_cutoff_hz(stream: &StreamInfo, params: &DetectionParams) -> Opti
     Some(c_exp)
 }
 
+fn shortfall_hz(stream: &StreamInfo, params: &DetectionParams, cutoff_hz: f64) -> Option<f64> {
+    expected_cutoff_hz(stream, params).map(|c| c - cutoff_hz)
+}
+
+pub(crate) fn measured_shortfall_hz(
+    stream: &StreamInfo,
+    m: &Measurements,
+    params: &DetectionParams,
+) -> Option<f64> {
+    shortfall_hz(
+        stream,
+        params,
+        reported_step_hz(m, params).unwrap_or(m.extent_hz),
+    )
+}
+
 /// Rule L0 as data: the `[lossy]` section and the table rows of a lossy codec, `Ok(None)` for a
 /// lossless codec, or the `UnsupportedFormat` error when these params cannot judge the codec.
 fn lossy_table(
@@ -473,6 +509,10 @@ pub fn is_streaming_rate(
         && fc < s.max_cutoff_hz
 }
 
+fn lossy_fake_rule(shortfall: f64, step_db: f64, params: &LossyParams) -> bool {
+    shortfall >= params.fake_shortfall_hz - EPS && step_db >= params.fake_min_step_db
+}
+
 /// Lossy-source.md sections 4 and 5, and rules.md section 3 for the lossless codecs.
 pub fn decide_track(
     stream: &StreamInfo,
@@ -508,23 +548,19 @@ pub fn decide_track(
         );
     }
     let b = stream.declared_bitrate_kbps;
-    // `D >= step_suspicious_db`, the literal comparison that chooses fc and the L4 reason.
+    // L4's reason uses the step depth even when fs is missing.
     let step_counts = m.step_db >= params.verdict.step_suspicious_db;
     // fc: the reported cutoff frequency.
-    let fc = match m.step_hz {
-        Some(fs) if step_counts => fs,
-        _ => m.extent_hz,
-    };
-    let shortfall = expected_cutoff_hz(stream, params).map(|c| c - fc);
-    let at_least = |s: f64, limit: f64| s >= limit - EPS;
+    let fc = reported_step_hz(m, params).unwrap_or(m.extent_hz);
+    let shortfall = shortfall_hz(stream, params, fc);
     if let (Some(s), Some(b)) = (shortfall, b) {
         let estimate = (stream.codec != AudioCodec::Opus).then(|| shortfall_estimate(rows, fc, b));
         // L3
-        if at_least(s, lossy.fake_shortfall_hz) && m.step_db >= lossy.fake_min_step_db {
+        if lossy_fake_rule(s, m.step_db, lossy) {
             return decision(Verdict::Fake, vec![], estimate);
         }
         // L4, L5
-        if at_least(s, lossy.suspicious_shortfall_hz) {
+        if s >= lossy.suspicious_shortfall_hz - EPS {
             let reason = if step_counts {
                 SuspicionReason::CutoffBelowDeclared
             } else {
@@ -549,6 +585,65 @@ pub fn decide_track(
     decision(Verdict::Real, vec![], b)
 }
 
+/// Evidence for RF-17, from the same inputs that produced `verdict`. Only `Fake` carries evidence.
+/// For lossy codecs, `shortfall` is the unrounded difference used in L3.
+pub fn fake_evidence(
+    m: &Measurements,
+    params: &DetectionParams,
+    codec: AudioCodec,
+    shortfall: Option<f64>,
+    verdict: Verdict,
+) -> Vec<FakeEvidence> {
+    if verdict != Verdict::Fake {
+        return Vec::new();
+    }
+    if codec.is_lossy() {
+        return match params.lossy.as_ref().zip(shortfall) {
+            Some((lossy, s)) if lossy_fake_rule(s, m.step_db, lossy) => vec![
+                evidence_item(EvidenceKind::Shortfall, s, lossy.fake_shortfall_hz),
+                evidence_item(EvidenceKind::CutoffStep, m.step_db, lossy.fake_min_step_db),
+            ],
+            _ => Vec::new(),
+        };
+    }
+    let (gap_fake, cutoff_fake) = lossless_fake_rules(m, params, in_lossy_range(m, params));
+    let mut evidence = Vec::new();
+    if gap_fake {
+        evidence.push(evidence_item(
+            EvidenceKind::GapStep,
+            m.gap_db,
+            params.verdict.gap_fake_db,
+        ));
+    }
+    if cutoff_fake {
+        evidence.push(evidence_item(
+            EvidenceKind::CutoffStep,
+            m.step_db,
+            params.verdict.step_fake_db,
+        ));
+    }
+    evidence
+}
+
+fn evidence_item(kind: EvidenceKind, value: f64, threshold: f64) -> FakeEvidence {
+    let margin = if value == threshold {
+        // Also handles equal signed infinities, whose subtraction would yield NaN.
+        0.0
+    } else if kind == EvidenceKind::Shortfall {
+        (value - threshold).max(0.0)
+    } else {
+        value - threshold
+    };
+    let limit = f64::from(f32::MAX);
+    let finite_f32 = |v: f64| v.clamp(-limit, limit) as f32;
+    FakeEvidence {
+        kind,
+        value: finite_f32(value),
+        threshold: finite_f32(threshold),
+        margin: finite_f32(margin),
+    }
+}
+
 /// Outcome of the rules for one analysed track of any codec (silence included).
 #[derive(Debug, Clone, PartialEq)]
 pub struct TrackDetection {
@@ -566,34 +661,51 @@ pub fn detect_track(
     stream: &StreamInfo,
     params: &DetectionParams,
 ) -> TrackDetection {
+    detect_track_with_measurements(spectra, stream, params).0
+}
+
+pub(crate) fn detect_track_with_measurements(
+    spectra: Option<&BandSpectra>,
+    stream: &StreamInfo,
+    params: &DetectionParams,
+) -> (TrackDetection, Option<Measurements>) {
     if let Some(e) = lossy_unsupported(stream.codec, params) {
-        return TrackDetection {
-            verdict: Verdict::Error,
-            reasons: Vec::new(),
-            cutoff: None,
-            estimated_source_bitrate_kbps: None,
-            error: Some(e),
-        };
+        return (
+            TrackDetection {
+                verdict: Verdict::Error,
+                reasons: Vec::new(),
+                cutoff: None,
+                estimated_source_bitrate_kbps: None,
+                error: Some(e),
+            },
+            None,
+        );
     }
     let Some(spectra) = spectra else {
         let d = detect(None, params);
-        return TrackDetection {
-            verdict: d.verdict,
-            reasons: d.reasons,
-            cutoff: None,
-            estimated_source_bitrate_kbps: None,
-            error: None,
-        };
+        return (
+            TrackDetection {
+                verdict: d.verdict,
+                reasons: d.reasons,
+                cutoff: None,
+                estimated_source_bitrate_kbps: None,
+                error: None,
+            },
+            None,
+        );
     };
     let m = measure(spectra, params);
     let d = decide_track(stream, &m, params);
-    TrackDetection {
-        verdict: d.verdict,
-        reasons: d.reasons,
-        cutoff: Some(cutoff_estimate(&m, params)),
-        estimated_source_bitrate_kbps: d.estimated_source_bitrate_kbps,
-        error: d.error,
-    }
+    (
+        TrackDetection {
+            verdict: d.verdict,
+            reasons: d.reasons,
+            cutoff: Some(cutoff_estimate(&m, params)),
+            estimated_source_bitrate_kbps: d.estimated_source_bitrate_kbps,
+            error: d.error,
+        },
+        Some(m),
+    )
 }
 
 fn median(values: &[f64]) -> f64 {

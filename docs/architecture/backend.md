@@ -20,7 +20,7 @@ The full-band guard (detection v3, ADR-0038, with the lossy-step condition of de
 
 ## 2. Domain model (`fakeflac-core`)
 
-See `crates/fakeflac-core/src/domain.rs`: `Verdict { Real, Suspicious, Fake, Error }`, `AudioFormat { Wav, Flac, Mp3, M4a, Opus }`, `TrackInfo`, `CutoffEstimate`, `SuspicionReason`, `TrackError`, `TrackAnalysis` (with `estimated_source_bitrate_kbps`), `AlbumSummary` (summary verdict = the worst of its tracks; exact rule in `specs/detection/`).
+See `crates/fakeflac-core/src/domain.rs`: `Verdict { Real, Suspicious, Fake, Error }`, `AudioFormat { Wav, Flac, Mp3, M4a, Opus }`, `TrackInfo`, `CutoffEstimate`, `SuspicionReason`, `TrackError`, `TrackAnalysis` (with `estimated_source_bitrate_kbps` and `evidence`), `FakeEvidence`, `EvidenceKind`, `AlbumSummary` (summary verdict = the worst of its tracks, as specified in `specs/detection/`).
 
 ## 3. Ports (traits in `core`)
 

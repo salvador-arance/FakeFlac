@@ -90,12 +90,22 @@ export type CutoffEstimate = {
 	noiseFloorDb: number,
 };
 
+export type EvidenceKind = "gapStep" | "cutoffStep" | "shortfall";
+
 /**  Result of `export_csv` (contract version 4, RF-09). */
 export type ExportResult = {
 	/**  Absolute path of the CSV written. */
 	path: string,
 	/**  Tracks written (header not counted). */
 	rows: number,
+};
+
+/**  Contract version 9 (RF-17). The detector represents every field as a finite number. */
+export type FakeEvidence = {
+	kind: EvidenceKind,
+	value: number,
+	threshold: number,
+	margin: number,
 };
 
 /**
@@ -141,6 +151,7 @@ export type TrackAnalysis = {
 	cutoff: CutoffEstimate | null,
 	estimatedSourceBitrateKbps: number | null,
 	reasons: SuspicionReason[],
+	evidence: FakeEvidence[],
 	error: TrackError | null,
 	algorithmVersion: number,
 };

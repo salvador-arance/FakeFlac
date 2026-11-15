@@ -1,7 +1,9 @@
 //! Use case: analyse one track (RF-03, RF-04, RF-15). Combines the scanner's `FileEntry`,
 //! the analyzer port and the pure detection rules into a `TrackAnalysis`.
 
-use crate::detect::{detect_track, track_guard, StreamInfo};
+use crate::detect::{
+    detect_track_with_measurements, fake_evidence, measured_shortfall_hz, track_guard, StreamInfo,
+};
 use crate::domain::{AudioCodec, TrackAnalysis, TrackError, TrackInfo, Verdict};
 use crate::params::DetectionParams;
 use crate::ports::{FileEntry, SpectrumAnalyzer};
@@ -31,6 +33,7 @@ pub fn analyze_track(
         cutoff: None,
         estimated_source_bitrate_kbps: None,
         reasons: Vec::new(),
+        evidence: Vec::new(),
         error: Some(error),
         algorithm_version: params.algorithm_version,
     };
@@ -64,16 +67,26 @@ pub fn analyze_track(
         declared_bitrate_kbps: info.declared_bitrate_kbps,
         encoder_lowpass_hz: probe.encoder_lowpass_hz,
     };
-    let detection = detect_track(probe.spectrum.as_ref(), &stream, params);
+    let (detection, measurements) =
+        detect_track_with_measurements(probe.spectrum.as_ref(), &stream, params);
     if let Some(e) = detection.error {
         return error(info, e);
     }
+    let evidence = measurements.map_or_else(Vec::new, |m| {
+        let shortfall = if detection.verdict == Verdict::Fake && stream.codec.is_lossy() {
+            measured_shortfall_hz(&stream, &m, params)
+        } else {
+            None
+        };
+        fake_evidence(&m, params, stream.codec, shortfall, detection.verdict)
+    });
     TrackAnalysis {
         info,
         verdict: detection.verdict,
         cutoff: detection.cutoff,
         estimated_source_bitrate_kbps: detection.estimated_source_bitrate_kbps,
         reasons: detection.reasons,
+        evidence,
         error: None,
         algorithm_version: params.algorithm_version,
     }

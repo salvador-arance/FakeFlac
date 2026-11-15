@@ -22,6 +22,7 @@ use cache::{
     assert_started_then_done, done_by_index, done_of, file_name_of, Behaviour, DecoderSpy, Op,
     Recorder, StoreFake,
 };
+use fakeflac_core::domain::{EvidenceKind, FakeEvidence};
 use fakeflac_core::ports::{FileEntry, FileScanner};
 use fakeflac_core::{
     analyze_folder, analyze_folder_cached, is_cacheable, summarize_album, AnalysisSummary,
@@ -99,9 +100,89 @@ fn stored_for(e: &FileEntry, verdict: Verdict, algorithm_version: u32) -> TrackA
         } else {
             vec![]
         },
+        evidence: if verdict == Verdict::Fake {
+            vec![step_evidence()]
+        } else {
+            vec![]
+        },
         error: None,
         algorithm_version,
     }
+}
+
+fn step_evidence() -> FakeEvidence {
+    FakeEvidence {
+        kind: EvidenceKind::CutoffStep,
+        value: 24.7,
+        threshold: 10.0,
+        margin: 14.7,
+    }
+}
+
+// @RF-17 @RF-11 A cached analysis is reused only when its evidence matches its verdict.
+#[test]
+fn rf17_cache_rechecks_evidence_against_verdict() {
+    for (verdict, evidence, from_cache) in [
+        (Verdict::Real, vec![], 1),
+        (Verdict::Suspicious, vec![], 1),
+        (Verdict::Error, vec![], 1),
+        (Verdict::Fake, vec![step_evidence()], 1),
+        (Verdict::Fake, vec![], 0),
+        (
+            Verdict::Real,
+            vec![FakeEvidence {
+                kind: EvidenceKind::GapStep,
+                value: 9.6,
+                threshold: 6.0,
+                margin: 3.6,
+            }],
+            0,
+        ),
+    ] {
+        let entry = entry("a.flac");
+        let mut stored = stored_for(&entry, verdict, params().algorithm_version);
+        stored.evidence = evidence;
+        if verdict == Verdict::Error {
+            stored.cutoff = None;
+            stored.error = Some(TrackError::TooShort);
+        }
+        let store = StoreFake::new();
+        store.force(&entry.path, stored);
+        let spy = DecoderSpy::new();
+        let (summary, _) = run_with_store(&FakeScanner(vec![entry]), &spy, &store, 1);
+        assert_eq!(summary.from_cache, from_cache, "{verdict:?}");
+        assert_eq!(summary.cache, CacheStatus::Ok);
+        assert_eq!(
+            spy.names(),
+            if from_cache == 1 {
+                vec![]
+            } else {
+                vec!["a.flac"]
+            }
+        );
+    }
+}
+
+// @RF-17 @RF-11 A cached fake without evidence is analysed again and replaced.
+#[test]
+fn rf17_cache_replaces_a_fake_without_evidence() {
+    let entry = entry("a.flac");
+    let mut stored = stored_for(&entry, Verdict::Fake, params().algorithm_version);
+    stored.evidence.clear();
+    let store = StoreFake::new();
+    store.hold(&entry, params().algorithm_version, stored);
+    let spy = DecoderSpy::new();
+    spy.on("a.flac", Behaviour::Cliff16k);
+    let (summary, events) = run_with_store(&FakeScanner(vec![entry]), &spy, &store, 1);
+    assert_eq!(summary.from_cache, 0);
+    assert_eq!(spy.names(), ["a.flac"]);
+    let analysis = done_of(&events, "a.flac");
+    assert_eq!(analysis.verdict, Verdict::Fake);
+    assert!(!analysis.evidence.is_empty());
+    let puts = store.puts();
+    assert_eq!(puts.len(), 1);
+    assert_eq!(file_name_of(&puts[0].path), "a.flac");
+    assert_eq!(puts[0].analysis.as_ref(), Some(&analysis));
 }
 
 /// `stored` as the run must report it: `info.path` and `info.folder` of the scan entry.

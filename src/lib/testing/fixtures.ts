@@ -5,6 +5,7 @@ import type {
   AudioCodec,
   AudioFormat,
   BitrateMode,
+  FakeEvidence,
   ResultRow,
   Spectrogram,
   SuspicionReason,
@@ -24,6 +25,7 @@ export type TrackOptions = {
   verdict?: Verdict
   cutoffHz?: number | null
   reasons?: SuspicionReason[]
+  evidence?: FakeEvidence[]
   error?: TrackError | null
   declaredBitrateKbps?: number | null
   bitrateMode?: BitrateMode | null
@@ -56,6 +58,7 @@ export function makeTrack(o: TrackOptions = {}): TrackAnalysis {
         : { frequencyHz: o.cutoffHz, steepnessDbPerKhz: 40, noiseFloorDb: -90 },
     estimatedSourceBitrateKbps: o.estimatedSourceBitrateKbps ?? null,
     reasons: o.reasons ?? [],
+    evidence: o.evidence ?? [],
     error: o.error ?? null,
     algorithmVersion: 5,
   }

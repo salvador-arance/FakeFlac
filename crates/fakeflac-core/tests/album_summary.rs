@@ -28,6 +28,7 @@ fn track(folder: &str, name: &str, verdict: Verdict) -> TrackAnalysis {
         cutoff: None,
         estimated_source_bitrate_kbps: None,
         reasons: Vec::new(),
+        evidence: Vec::new(),
         error: (verdict == Verdict::Error).then(|| TrackError::CorruptStream("test".into())),
         algorithm_version: 1,
     }

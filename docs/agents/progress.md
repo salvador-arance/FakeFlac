@@ -2,6 +2,69 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-15 - RF-17 full-library CSV comparison passed
+
+**Done**
+- M2 passed. The 2026-11-14 export was unavailable locally, so rebuilt the same release revision (`2f800f2`) and exported directly from both native apps with isolated cache and WebView2 profiles. Both exports have 11,396 rows and are byte-identical (4,427,958 bytes, SHA-256 `6cc29a063bd825d980e570481f1c28e9c6ff348df029b9f195134a286f7af1d2`). Both apps reported 9,003 real, 1,173 suspicious, 1,156 fake and 64 errors.
+- Before the runs, all 13,203 library paths, sizes and modification times matched the November 14 snapshot. The same inventory matched after the two exports. Private CSVs remain under `target/`; the PR draft records aggregates only.
+
+**Pending**
+- [PR #145](https://github.com/salvador-arance/FakeFlac/pull/145) is open for the owner's G2 review and merge.
+
+**Next step:** Review PR #145 at G2.
+
+## 2026-11-15 - RF-17 native walkthrough completed
+
+**Done**
+- At the owner's request, exercised the native WebView2 release build in English and Spanish on anonymized copies of 35 real library tracks. Verified six selected cases: gap-only with a 22.1 kHz cutoff and a 0.5 dB margin, step-only with a 0.6 dB margin, both lossless conditions, a lossy track with shortfall and step, the only Fake in an album, and an all-Fake album. The mixed albums show their counts, the all-Fake and single-track albums omit the album note, and the audio note explains the provenance limit in both languages. The State cell exposes both evidence items for the two-rule case. This was an engineering walkthrough rather than an unfamiliar user's comprehension test.
+- Native MU1 passed at 900 × 500 using the default and 160 px detail heights. The evidence stayed readable without overlapping the graph or status bar. At minimum height in Spanish, the graph remained visible and its frequency labels crowded together.
+- The scratch build used the same application code and web assets with test-only window and storage paths. The initial launch used the normal WebView profile before the test was repeated with an explicit scratch WebView2 profile. Language and panel-height changes were made in the isolated session.
+
+**Pending**
+- M2 full-library app CSV comparison and the feature PR for G2.
+
+**Next step:** Open the RF-17 feature PR after the owner's go-ahead.
+
+## 2026-11-15 - RF-17 implemented and verified
+
+**Done**
+- G1 approved in #139, #143 and #144. Protected tests are in `6a30140`; Rust, generated v9 bindings and cache compatibility are in `35984e1`; the English and Spanish UI is in `34994c7` and `faa9fcf`. Both independent reviews found no issues after the layout adjustment.
+- `just check ci`, `just check-app`, `just trace`, `just privacy-check --base origin/main` and `just build` passed. `just perf` passed with T1 medians 165/196 ms and T2 medians 535/546 ms (cache off/cold), within the reference bound. The full performance report is saved under `target/`.
+- X3: same local corpus, calibration v5 and detection v8. Both CSV outputs are byte-identical and both Markdown reports match after removing run metadata. The production browser check at 900 × 500 passed in both languages with the detail panel at 260 and 160 px. The Windows release executable and installers are available under `target/release/`.
+
+**Pending**
+- Approval to open the feature PR at G2, per `/feature`. The PR body and full performance report are ready under `target/`. Owner walkthrough M1 and real library app CSV comparison M2 remain pending.
+
+**Next step:** Open the RF-17 feature PR when the owner authorizes it.
+
+## 2026-11-15 - RF-17 evidence representation needs G1 clarification
+
+**Done**
+- The shortfall margin correction merged in #143 (`bd6353f`). Rebased `feat/RF-17` on it and started the test stage. Baseline probes matched all 25 default rule-level cases and the specified fixture evidence kinds.
+- Captured the pre-feature v5/v8 corpus acceptance in repository scratch storage (run `20261115T133313Z`). The original corpus and calibration data were read only.
+
+**Blocker / question for the human**
+- The evidence spec §2.4 and contract v9 require finite `f32` fields. The existing validator accepts finite v8 `gap_suspicious_db` and `gap_fake_db` values of `-1e40`. The gap-only FLAC measurement still returns `Fake`, but a direct `f32` conversion produces `-inf` for the threshold and `inf` for the margin. A proposed G1 resolution is to saturate evidence fields to the finite `f32` range after the margin calculation in `f64`. The detector and params validation would retain their existing behavior.
+
+**Pending**
+- The test stage is paused with its drafts uncommitted. No implementation or spec changes were made in this stage.
+
+**Next step:** Resolve the evidence conversion rule at G1, then finish the drafted RF-17 tests.
+
+## 2026-11-15 - RF-17 lossy shortfall margin needs G1 clarification
+
+**Done**
+- RF-17 spec PR #139 merged at `298138f`. Created `feat/RF-17` from `b645d54`, which includes the merged RP-11 feature PR #142.
+- A Rust probe against `decide_track` returned `Fake` for an MP3 with a 2450 Hz shortfall and a `2450.0000000005` Hz threshold. The raw margin remains negative after conversion to `f32` (`-5.002221e-10` Hz).
+
+**Blocker / question for the human**
+- The existing L3 comparison allows a shortfall up to `1e-9` Hz below the configured threshold. `specs/detection/fake-evidence.md` sections 2.2 and 2.4 and the v9 contract require both the exact difference and a nonnegative margin while preserving that verdict. A proposed resolution is to keep the configured threshold and measured value and report a zero margin for shortfalls accepted by the existing tolerance.
+
+**Pending**
+- RF-17 test, implementation and review stages.
+
+**Next step:** Resolve the shortfall margin rule at G1 before starting RF-17 tests.
+
 ## 2026-11-15 - RP-11 lossy-master reporting implemented and checked
 
 **Done**
