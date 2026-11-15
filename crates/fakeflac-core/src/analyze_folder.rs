@@ -274,6 +274,7 @@ fn matches_entry(hit: &TrackAnalysis, entry: &FileEntry, params: &DetectionParam
         && hit.info.size_bytes == entry.size_bytes
         && hit.info.modified_unix == entry.modified_unix
         && hit.info.format == entry.format
+        && hit.evidence.is_empty() == (hit.verdict != Verdict::Fake)
 }
 
 /// The album of a `TrackDone` after counting that track (RF-10, commands.md version 5).

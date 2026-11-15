@@ -98,6 +98,26 @@ pub enum SuspicionReason {
     StreamingSampleRate,
 }
 
+/// Rule measurement that supports a `Fake` verdict (RF-17).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EvidenceKind {
+    GapStep,
+    CutoffStep,
+    Shortfall,
+}
+
+/// Measurement, configured threshold and nonnegative margin, represented as finite `f32` values.
+/// `Shortfall` uses Hz. `GapStep` and `CutoffStep` use dB.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FakeEvidence {
+    pub kind: EvidenceKind,
+    pub value: f32,
+    pub threshold: f32,
+    pub margin: f32,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CutoffEstimate {
@@ -150,6 +170,9 @@ pub struct TrackAnalysis {
     /// Estimated source bitrate in kbps (RF-15, lossy formats).
     pub estimated_source_bitrate_kbps: Option<u32>,
     pub reasons: Vec<SuspicionReason>,
+    /// Present for `Fake` results. A pre-RF-17 cache row can omit this field.
+    #[serde(default)]
+    pub evidence: Vec<FakeEvidence>,
     pub error: Option<TrackError>,
     pub algorithm_version: u32,
 }
