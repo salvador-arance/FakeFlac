@@ -2,6 +2,23 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-15 - Report-folder guard specified; CI timeout raised
+
+**Done**
+- The census follow-up merged as #154 (`ca67f22`); the merged local branches were pruned.
+- Spec PR `spec/RP-12-folder-ancestor-guard`: a `FOLDER` that contains the report folder `<repository root>/target/census/` (the repository root, an ancestor, `target/` or `target/census/`) is refused with exit 2, an empty stdout, nothing written and the fixed line `error: census: the folder contains the report folder (target/census/ of the repository)`. Canonical forms are compared, canonicalizing the deepest part of the report folder that exists. New acceptance case C11, a Scenario Outline in `census.feature` and the traceability row. The stale "tests pending" of the empty-field scenario was corrected (tests landed in #154).
+- CI PR [#155](https://github.com/salvador-arance/FakeFlac/pull/155): `test-rust` `timeout-minutes` from 20 to 30 (the `nextest` step takes 12 to 17 minutes on `main`).
+
+**Pending**
+- G1 on the spec PR, then a `/feature RP-12` round: the C11 test, then the guard in `tools/fakeflac-calibrate/src/census.rs` (between finding the repository and the run).
+- G2 on #155.
+- Not specified: the sentence in census.md section 5 saying the "empty means not measured" rule covers error tracks only (pinned by a test today).
+
+**Blockers / questions for the human**
+- None. Decision taken for G1 (delegated): the guard canonicalizes the deepest existing part of the report folder, so it also holds on a fresh checkout where `target/census/` does not exist yet. The C11 allowed cases are not tested with other letter case or the `\\?\` prefix.
+
+**Next step:** Review the spec PR at G1.
+
 ## 2026-11-15 - RP-12 follow-up: tests and numeric blanking (branch `feat/RP-12-census-empty-fields`)
 
 **Done**
