@@ -2,6 +2,26 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-15 - Report-folder guard implemented (branch `feat/RP-12-folder-guard`)
+
+**Done**
+- #155 (`test-rust` timeout 30 min) and #156 (the guard spec) are merged on `main` (`275d51d`).
+- Test stage `845247f`: six `rp12_c11_*` tests in `tools/fakeflac-calibrate/tests/census.rs` (four refused cases red, two allowed cases green before the guard); the fourth refused case, `target/census/` itself, comes from section 2 and is not in C11's list.
+- Implement stage `cf17bcd`: the guard in `tools/fakeflac-calibrate/src/census.rs` (`canonical_report_folder`, `contains_report_folder`), after the repository is found and before the run; exit 2 with the fixed line, nothing written. `std` only, no dependency.
+- Review: no blocking findings; the reviewer ran the real binary on synthetic repos (other letter case, `..`, trailing separator, junctions, `Música` against `Música 2`) and every case behaved as specified. `just check`, `just guard-tests`, `just ci` and `just privacy-check --base origin/main` exit 0. The initial `just check` before the test stage was skipped on the owner's instruction.
+
+**Pending**
+- G2 on the PR of this branch.
+- Review improvements not applied: (1) a refused C11 case where `FOLDER` is spelled differently from the repository root (`repo/../repo`, and an upper-cased spelling on Windows): a plain non-canonical `starts_with` passes every test today, so the canonical comparison is checked only by hand; (2) no test of the fail-open rule or of a `target` junction (needs privileges on Windows).
+- Spec wording for a `spec/` PR: section 9 says "only its three refused cases may be red" but there are four; and a clause that with `target` redirected by a junction outside the repository the repository root is refused only if the redirected report folder lies inside it (the code follows the canonical rule).
+- Not specified: the sentence in census.md section 5 saying the "empty means not measured" rule covers error tracks only.
+- Run `just prune-branches` after the merge.
+
+**Blockers / questions for the human**
+- None.
+
+**Next step:** Review the PR at G2.
+
 ## 2026-11-15 - Report-folder guard specified; CI timeout raised
 
 **Done**
