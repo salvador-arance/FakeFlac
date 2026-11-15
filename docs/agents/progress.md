@@ -2,6 +2,20 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-15 - RF-17 lossy shortfall margin needs G1 clarification
+
+**Done**
+- RF-17 spec PR #139 merged at `298138f`. Created `feat/RF-17` from `b645d54`, which includes the merged RP-11 feature PR #142.
+- A Rust probe against `decide_track` returned `Fake` for an MP3 with a 2450 Hz shortfall and a `2450.0000000005` Hz threshold. The raw margin remains negative after conversion to `f32` (`-5.002221e-10` Hz).
+
+**Blocker / question for the human**
+- The existing L3 comparison allows a shortfall up to `1e-9` Hz below the configured threshold. `specs/detection/fake-evidence.md` sections 2.2 and 2.4 and the v9 contract require both the exact difference and a nonnegative margin while preserving that verdict. A proposed resolution is to keep the configured threshold and measured value and report a zero margin for shortfalls accepted by the existing tolerance.
+
+**Pending**
+- RF-17 test, implementation and review stages.
+
+**Next step:** Resolve the shortfall margin rule at G1 before starting RF-17 tests.
+
 ## 2026-11-15 - RP-11 lossy-master reporting implemented and checked
 
 **Done**
