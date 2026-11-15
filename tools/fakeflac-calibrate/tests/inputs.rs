@@ -260,6 +260,6 @@ fn rp11_confirmed_error_unknown_kind() {
     confirmed_line_error(
         "confirmed-unknown-kind",
         "Sueltas\\Mixto\\06 – Falso.flac | dudoso",
-        "confirmed.txt:2: unknown kind 'dudoso' (expected fake, real or false-positive)",
+        "confirmed.txt:2: unknown kind 'dudoso' (expected fake, real, false-positive or lossy-master)",
     );
 }

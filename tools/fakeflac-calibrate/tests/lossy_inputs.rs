@@ -148,7 +148,7 @@ fn rf15_confirmed_error_unknown_kind() {
     confirmed_attribute_error(
         "lossy-attr-kind",
         &format!("{FALSO} | dudoso"),
-        "unknown kind 'dudoso' (expected fake, real or false-positive)",
+        "unknown kind 'dudoso' (expected fake, real, false-positive or lossy-master)",
     );
 }
 
