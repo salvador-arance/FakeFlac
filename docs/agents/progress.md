@@ -2,25 +2,23 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
-## 2026-11-15 - Report-folder guard implemented (branch `feat/RP-12-folder-guard`)
+## 2026-11-15 - RP-12 closed in PR #157 (branch `feat/RP-12-folder-guard`)
 
 **Done**
 - #155 (`test-rust` timeout 30 min) and #156 (the guard spec) are merged on `main` (`275d51d`).
-- Test stage `845247f`: six `rp12_c11_*` tests in `tools/fakeflac-calibrate/tests/census.rs` (four refused cases red, two allowed cases green before the guard); the fourth refused case, `target/census/` itself, comes from section 2 and is not in C11's list.
-- Implement stage `cf17bcd`: the guard in `tools/fakeflac-calibrate/src/census.rs` (`canonical_report_folder`, `contains_report_folder`), after the repository is found and before the run; exit 2 with the fixed line, nothing written. `std` only, no dependency.
-- Review: no blocking findings; the reviewer ran the real binary on synthetic repos (other letter case, `..`, trailing separator, junctions, `Música` against `Música 2`) and every case behaved as specified. `just check`, `just guard-tests`, `just ci` and `just privacy-check --base origin/main` exit 0. The initial `just check` before the test stage was skipped on the owner's instruction.
+- Guard: tests `845247f`, implementation `cf17bcd` in `tools/fakeflac-calibrate/src/census.rs` (`canonical_report_folder`, `contains_report_folder`): a `FOLDER` that contains `<repository root>/target/census/` is refused with exit 2, an empty stdout, nothing written and a fixed line. Review round 1: no blocking findings; the reviewer ran the real binary on synthetic repositories.
+- Everything left open about RP-12 is closed in this PR, with the owner's delegation: spec `5dc6ab3` and `9328467` (four refused cases in section 9, the redirected-`target` clause, C11 cases (a) to (d), "empty means not measured covers error tracks only", `@RNF-07` on the Windows examples); tests `43a605d` (five tests: `..` segment, other letter case, a missing repository root, a junction on `target`, plus the typed `pick` helper); `40c632b` (one empty arm in `probed_field`). Review round 2: no blocking findings.
+- `just check` and `just guard-tests` exit 0. `just ci` was not run locally, on the owner's instruction; the CI of the PR runs it. The initial `just check` before the test stage was also skipped.
+- RP-12 earlier: census #152, spec clarification #153, numeric blanking and tests #154, MC1 and MC2 passed on the owner's library (recorded in #152).
 
 **Pending**
-- G2 on the PR of this branch.
-- Review improvements not applied: (1) a refused C11 case where `FOLDER` is spelled differently from the repository root (`repo/../repo`, and an upper-cased spelling on Windows): a plain non-canonical `starts_with` passes every test today, so the canonical comparison is checked only by hand; (2) no test of the fail-open rule or of a `target` junction (needs privileges on Windows).
-- Spec wording for a `spec/` PR: section 9 says "only its three refused cases may be red" but there are four; and a clause that with `target` redirected by a junction outside the repository the repository root is refused only if the redirected report folder lies inside it (the code follows the canonical rule).
-- Not specified: the sentence in census.md section 5 saying the "empty means not measured" rule covers error tracks only.
-- Run `just prune-branches` after the merge.
+- G2 on #157 (the spec edits ride in this feat PR by the owner's delegation; keep that in the PR description). Then `just prune-branches`.
+- Nothing else is open for RP-12. Optional, not done: the C11 junction cases print a reason and pass when `mklink /J` cannot create the link, so a skip is silent unless the CI log is read; a dangling `target` junction makes the run fail later at `create_dir_all` (nothing is written).
 
 **Blockers / questions for the human**
 - None.
 
-**Next step:** Review the PR at G2.
+**Next step:** Review #157 at G2.
 
 ## 2026-11-15 - Report-folder guard specified; CI timeout raised
 
