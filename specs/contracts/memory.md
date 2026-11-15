@@ -381,13 +381,16 @@ If the allowed levers do not meet a gate, the implement stage stops and reports 
 - **A10 (long tracks).** `flac_1h` (`analyze` and `spectrogram`) and `opus_1h` (`analyze`) each meet the growth bound of 1 MiB against their 30 s files and the ceiling of 32 MiB. `flac_hires` meets the growth bound against its own short file and the ceiling of **64 MiB** (67 108 864 bytes). The A10 figures are not measured yet (F6). The 64 MiB ceiling is provisional: the first `just memory` report (M2) confirms it, or the spec returns to G1 with that report.
 
 **Manual** (owner, release build of the app; aggregates only, ADR-0022):
-- **M1 (the app on a real folder, Q7).**
+- **M1 (the app on a real folder, Q7; steps 3 to 5 revised after F7, section 14).**
   1. Start the app and run `Get-Process -Name FakeFlac | Select-Object PeakWorkingSet64, PeakPagedMemorySize64` in PowerShell (P0).
   2. Clear the result cache, analyse a real folder that holds a 15-track album and the longest file available (at least 40 minutes), and run the command again (P1).
-  3. Open the spectrogram of the longest file, and run the command again (P2).
-  4. Record the worker count, the track count, the folder's total size in MB, and P1 − P0 and P2 − P1 for both metrics.
+  3. Close the app and start it again. Analyse the same folder: every track now comes from the result cache, so nothing is decoded. When the run has finished, run `Get-Process -Name FakeFlac | Select-Object PeakWorkingSet64, PeakPagedMemorySize64, WorkingSet64, PagedMemorySize64` (P2a: the two peaks and the two current figures).
+  4. Open the spectrogram of the longest file, wait until it is drawn, do nothing else in the app, and run the command of step 1 again (P2b).
+  5. Record the worker count, the track count, the folder's total size in MB, P1 − P0 for both metrics, and for the spectrogram, for both metrics: the **peak increase** (P2b peak − P2a peak) and the **upper bound** (P2b peak − P2a current).
 
-  Indicative targets: P1 − P0 ≤ `workers × 32 MiB + 64 MiB`, and P2 − P1 ≤ 32 MiB. They never fail.
+  Indicative targets: P1 − P0 ≤ `workers × 32 MiB + 64 MiB`, and the spectrogram's upper bound ≤ 32 MiB. They never fail.
+
+  Why the upper bound. The peaks are lifetime figures. A spectrogram opened after the analysis cannot raise them unless it needs more than the analysis did, so a peak increase of 0 says nothing (F7, 12.6). Before the spectrogram the process held the P2a current figure, and at no time did it hold more than the P2b peak, so the spectrogram added at most the difference. The restart keeps the analysis peak of step 2 out of P2b, and the cached run keeps the bound small enough to compare with 32 MiB. When the upper bound is above 32 MiB although the peak increase is 0, the result is recorded as **inconclusive**, not as a miss.
 - **M2 (the long suite on record).** The report of `just memory` on the owner's machine is pasted into the feature PR.
 
 ## 11. What the code does today (read from the code; the measured figures are in section 12)
@@ -410,7 +413,7 @@ If the allowed levers do not meet a gate, the implement stage stops and reports 
 
 ## 12. Figures
 
-**Status.** F1–F5 were measured before G1, and they back the growth bound, the ceiling, the CI budget, A1's 4 MiB and A5 (Q3, 5.4). With them the spec is **Ready for G1**. F6 and F7 are not measured. They are measured later: F6 by the opt-in `just memory` run whose report goes in the feature PR (M2), F7 by hand (M1). Neither feeds a CI gate. Until F6 is measured, the A10 bounds, and the 64 MiB hi-res ceiling in particular, are provisional, and a figure of F6 that contradicts them sends the spec back to G1 with the report. Every figure is recorded as an aggregate of synthetic fixtures (no corpus names or paths, ADR-0022).
+**Status.** F1–F5 were measured before G1, and they back the growth bound, the ceiling, the CI budget, A1's 4 MiB and A5 (Q3, 5.4). With them the spec is **Ready for G1**. F6 and F7 are not measured. They are measured later: F6 by the opt-in `just memory` run whose report goes in the feature PR (M2), F7 by hand (M1). (F7 has since been measured: 12.6 and section 14.) Neither feeds a CI gate. Until F6 is measured, the A10 bounds, and the 64 MiB hi-res ceiling in particular, are provisional, and a figure of F6 that contradicts them sends the spec back to G1 with the report. Every figure is recorded as an aggregate of synthetic fixtures (no corpus names or paths, ADR-0022).
 
 | # | Figure | Feeds | Status |
 |---|---|---|---|
@@ -420,7 +423,7 @@ If the allowed levers do not meet a gate, the implement stage stops and reports 
 | F4 | File sizes of every pair, and the growth that A1 checks | A1 (4 MiB) | Measured (12.5) |
 | F5 | Chunks per format: `max_chunk_frames`, chunks and frames of one decoding pass | A5 (65 535), the length tolerance of section 4 | Measured (12.5) |
 | F6 | The peaks of the long suite (A10) | A10 bounds, 64 MiB hi-res ceiling (provisional) | **Not measured.** Measured in the opt-in `just memory` run, whose report goes in the feature PR (M2). Expected: like F1; hi-res about 3 MB more than 44.1 kHz; `opus_1h` fails until Q4 is done (27–36 MB, estimated) |
-| F7 | M1 on the owner's machine (the whole app) | M1 indicative targets | **Not measured.** Manual (M1), recorded in the feature PR or later |
+| F7 | M1 on the owner's machine (the whole app) | M1 indicative targets | Measured on 2026-11-14 with M1 as first written (12.6). The analysis target is met. The spectrogram figure is not informative, which is why M1's steps 3 to 5 are revised (section 14); the spectrogram part is to be measured again with them |
 
 ### 12.1 How F1–F5 were measured
 
@@ -492,6 +495,20 @@ Five repeats of each child, each in a fresh process. Spread (largest minus small
 - **F5 (A5).** Every largest chunk is far below 65 535 frames. WAV chunks are 1152 frames (symphonia's packet size for this WAV). `mp3` decodes 1 321 967 frames for the short file (1 322 496 written) and 13 229 039 for the long one, 529 frames short of each, within the 1152-frame tolerance. At 300 s every other case decodes exactly its fixture's length.
 - **Error and empty cases.** `wav_empty`: 0 chunks, 0 frames. `flac_truncated`: `CorruptStream("stream ended after 6610944 of 13225984 frames")`. `flac_huge_length`: `CorruptStream("stream ended after 1318912 of 68719476735 frames")`.
 
+### 12.6 F7: the whole app (M1 as first written)
+
+Measured on 2026-11-14 with the release app built from `2f800f2`, on the development machine (16 logical CPUs, 15 workers), result cache cleared, on a real folder: 11 396 tracks in 902 albums, 150 714 MB, with 66 folders of exactly 15 tracks. The longest analysed track is an MP3 of 60 min 32 s. Aggregates only (ADR-0022).
+
+| Reading | Peak private bytes | Peak working set |
+|---|---|---|
+| P0, app ready | 8 110 080 | 33 443 840 |
+| P1, analysis complete | 240 324 608 | 291 893 248 |
+| P2, longest track's spectrogram drawn | 240 324 608 | 291 893 248 |
+
+- **Analysis.** P1 − P0 is 221.5 MiB (private) and 246.5 MiB (working set), against an indicative target of 544 MiB (15 × 32 + 64): met.
+- **Spectrogram.** P2 − P1 is 0 for both metrics. This does not show that the spectrogram used less than 32 MiB. It shows only that it did not need more than the analysis had already used: a spectrogram that took 200 MiB would have given the same 0. The check as first written could not miss its target.
+- The per-track gate is not affected: A4 and A10 measure the spectrogram of a 300 s and of a 1-hour FLAC in a fresh child process against the 32 MiB ceiling. What M1 adds is the app's own wiring around that call, and that is what the revised steps measure.
+
 ## 13. Edits to approved specs and docs
 
 - **In this spec PR:**
@@ -512,3 +529,11 @@ Five repeats of each child, each in a fresh process. Spread (largest minus small
   - **The two-pass Opus reader (Q4)** changes no contract. It is guarded by the existing `opus.feature` scenarios, which stay green unchanged (section 8). These include "Stream information of Opus fixtures", "Pre-skip and end trim are applied", "The output gain of OpusHead is applied to every sample", "A packet split across pages is reassembled", "Verdict of Opus fixtures", "Broken Ogg or Opus structure is corruptStream" (R1–R22), "Recognised but unsupported Opus streams are unsupportedFormat", "A short Opus file is too short" and "The spectrogram of an Opus file". Memory adds only the growth scenario.
   - **M4A per-sample table growth (Q8)** was measured by F1 at 69 632 bytes (working set) and 94 208 bytes (private) from 30 s to 300 s, and A3 gates it at 300 s. The hour-long M4A remains out of scope (section 1).
 - **`performance.md` is not edited.** Its D7 ("Memory is RNF-02") stays true.
+
+## 14. Revision after F7 (draft 2026-11-15, G1 pending)
+
+- **What changes.** M1's steps 3 to 5 (section 10), the F7 row of section 12, the new section 12.6 with the F7 figures, the scenario "The app's peak memory on a real folder is reported" of `memory.feature`, and the "Manual check" line of `requirements/RNF-02.md`.
+- **Why.** M1 compared lifetime peaks read before and after the spectrogram, in the session that had just analysed the whole folder. F7 measured 0 for both metrics (12.6), and 0 is what any spectrogram below about 220 MiB would have given.
+- **The revised check.** A fresh session, a cached run (no decoding), then the spectrogram, reported as an upper bound: the peak after it minus the current figure before it. `Get-Process` gives the current figures (`WorkingSet64`, `PagedMemorySize64`) in the same call as the peaks, so there is no new tool.
+- **Open question for G1 (Q10).** Is an upper bound from two readings enough, or should the app's spectrogram be measured in a process of its own? Default: **the upper bound.** The alternative needs a way to open one file's spectrogram in the app without analysing a folder first, which is a product change (a new command or a start-up argument) for a check that is manual and indicative.
+- **Unchanged.** The criterion (section 2), the gates A1 to A10, the suites, `just memory`, the report, every bound and the first two steps of M1. No test, no code and no recipe changes: M1 is manual. No layer has work after G1 except the owner's new reading, recorded in a later docs PR in aggregates only.

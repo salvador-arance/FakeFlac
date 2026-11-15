@@ -255,6 +255,15 @@ Feature: Performance budget for a typical track and a 15-track album (H2)
     Then the size, modification time and content hash of both files are unchanged
     And the folder holds exactly the files it held before
 
+  Scenario: A performance-sensitive change is compared with its own base
+    Checked by hand at review (performance.md 5.4, revised in section 14). The
+    flag is indicative and fails nothing.
+    Given a PR whose diff touches a path listed in performance.md Q13
+    When "just perf" runs on the PR's merge base and then on its head, on the same machine, one right after the other
+    Then the PR records both reports, each with its commit and its machine line
+    And a gated median of the head report is flagged for G2 when 10 times it is greater than 11 times the same median of the base report
+    And a head median of 572 ms against a base of 520 ms is not flagged, and one of 573 ms is
+
   Scenario: just perf accepts at most one argument
     Checked by hand (performance.md M3); T14 checks that the recipe holds the text.
     When I run "just perf" with the arguments "a" and "b"

@@ -2,6 +2,24 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-15 - Census and manual-check specs opened for G1
+
+**Done**
+- RF-17 merged as #145 (`13a666c`). The three items left unspecified by the library diagnosis of 2026-11-14 now have spec PRs.
+- Spec [PR #148](https://github.com/salvador-arance/FakeFlac/pull/148) (`spec/RP-12-library-census`): new requirement RP-12, `specs/calibration/census.md` (CQ1-CQ9, C1-C10, MC1-MC2) and `specs/features/census.feature`. `just census FOLDER [--params FILE]` is a subcommand of `fakeflac-calibrate` that runs the app's own use case and reports aggregates (verdicts by codec, evidence kinds, album strata, margin bands, suspicion reasons, errors), with a private per-track CSV under `target/census/<run>/`.
+- Spec [PR #149](https://github.com/salvador-arance/FakeFlac/pull/149) (`spec/RNF-01-02-manual-checks`): memory.md M1 reads the app's spectrogram in a fresh session as an upper bound (Q10) and records the F7 figures (12.6); performance.md 5.4 replaces the fixed reference with a paired base/head comparison and a 10 % bound (Q15). Specs only.
+- `just check`, `just trace` and `just privacy-check --base origin/main` pass on both branches. The two branches merge with each other without conflicts.
+
+**Pending**
+- G1 on #148 and #149. After #148: `/feature RP-12`. After #149 nothing is implemented; the owner repeats the spectrogram part of M1 with the revised steps.
+- Owner's agent-configuration edits, then `just agents-sync`: the `memory` and `census` recipes in the `CLAUDE.md` command list, and in `.claude/agents/code-reviewer.md` the memory rule of memory.md section 13 and the paired `just perf` rule of performance.md section 14.
+- Still measured but not proposed: encoder-specific AAC cutoffs for the 17 kHz platform edge, and the share of legitimate 48 kHz files under L6a.
+
+**Blockers / questions for the human**
+- None beyond G1.
+
+**Next step:** Review #148 and #149 at G1.
+
 ## 2026-11-15 - RF-17 full-library CSV comparison passed
 
 **Done**

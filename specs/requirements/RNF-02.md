@@ -21,7 +21,7 @@ Measurable acceptance (pending G1). The bounds are backed by memory.md F1–F5, 
   - Its time budget is 120 s. F3 measured about 55 s on the development machine (dev profile), a margin of about 2× for a slower CI runner.
 - **ADR.** An ADR extending ADR-0046 must exist before the feature PR opens (memory.md Q9). It inverts ADR-0046's "not in CI" stance for memory, and it names the flake risk of measuring through PowerShell.
 - **Opt-in long suite.** `just memory` checks 1-hour FLAC and Opus files the same way, and a 24-bit/96 kHz FLAC with a 64 MiB ceiling. These figures are not measured yet (F6), so the 64 MiB ceiling is provisional: the first `just memory` report in the feature PR confirms it, or the spec returns to G1.
-- **Manual check.** The whole app's peak on a real folder is a manual, indicative check (M1; F7, not measured yet).
+- **Manual check.** The whole app's peak on a real folder is a manual, indicative check (M1). F7 measured it on 2026-11-14: the analysis target is met (221.5 MiB private and 246.5 MiB working set over the app at rest, against 544 MiB). Its spectrogram figure was 0 and not informative, because lifetime peaks cannot show an increase below the analysis peak; M1 now reads the spectrogram in a fresh session as an upper bound (memory.md section 14, draft for G1).
 
 Today's Opus reader keeps a per-packet index, and it fails the growth gate: from 30 s to 300 s its peaks grow by 2 142 208 bytes (working set) and 2 248 704 bytes (private), about twice the bound (F1). It must be made two-pass with identical results (memory.md Q4).
 
