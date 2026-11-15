@@ -12,7 +12,8 @@
 - `just check`, `just trace`, `just guard-tests` and `just ci` exit 0 (exit code of `just` itself, not of a pipe). On the synthetic sample the figures match section 8 of `census.md`.
 
 **Pending**
-- G2 on the PR (the owner merges). MC1 and MC2 (owner, release build, aggregates only in the PR): `just census` on the library of 2026-11-14, with `summary.md` and the elapsed time recorded in the PR; the totals must be 11 396 tracks (9 003 real, 1 173 suspicious, 1 156 fake, 64 errors).
+- G2 on the PR (the owner merges).
+- MC1 and MC2 passed on 2026-11-15 and are recorded in a comment on the PR (aggregates only): `just census` on the library of 2026-11-14 gave 11 396 tracks (9 003 real, 1 173 suspicious, 1 156 fake, 64 errors), lossless `gapStep` 95, `cutoffStep` 188, both 218, in 345.8 s with no cache; the library's 13 203 files, sizes and modification times were identical before and after.
 - Owner's agent-configuration edit, then `just agents-sync`: the `census` line in the `CLAUDE.md` command list.
 - Needs a spec line first (G1): a guard for FOLDER being an ancestor of the repository, which would put the report inside FOLDER (D1). Also census.md section 5 / C2 should state that an empty measurement field means "not measured", and the blank lines of `summary.md` (between blocks and at the end, so `elapsed:` is not read as a table row) are unspecified.
 - Small round 2 improvements, not applied: a unit test in `census.rs` for the blanking of placeholder fields (the protected test checks only six columns), and deciding the blanking from the numeric fields instead of comparing the formatted string with `0`.
@@ -21,7 +22,7 @@
 **Blockers / questions for the human**
 - None blocking. A probed `tooShort` track with a 0 ms duration also shows an empty `duration_ms`; the reviewer judged it acceptable.
 
-**Next step:** Review the PR at G2, then run MC1 and MC2 on the library.
+**Next step:** Review the PR at G2.
 
 ## 2026-11-15 - Revised spectrogram reading and agent configuration
 
