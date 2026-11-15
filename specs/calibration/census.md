@@ -1,7 +1,7 @@
 ---
 id: SPEC-CENSUS
 requirements: [RP-12, RNF-04, RNF-05, RNF-09]
-status: proposed
+status: approved
 ---
 
 # Library census: the detector's verdicts on a whole folder, in aggregates (RP-12)
@@ -12,7 +12,7 @@ status: proposed
 
 ## 0. Open questions for G1
 
-Each question has a default, and the rest of this spec is written with it. Changing a default changes only the sections named in its row.
+Decided at G1 (#148) with the defaults below; the rest of this spec is written with them. The table stays as the record of the questions; changing a default later changes only the sections named in its row.
 
 | # | Question | Default (this spec) | Where |
 |---|---|---|---|
@@ -73,6 +73,8 @@ No census message of its own contains `FOLDER` or any path under it. A decoding 
 ## 4. `summary.md`
 
 Plain text and Markdown tables, UTF-8, LF line ends, in this order. Counts are plain integers. Every table has all the rows listed for it, with 0 where nothing is counted, unless its section says otherwise.
+
+**Blocks and blank lines.** The report is a sequence of blocks: each of the four header lines of 4.1, each table (its header line, its separator line and its rows), the line `albums with exactly one Fake among 2 or more analysed tracks: <count>` of 4.4, and the line `errors: none` or the error table of 4.7. One blank line follows every block, the last one included: there is one blank line between two blocks, and the file ends with the last line of its last block followed by one blank line. So when stdout is pasted as Markdown, the `elapsed:` line that follows `summary.md` there (section 2) is not read as a row of the last table. There is no blank line inside a block. The code blocks of 4.1 to 4.7 show the lines of the blocks without these blank lines. Blank lines are layout: the tests, and the comparison of two runs of section 7, compare the non-blank lines, and a table line cell by cell with its cells trimmed. No heading and no other text is added before, between or after the blocks.
 
 ### 4.1 Header
 
@@ -185,6 +187,7 @@ path,album_index,album_stratum,codec,sample_rate,bit_depth,channels,declared_bit
 - `album_stratum`: `whole`, `mixed` or `isolated` for a track of an album with a `Fake`, otherwise empty.
 - `codec`, `verdict`, `reasons`, `evidence` and `error` use the camelCase names of the contract. `reasons` and `evidence` (the kinds) are joined with `|` in the order of the analysis. `error` is the error's kind only (no detail text).
 - The three margin columns hold the `margin` of the item of that kind, and `cutoff_hz` the cutoff's `frequency_hz`, written with Rust's shortest `f32` form that reads back to the same value. A missing value is an empty field.
+- **Empty means not measured.** An empty field means that the value was not measured; a placeholder 0 is never written for a value that was not measured. For an error track whose file could not be probed (the analyzer returned an error, so no value of the file reached the analysis, as for the `corrupt` fixture of section 8), the fields `sample_rate`, `bit_depth`, `channels`, `declared_bitrate_kbps` and `duration_ms` are empty: the analysis holds only the unprobed placeholders there (0 for `sample_rate`, `channels` and `duration_ms`, no value for `bit_depth` and `declared_bitrate_kbps`). A track that was probed keeps its real values in these fields even when it fails afterwards (for example `tooShort`, as the `short` fixture of section 8, with its real sample rate, channels and duration). An error track whose probe reported 0 for one of these fields has that field empty too, since 0 is not a valid measurement of these fields.
 - No absolute path appears in the file.
 
 ## 6. Privacy (ADR-0022)
@@ -248,7 +251,7 @@ If the test stage finds that a fixture's verdict or evidence with the defaults d
 
 **Automated in `just test` and CI** (`census.rs`, synthetic fixtures):
 - **C1 (sample).** A census of the sample folder exits 0, and its `summary.md` equals the expected one of section 8 in every line but `run:`; stdout is that `summary.md` followed by one `elapsed:` line.
-- **C2 (per-track file).** `tracks.csv` has the header of section 5 and 15 rows sorted by `path`; row 9 (`Álbum B, aislado/05 – Falsa.flac`) has its `path` quoted, verdict `fake`, evidence `cutoffStep`, stratum `isolated`, a `cutoff_step_margin_db` that is not empty and empty `gap_step_margin_db` and `shortfall_margin_hz`; the row of `02 – Roto.flac` has verdict `error`, error `corruptStream` and empty measurement fields; no field holds the root's absolute path.
+- **C2 (per-track file).** `tracks.csv` has the header of section 5 and 15 rows sorted by `path`; row 9 (`Álbum B, aislado/05 – Falsa.flac`) has its `path` quoted, verdict `fake`, evidence `cutoffStep`, stratum `isolated`, a `cutoff_step_margin_db` that is not empty and empty `gap_step_margin_db` and `shortfall_margin_hz`; the row of `02 – Roto.flac` has verdict `error`, error `corruptStream`, empty `sample_rate`, `bit_depth`, `channels`, `declared_bitrate_kbps` and `duration_ms` (not measured, section 5) and empty `reasons`, `evidence`, `gap_step_margin_db`, `cutoff_step_margin_db`, `shortfall_margin_hz` and `cutoff_hz`; the row of `03 – Corto.flac` has verdict `error`, error `tooShort` and a `sample_rate`, `channels` and `duration_ms` that are neither empty nor `0`; no field holds the root's absolute path.
 - **C3 (privacy and Unicode, RNF-09).** None of these appears as a substring of `summary.md` or of stdout: the root's name, any folder or file name of the sample, and every component of 4 or more characters of the root's absolute path.
 - **C4 (read-only, RNF-05).** After the run, every file of the sample folder has the same size, modification time and content hash, and the folder holds no new file. The only folder created is `target/census/<run>/`, with exactly `summary.md` and `tracks.csv`.
 - **C5 (the tables from given analyses).** The pure report builder, given analyses and albums built in the test, prints:
