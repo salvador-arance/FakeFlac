@@ -68,6 +68,10 @@ Detection v8 (RF-14, RF-15; `specs/contracts/commands.md`, "Opus files (detectio
 
 Scenarios: `specs/features/opus.feature`, "Opus rows in the table" (`@RF-06`), "Detail line of an Opus track" and "An unsupported Opus file shows its error text" (`@RF-07`).
 
+## Evidence of a lossy `Fake` (RF-17)
+
+Proposed for G1 (contract version 9; rule `specs/detection/fake-evidence.md` section 2.2; UI `fake-evidence.md`). The detail line above does not change. Below it, a lossy `Fake` shows two evidence lines, the shortfall (`evidence.shortfall`) and the cutoff step (`evidence.cutoffStep`), each with its margin over the `Fake` threshold, and the same sentences appear in the State cell's tooltip. Example: "Cutoff 17.0 kHz · 320 kbps · ≈128 kbps source · Fake", then "Content ends 3.5 kHz below what its bitrate keeps: 1.0 kHz over the Fake threshold (2.5 kHz)" and "Sharp cutoff where lossy encoders cut: step 40.0 dB, 30.0 dB over the Fake threshold (10.0 dB)". The Bitrate and Real bitrate cells do not change.
+
 ## Scenarios
 
 `specs/features/decode-lossy.feature`: "A lossy row has the same fields as a lossless row", "A variable bitrate is marked in the table", "BitrateValue states", "Table cells of a stubbed lossy row", "The Real bitrate column explains the estimate" (`@RF-06`), "Detail line of a lossy track" and "An unsupported lossy file shows its error text" (`@RF-07`).

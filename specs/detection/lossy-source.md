@@ -254,6 +254,8 @@ Consequences (they rely on the checks of section 6):
 
 **Reported cutoff.** `CutoffEstimate` exactly as in rules.md section 2 ("Reported cutoff"), so its `frequencyHz` equals `fc`. It is `null` only for `Error` and silent tracks.
 
+**Evidence of a `Fake` (RF-17, proposed for G1).** The reasons of L3 stay `—`. Since RF-17 a lossy `Fake` also carries its evidence in a separate field, `TrackAnalysis.evidence`: `shortfall` (`s` against `lossy.fake_shortfall_hz`) and `cutoffStep` (`D` against `lossy.fake_min_step_db`), each with its margin (`specs/detection/fake-evidence.md` section 2.2). It is computed after the verdict and read by no rule, so it changes no verdict, reason, cutoff, estimate or version.
+
 ## 5. Estimated source bitrate (`estimatedSourceBitrateKbps`)
 
 - **Lossless codecs, `Error`, silent tracks and L2:** `null`. Nothing reliable can be said.

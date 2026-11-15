@@ -102,9 +102,12 @@ There is no content hash (ADR-0008).
 
 **The core checks every hit again.** It accepts a returned analysis only if all of these equal the run's values:
 - `algorithm_version` equals `p.algorithm_version`;
-- `info.size_bytes`, `info.modified_unix` and `info.format` equal those of `e`.
+- `info.size_bytes`, `info.modified_unix` and `info.format` equal those of `e`;
+- (RF-17, contract version 9, proposed for G1) `evidence` is not empty exactly when `verdict` is `fake` (`specs/detection/fake-evidence.md` section 6.3).
 
 Anything else is a miss, not a failure.
+
+**Rows written before RF-17 (proposed for G1).** `evidence` deserialises as an empty list when the key is absent, so such a row still parses (section 6.3). A `real`, `suspicious` or `error` row is then still a hit, and correct; a `fake` row fails the last check above, so the file is analysed again and its row is replaced. The schema version (`user_version` 1) and the engine (section 4) do not change. The first release that ships RF-17 recomputes every result anyway through `app_version` (Q3, ADR-0044).
 
 ## 4. Engine
 

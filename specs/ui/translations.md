@@ -10,6 +10,10 @@ Approved extension (#113; implemented in #115): `resizable-widths.md` section 4 
 additional layout-resize keys. That table supplements this
 catalogue; the existing entries below retain their approved values.
 
+Proposed extension (RF-17, G1 pending): `fake-evidence.md` section 6 defines seven `evidence.*`
+keys in English and Spanish. That table supplements this catalogue in the same way; no entry
+below changes.
+
 Approved at G1 (#107); the behavior and acceptance checks are in `language-settings.md`. Each row is
 an explicit catalogue entry in both languages, including identical technical text. Braces
 identify interpolation parameters, substituted literally once per occurrence (never parsed

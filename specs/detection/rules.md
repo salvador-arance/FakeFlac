@@ -233,6 +233,8 @@ Consequences of the order (no new rule is needed; they rely on the load-time che
 - `EdgeStep` does not touch V3: a track with `G ≥ gap_fake_db` that is not `FullBand` is still `Fake`. It does not touch `LossyStep` either, so an `EdgeStep` track still has no full-band guard.
 - **Relation to v5.** For the same spectra, `EdgeStep` only skips V4. Every v6 verdict therefore equals the v5 verdict, except `Fake → Suspicious` on V4 tracks; the caught rate of every setting is the same as with v5, and the reported cutoff does not change. Lossy files are not affected (lossy-source.md rule L3 does not read `EdgeStep`, Q16).
 
+**Evidence of a `Fake` (RF-17, proposed for G1).** The reasons of V3 and V4 stay `—`. Since RF-17 a `Fake` track also carries its evidence in a separate field, `TrackAnalysis.evidence`: `gapStep` when V3's condition holds and `cutoffStep` when V4's condition holds, both when both hold, each with its measured value, its threshold and the margin between them (`specs/detection/fake-evidence.md` section 2.1). It is computed after the verdict and read by no rule, so it changes no verdict, reason, cutoff or version, and no value of this file.
+
 Higher sample rates (88.2/96/192 kHz) use the same absolute frequencies: a lossy origin still shows its step at or below ~20.3 kHz, its gaps at 16 kHz and no music in the upper window.
 
 ## 4. Invariants and parameter validation

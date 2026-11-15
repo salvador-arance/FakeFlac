@@ -12,6 +12,12 @@ and clear text. This proposal consolidates `components.md`, `main-screen.md`,
 evidence. It changes no component props, events, atomic levels, command or DTO.
 `commands.md` remains version 8. Scenarios: `../features/verdict-usability.feature`.
 
+Proposed extension (RF-17, G1 pending): a `Fake` verdict also gets an explanation.
+Selecting a `Fake` row shows, below the verdict line of `DetailPanel`, its evidence with the
+margin over each `Fake` threshold, and the State cell's tooltip shows the same evidence
+(`fake-evidence.md`; contract version 9). U1–U4 below are unchanged; the RF-17 owner
+walkthrough is M1 of `../detection/fake-evidence.md`.
+
 ## Presentation and acceptance
 
 | State | English / Spanish label | Colour family and distinct icon | Meaning for the manual check |
