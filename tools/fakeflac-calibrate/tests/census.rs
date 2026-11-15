@@ -3,8 +3,11 @@
 //! library census on the census sample folder of section 8 (synthetic fixtures in a temporary folder
 //! outside the repository, never real audio), the report builder on analyses built in the test, the
 //! refused runs, the refusal of a folder that contains the report folder (C11, against a stand-in
-//! repository root in the temporary folder, never the repository's own `target/`) and the wiring of
-//! the recipe. Protected after the `test(RP-12)` commits.
+//! repository root in the temporary folder, never the repository's own `target/`, with its cases
+//! (a) a `..` segment, (b) a different letter case (Windows only), (c) a repository root that does
+//! not exist (fail-open) and (d) a `target` that is a junction (Windows only, skipped with the
+//! reason printed when the junction cannot be created)) and the wiring of the recipe. Protected
+//! after the `test(RP-12)` commits.
 //!
 //! # Entry points the implementation must provide (census.md section 9)
 //!
@@ -1696,6 +1699,218 @@ fn rp12_c11_a_fixtures_folder_inside_the_repository_is_censused() {
     );
 }
 
+/// Scenario Outline: A folder that contains the report folder is refused before anything is
+/// written (@RP-12 @RNF-05), row "the stand-in root spelled with a \"..\" segment": `FOLDER` is
+/// `<stand-in>/../<stand-in name>`, which resolves to the stand-in root, so the comparison is on
+/// the canonical forms, not on the spellings. Acceptance C11 (a).
+#[test]
+fn rp12_c11_the_repository_root_spelled_with_a_dot_dot_segment_is_refused() {
+    let (sample, repo, _cleanup) = guard_setting("census-guard-dotdot");
+    let spelled = repo.join("..").join(repo.file_name().unwrap());
+    assert!(
+        spelled
+            .components()
+            .any(|c| c == std::path::Component::ParentDir),
+        "the spelling keeps its .. segment: {}",
+        spelled.display()
+    );
+    assert!(spelled.is_dir(), "the spelling names the stand-in root");
+    assert!(!repo.join("target").exists(), "no target/ before the call");
+    assert_contains_the_report_folder(&sample.base, &repo, &spelled);
+    assert!(!repo.join("target").exists(), "no target/ after the call");
+}
+
+/// Scenario Outline: A folder that contains the report folder is refused before anything is
+/// written (@RP-12 @RNF-05 @RNF-07), Examples: Windows, row "the stand-in root spelled in a
+/// different letter case": `FOLDER` is the stand-in root with its last component upper-cased, the
+/// same folder on Windows, so it is refused the same way. Not run on other platforms. Acceptance
+/// C11 (b).
+#[cfg(windows)]
+#[test]
+fn rp12_c11_the_repository_root_in_a_different_letter_case_is_refused() {
+    let (sample, repo, _cleanup) = guard_setting("census-guard-case");
+    let upper = repo.file_name().unwrap().to_str().unwrap().to_uppercase();
+    let spelled = repo.with_file_name(&upper);
+    assert_ne!(
+        spelled.as_os_str(),
+        repo.as_os_str(),
+        "a different spelling of the stand-in root"
+    );
+    assert!(
+        spelled.is_dir(),
+        "the temporary folder is case-insensitive, so {} names the stand-in root",
+        spelled.display()
+    );
+    assert!(!repo.join("target").exists(), "no target/ before the call");
+    assert_contains_the_report_folder(&sample.base, &repo, &spelled);
+    assert!(!repo.join("target").exists(), "no target/ after the call");
+}
+
+/// Scenario Outline: A folder that contains the report folder is refused before anything is
+/// written (@RP-12 @RNF-05), row "the sample folder" with "a stand-in root that does not exist":
+/// the repository root cannot be put in canonical form, so the check does not refuse the run
+/// (fail-open, census.md section 2). The census exits 0 with the `summary.md` of C1 (every line
+/// but `run:`), and the tool creates exactly one run folder `<that root>/target/census/<run>/`
+/// with `summary.md` and `tracks.csv`, together with the missing root, `target/` and `census/`.
+/// Acceptance C11 (c).
+#[test]
+fn rp12_c11_a_repository_root_that_does_not_exist_does_not_refuse_the_run() {
+    let (sample, _repo, _cleanup) = guard_setting("census-guard-missing-root");
+    let missing = sample.base.join("missing-repo");
+    assert!(!missing.exists(), "the stand-in root is not created");
+    let before = folder_state(&sample.root);
+    let dir = assert_not_refused_by_the_check(&missing, &sample.root);
+    assert_eq!(
+        without_run(&read(&dir.join("summary.md"))),
+        without_run(&shared().summary()),
+        "the census of C1"
+    );
+    let run = run_name(&dir);
+    assert_eq!(
+        names(&missing),
+        [
+            "target".to_string(),
+            "target/census".to_string(),
+            format!("target/census/{run}"),
+            format!("target/census/{run}/summary.md"),
+            format!("target/census/{run}/tracks.csv"),
+        ],
+        "only the run folder and its missing parents are created"
+    );
+    assert_eq!(
+        folder_state(&sample.root),
+        before,
+        "the sample is untouched"
+    );
+}
+
+/// The setting of C11 (d): the setting of `guard_setting` (in `<base>`, outside the repository)
+/// with `<stand-in>/target` a junction to the empty folder `<base>/redirected`. When dropped, it
+/// removes the junction itself first (`remove_dir` on the link, never a recursive removal through
+/// it), then `<base>`.
+#[cfg(windows)]
+struct JunctionSetting {
+    sample: CensusSample,
+    repo: PathBuf,
+    redirected: PathBuf,
+}
+
+#[cfg(windows)]
+impl Drop for JunctionSetting {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir(self.repo.join("target"));
+        let _ = std::fs::remove_dir_all(&self.sample.base);
+    }
+}
+
+/// The setting of C11 (d), or `None` (with the reason printed: the case is skipped, as census.md
+/// C11 (d) says) when the junction cannot be created. The junction is made with `mklink /J`
+/// through `cmd`, no new dependency.
+#[cfg(windows)]
+fn junction_setting(name: &str) -> Option<JunctionSetting> {
+    use std::os::windows::process::CommandExt;
+    let sample = CensusSample::new(name);
+    let repo = sample.repo("repo");
+    let redirected = sample.base.join("redirected");
+    std::fs::create_dir(&redirected).unwrap();
+    let link = repo.join("target");
+    let setting = JunctionSetting {
+        sample,
+        repo,
+        redirected,
+    };
+    let quoted = |p: &Path| format!("\"{}\"", p.display());
+    let made = std::process::Command::new("cmd")
+        .args(["/C", "mklink", "/J"])
+        .raw_arg(quoted(&link))
+        .raw_arg(quoted(&setting.redirected))
+        .output();
+    let why = match made {
+        Err(e) => Some(format!("cmd could not be started: {e}")),
+        Ok(out) if !out.status.success() => Some(format!(
+            "mklink /J failed ({}): {} {}",
+            out.status,
+            String::from_utf8_lossy(&out.stdout).trim(),
+            String::from_utf8_lossy(&out.stderr).trim()
+        )),
+        Ok(_) => {
+            let is_link = std::fs::symlink_metadata(&link)
+                .map(|m| m.file_type().is_symlink())
+                .unwrap_or(false);
+            let resolves = std::fs::canonicalize(&link).ok()
+                == std::fs::canonicalize(&setting.redirected).ok();
+            (!is_link || !resolves).then(|| {
+                format!(
+                    "mklink /J did not make {} a junction to {}",
+                    link.display(),
+                    setting.redirected.display()
+                )
+            })
+        }
+    };
+    match why {
+        Some(why) => {
+            eprintln!("skipped: census.md C11 (d) needs a junction for target/: {why}");
+            None
+        }
+        None => Some(setting),
+    }
+}
+
+/// Scenario Outline: A folder that contains the report folder is refused before anything is
+/// written (@RP-12 @RNF-05 @RNF-07), Examples: Windows, row "the folder \"redirected\" beside the
+/// stand-in root" with "the stand-in, whose \"target\" is a junction to the empty folder
+/// \"redirected\"": the report folder is the canonical `<base>/redirected/census`, so its redirect
+/// target is refused although it lies outside the stand-in root. Acceptance C11 (d).
+#[cfg(windows)]
+#[test]
+fn rp12_c11_the_redirect_target_of_a_junction_target_is_refused() {
+    let Some(s) = junction_setting("census-guard-junction-target") else {
+        return;
+    };
+    assert_contains_the_report_folder(&s.sample.base, &s.repo, &s.redirected);
+    assert!(names(&s.redirected).is_empty(), "redirected/ stays empty");
+}
+
+/// Scenario Outline: A folder that contains the report folder is refused before anything is
+/// written (@RP-12 @RNF-05 @RNF-07), Examples: Windows, row "the stand-in root" with "the
+/// stand-in, whose \"target\" is a junction to the empty folder \"redirected\"": the redirected
+/// report folder `<base>/redirected/census` is not inside the stand-in root, so the check does not
+/// refuse it; the scan does not follow the junction and the stand-in root holds no audio, so the
+/// census exits 2 with the line of a folder without audio and writes nothing (no
+/// `<base>/redirected/census/`). Acceptance C11 (d).
+#[cfg(windows)]
+#[test]
+fn rp12_c11_the_repository_root_with_a_junction_target_is_not_refused_by_the_check() {
+    let Some(s) = junction_setting("census-guard-junction-root") else {
+        return;
+    };
+    let before = folder_state(&s.sample.base);
+    let o = census(&s.repo, None, Some(&s.repo));
+    assert!(
+        !o.stderr.contains(CONTAINS_REPORT),
+        "not refused by the report-folder check: {}",
+        o.stderr
+    );
+    assert_eq!(o.exit_code, 2, "stderr: {}", o.stderr);
+    assert_eq!(
+        o.stderr.lines().collect::<Vec<_>>(),
+        [NO_AUDIO],
+        "the exact stderr of a folder without audio"
+    );
+    assert_eq!(o.stdout, "", "stdout is empty");
+    assert!(o.report_dir.is_none(), "no run folder");
+    assert_eq!(
+        folder_state(&s.sample.base),
+        before,
+        "nothing is created, changed or removed under the temporary folder"
+    );
+    assert!(
+        !s.redirected.join("census").exists(),
+        "no redirected/census/"
+    );
+}
+
 // ---------------------------------------------------------------------------------------------
 // The report builder on given analyses (C5)
 // ---------------------------------------------------------------------------------------------
@@ -2230,16 +2445,23 @@ fn rp12_c2_a_probed_error_track_keeps_its_real_probe_values() {
 /// the per-track file means the value was not measured (@RP-12 @RNF-04). Acceptance C2.
 #[test]
 fn rp12_c2_an_error_track_with_a_zero_from_the_probe_has_that_field_empty() {
+    /// `v`, or 0 of its type when field `i` is the one reported as 0.
+    fn pick<T: From<u8>>(zero: usize, i: usize, v: T) -> T {
+        if i == zero {
+            T::from(0)
+        } else {
+            v
+        }
+    }
     let real = ["48000", "24", "2", "1411", "1250"];
     for zero in 0..PROBE_COLUMNS.len() {
-        let pick = |i: usize, v: u64| if i == zero { 0 } else { v };
         let t = error_track(
             TrackError::TooShort,
-            pick(0, 48_000) as u32,
-            Some(pick(1, 24) as u8),
-            pick(2, 2) as u8,
-            Some(pick(3, 1411) as u32),
-            pick(4, 1_250),
+            pick(zero, 0, 48_000),
+            Some(pick(zero, 1, 24)),
+            pick(zero, 2, 2),
+            Some(pick(zero, 3, 1411)),
+            pick(zero, 4, 1_250),
         );
         let mut want = real;
         want[zero] = "";
