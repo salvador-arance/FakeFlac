@@ -2,6 +2,18 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-15 - RF-17 native walkthrough completed
+
+**Done**
+- At the owner's request, exercised the native WebView2 release build in English and Spanish on anonymized copies of 35 real library tracks. Verified six selected cases: gap-only with a 22.1 kHz cutoff and a 0.5 dB margin, step-only with a 0.6 dB margin, both lossless conditions, a lossy track with shortfall and step, the only Fake in an album, and an all-Fake album. The mixed albums show their counts, the all-Fake and single-track albums omit the album note, and the audio note explains the provenance limit in both languages. The State cell exposes both evidence items for the two-rule case. This was an engineering walkthrough rather than an unfamiliar user's comprehension test.
+- Native MU1 passed at 900 × 500 using the default and 160 px detail heights. The evidence stayed readable without overlapping the graph or status bar. At minimum height in Spanish, the graph remained visible and its frequency labels crowded together.
+- The scratch build used the same application code and web assets with test-only window and storage paths. The initial launch used the normal WebView profile before the test was repeated with an explicit scratch WebView2 profile. Language and panel-height changes were made in the isolated session.
+
+**Pending**
+- M2 full-library app CSV comparison and the feature PR for G2.
+
+**Next step:** Open the RF-17 feature PR after the owner's go-ahead.
+
 ## 2026-11-15 - RF-17 implemented and verified
 
 **Done**
