@@ -63,6 +63,13 @@ Feature: Library census
     And the row of "Álbum C/CD2/02 – Roto.flac" has verdict "error", error "corruptStream" and empty measurement fields
     And no field of tracks.csv holds the absolute path of the sample folder
 
+  @RNF-04
+  Scenario: An empty field of the per-track file means the value was not measured
+    When "census" runs on the sample folder
+    Then the row of "Álbum C/CD2/02 – Roto.flac" has empty sample_rate, bit_depth, channels, declared_bitrate_kbps and duration_ms
+    And the row of "Álbum C/CD2/03 – Corto.flac" has verdict "error" and error "tooShort"
+    And that row has a sample_rate, a channels and a duration_ms that are neither empty nor "0"
+
   @RNF-09
   Scenario: The summary names no folder and no file
     When "census" runs on the sample folder
