@@ -423,7 +423,7 @@ If the allowed levers do not meet a gate, the implement stage stops and reports 
 | F4 | File sizes of every pair, and the growth that A1 checks | A1 (4 MiB) | Measured (12.5) |
 | F5 | Chunks per format: `max_chunk_frames`, chunks and frames of one decoding pass | A5 (65 535), the length tolerance of section 4 | Measured (12.5) |
 | F6 | The peaks of the long suite (A10) | A10 bounds, 64 MiB hi-res ceiling (provisional) | **Not measured.** Measured in the opt-in `just memory` run, whose report goes in the feature PR (M2). Expected: like F1; hi-res about 3 MB more than 44.1 kHz; `opus_1h` fails until Q4 is done (27–36 MB, estimated) |
-| F7 | M1 on the owner's machine (the whole app) | M1 indicative targets | Measured on 2026-11-14 with M1 as first written (12.6). The analysis target is met. The spectrogram figure is not informative, which is why M1's steps 3 to 5 are revised (section 14); the spectrogram part is to be measured again with them |
+| F7 | M1 on the owner's machine (the whole app) | M1 indicative targets | Analysis met the target on 2026-11-14 (12.6). The revised spectrogram reading on 2026-11-15 was inconclusive (12.7) |
 
 ### 12.1 How F1–F5 were measured
 
@@ -508,6 +508,20 @@ Measured on 2026-11-14 with the release app built from `2f800f2`, on the develop
 - **Analysis.** P1 − P0 is 221.5 MiB (private) and 246.5 MiB (working set), against an indicative target of 544 MiB (15 × 32 + 64): met.
 - **Spectrogram.** P2 − P1 is 0 for both metrics. This does not show that the spectrogram used less than 32 MiB. It shows only that it did not need more than the analysis had already used: a spectrogram that took 200 MiB would have given the same 0. The check as first written could not miss its target.
 - The per-track gate is not affected: A4 and A10 measure the spectrogram of a 300 s and of a 1-hour FLAC in a fresh child process against the 32 MiB ceiling. What M1 adds is the app's own wiring around that call, and that is what the revised steps measure.
+
+### 12.7 F7 revised: spectrogram in a fresh app session
+
+Measured on 2026-11-15 with the release app built from `faa9fcf` on the development machine (16 logical CPUs, 15 workers). The library held 11 396 tracks and 150 714 MB. After an initial pass with the existing result cache, the app was restarted. The fresh session reported 11 332 cache hits and 64 errors across 11 396 tracks. The run therefore fell short of the all-cache condition in M1. The spectrogram was drawn for the longest track, a 60 min 32 s MP3.
+
+| Reading (bytes) | Private bytes | Working set |
+|---|---:|---:|
+| P2a peak, library run complete | 98 533 376 | 147 083 264 |
+| P2a current, library run complete | 49 262 592 | 102 412 288 |
+| P2b peak, spectrogram drawn | 98 533 376 | 147 083 264 |
+| Peak increase (P2b peak − P2a peak) | 0 | 0 |
+| Upper bound (P2b peak − P2a current) | 49 270 784 | 44 670 976 |
+
+**Inconclusive.** Neither peak increased and both upper bounds exceed the indicative target of 33 554 432 bytes. The 64 cache misses also limit what this reading establishes about the spectrogram. A read-only inventory confirmed that all 13 203 files in the library retained their sizes and modification times.
 
 ## 13. Edits to approved specs and docs
 
