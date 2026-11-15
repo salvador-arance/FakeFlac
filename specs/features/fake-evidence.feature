@@ -18,7 +18,8 @@ Feature: Explain a Fake verdict (evidence and album context)
   Notation. "evidence" lists the items in order, separated by "; ", each
   written "<kind> <value>/<threshold>/<margin>" (dB for gapStep and
   cutoffStep, Hz for shortfall); "—" means an empty evidence. Rule-level
-  values are compared within 0.01. "the evidence kinds" lists only the kinds,
+  values are compared within 0.01 unless a scenario requires an exact value or
+  bit-for-bit equality. "the evidence kinds" lists only the kinds,
   in order. An album note "none" means that the panel shows no album note. The
   "audio note" is the text evidence.audioNote, the last line of every fake
   track's evidence (specs/ui/fake-evidence.md section 2). An
@@ -96,6 +97,37 @@ Feature: Explain a Fake verdict (evidence and album context)
       | honest MP3 320                            | mp3   | 44100 | 320 | -20 | 0  | 40   | 20450 | 22050 | 20500 | real       |                         | 320      | —                                                        |
       | 48 kHz streaming rip: L6a                 | mp3   | 48000 | 320 | -20 | 0  | 40   | 20050 | 24000 | 20500 | suspicious | streamingSampleRate     | none     | —                                                        |
       | little treble: L2 comes first             | mp3   | 44100 | 320 | -65 | 0  | 40   | 17050 | 22050 | 20500 | suspicious | lowHighFrequencyContent | none     | —                                                        |
+
+  @RF-15
+  Scenario Outline: The shortfall evidence follows the existing L3 tolerance
+    Given a lossy track with codec "mp3", sample rate 44100 Hz, declared bitrate 320 kbps and tag low-pass — Hz
+    And the measurements H = -20 dB, G = 0 dB, D = 40 dB, fs = 18050 Hz and fe = 22050 Hz
+    And the parameters of specs/detection/detection-params.v8.toml with lossy.fake_shortfall_hz set to <threshold> Hz
+    When the lossy rules and the evidence of those parameters are applied
+    Then the expected cutoff is 20500 Hz and the shortfall before f32 conversion is exactly 2450 Hz
+    And the verdict is "<verdict>" with reasons "<reasons>"
+    And the reported cutoff is 18050 Hz and the estimated source bitrate is 160
+    And the evidence kinds are "<kinds>"
+    And for a "fake" verdict the shortfall value is bit-for-bit f32(2450), its threshold is bit-for-bit f32(<threshold>), and its margin is exactly positive zero
+    And for a "fake" verdict the cutoffStep evidence is "cutoffStep 40.00/10.00/30.00"
+
+    Examples:
+      | case                  | threshold         | verdict    | reasons             | kinds                 |
+      | at the threshold      | 2450.0            | fake       |                     | shortfall, cutoffStep |
+      | within L3 tolerance   | 2450.0000000005   | fake       |                     | shortfall, cutoffStep |
+      | outside L3 tolerance  | 2450.000000002    | suspicious | cutoffBelowDeclared | —                     |
+
+  @RF-15
+  Scenario: A positive shortfall margin is computed before f32 conversion
+    Given a lossy track with codec "mp3", sample rate 44100 Hz, declared bitrate 320 kbps and tag low-pass — Hz
+    And the measurements H = -20 dB, G = 0 dB, D = 40 dB, fs = 18050 Hz and fe = 22050 Hz
+    And the parameters of specs/detection/detection-params.v8.toml with lossy.fake_shortfall_hz set to 2449.9999999995 Hz
+    When the lossy rules and the evidence of those parameters are applied
+    Then the verdict is "fake" with no reasons
+    And the evidence kinds are "shortfall, cutoffStep"
+    And the shortfall value is bit-for-bit f32(2450) and its threshold is bit-for-bit f32(2449.9999999995)
+    And the shortfall margin is strictly positive and bit-for-bit f32(2450.0_f64 - 2449.9999999995_f64)
+    And the cutoffStep evidence is "cutoffStep 40.00/10.00/30.00"
 
   # --- Fixtures ----------------------------------------------------------------
 
