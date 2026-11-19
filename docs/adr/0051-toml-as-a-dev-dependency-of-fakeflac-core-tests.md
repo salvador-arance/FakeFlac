@@ -1,6 +1,6 @@
 # ADR-0051: `toml` as a dev-dependency of `fakeflac-core` tests
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-11-19
 
 ## Context and rationale

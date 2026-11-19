@@ -2,6 +2,26 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-19 - #158 steps 4 and 5: RNF-03 and RNF-10 specified, requirement statuses
+
+**Done**
+- #165 (RF-17 guard tests, closes #146 and #147) is merged at G2. ADR-0051 is `accepted` here (ADR file and `docs/adr/README.md`).
+- Step 4, merged at G1: RNF-03 (#166, `contracts/privacy.md`: Tauri surface, Rust dependencies, sources, frontend, owner check M1; `reqwest`, `hyper` and `hyper-util` checked absent from the Windows graph) and RNF-10 (#167, `ui/look-and-feel.md`: element map, asset register, M1). Both are `specified`; their `/feature` rounds are still to do.
+- Step 5, this PR: RNF-04, RNF-05 and RNF-09 are `specified`. The owner chose option A for RP-01 to RP-10: `contracts/agent-process.md` and `features/agent-process.feature` give RP-02, RP-05, RP-07, RP-08 and RP-09 the criterion that exists today (what enforces each, owner checks with a milestone-close cadence, the gaps). RP-01 to RP-08 and RP-10 are `specified`. `just check-fast` took 24 s on 2026-11-19 (warm, one run).
+
+**Pending**
+- G1 on this PR. Questions in `agent-process.md` section 6, mainly Q2 (the monthly agent budget: **RP-09 stays `draft` until the owner gives it**) and Q14 (RP-01 and RP-10 have no mechanism and no owner check; keep `specified` or go back to `draft`).
+- Open G1 questions of the merged specs, answered by the owner when the `/feature` rounds start: Q1 to Q10 of `privacy.md`; Q1 to Q7 of `look-and-feel.md`, above all Q3 (who drew the 15 icons; the `close` path looks like a third-party MIT glyph) and Q6 (accent color).
+- #158 steps 6 to 8: step 6 (release 0.3.0: `just set-version 0.3.0`, paired `just perf` against v0.2.0, README) can start now that #165 is merged; step 7 are the owner's decisions; step 8 needs `just accept` on the labelled corpus for the 17 kHz AAC edge and the V3-only fakes (the census aggregates are in the block below).
+- Follow-up from `agent-process.md` Q11 (default yes): `guard-bash` rules for `gh api` merges and `git -C … push … main`, in a separate harness PR.
+- Cleanup on the owner's machine: the folders `.claude/worktrees/next-steps-github-issues-e67b04` and `.claude/worktrees/calibrate-62fdf7`, and the worktree folders of this work.
+
+**Blockers / questions for the human**
+- The budget figure (RP-09) and the Q14 decision.
+- Icon origins (look-and-feel Q3).
+
+**Next step:** merge this PR at G1, then release 0.3.0 (step 6), or `/feature RNF-03` (small: a lint module and `deny.toml` bans).
+
 ## 2026-11-19 - #158 steps 2 and 3: RF-17 guard tests, M1 reading accepted
 
 **Done**
