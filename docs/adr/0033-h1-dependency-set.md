@@ -1,6 +1,6 @@
 # ADR-0033: H1 dependency set
 
-- Status: accepted; amended by ADR-0040, ADR-0044 and ADR-0047
+- Status: accepted; amended by ADR-0040, ADR-0044, ADR-0047 and ADR-0051
 - Date: 2026-10-15
 
 ## Context and rationale
@@ -17,7 +17,7 @@ H1 needs decoding (WAV, FLAC), a real FFT, parallelism, a recursive scan, a fold
 | `walkdir` 2 | `fakeflac-fs` | Recursive scan without following links | this ADR |
 | `tauri-specta` 2 + `specta` 2 (+ `specta-typescript`) | `src-tauri` | Generated TS bindings | ADR-0003 |
 | `tauri-plugin-dialog` 2 | `src-tauri` | Native folder picker (`pick_folder`), opened from Rust: no frontend package and no `dialog:` capability (see notes) | this ADR |
-| `toml` (dev-dependency) | `fakeflac-audio` tests | Check that default `DetectionParams` equal `specs/detection/detection-params.v1.toml`. The core stays free of parsers | ADR-0011 |
+| `toml` (dev-dependency) | `fakeflac-audio` tests | Check that default `DetectionParams` equal `specs/detection/detection-params.v1.toml`. The core stays free of parsers (ADR-0051 also allows `toml` as a dev-dependency of the core's own tests; the shipped core still has no parser) | ADR-0011, ADR-0051 |
 | `hound` 3 (dev-dependency) | tests, `just fixtures` | Write synthetic WAV fixtures | ADR-0022 |
 | `flacenc` (dev-dependency) | tests, `just fixtures` | Pure-Rust FLAC encoder for synthetic FLAC fixtures | ADR-0022 |
 | `rand` + `rand_chacha` (dev-dependency) | tests | Seeded noise for reproducible fixtures | ADR-0022 |

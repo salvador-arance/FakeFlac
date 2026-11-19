@@ -13,6 +13,8 @@ thiserror.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true
+# Tests only: read the shipped params files v2 to v8 (fake-evidence.md criterion X8).
+toml = "1.1.8"
 
 [lints]
 workspace = true
