@@ -26,9 +26,10 @@ fn analyze(path: &Path) -> fakeflac_core::TrackAnalysis {
     analyze_track(&SymphoniaAnalyzer, &entry, &DetectionParams::default())
 }
 
+/// 3 since the Opus start offset (lossy-source.md §12.9 (m), Q44; ADR-0047 point 5 amended).
 #[test]
 fn rp11_extraction_version_is_declared() {
-    assert_eq!(EXTRACTION_VERSION, 2);
+    assert_eq!(EXTRACTION_VERSION, 3);
 }
 
 #[test]

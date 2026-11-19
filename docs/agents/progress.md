@@ -2,6 +2,26 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-19 - RF-14: Opus start offset (#159), spec merged and feature PR open
+
+**Done**
+- #157 is merged (`a11068a`), so the "G2 on #157" of the block below is closed. RP-12 has nothing open.
+- Spec PR #160 merged at G1 (`a7f1efb`): `lossy-source.md` sections 2.4.3 and 2.4.4 (`E = max(0, F − S₁)`, R20 and R21 on `G − E`, `L = G − E − pre_skip`), Q43 and Q44, three fixtures in `lossy-fixtures.md`, two scenarios in `opus.feature`, the amendment of ADR-0047 point 5. The owner accepted both defaults on 2026-11-19: a first page below its samples is `E = 0` and not an error, and `EXTRACTION_VERSION` goes to 3.
+- Feature PR [#161](https://github.com/salvador-arance/FakeFlac/pull/161) (`feat/RF-14-opus-start-offset`): tests `2fa54f4`, implementation `29ca4f6` (`OpusStream::open` in `crates/fakeflac-audio/src/opus.rs`, `EXTRACTION_VERSION` 3, one comment in `tools/fakeflac-calibrate/src/cache.rs`). Review: no blocking findings; three mutation checks fail the tests as expected. `just ci` exit 0. Paired `just perf` (base `a7f1efb`, head `29ca4f6`): no gated median above its base by 10 %, figures in the PR. `just memory` passes (`opus_1h` 3.5 MB over the baseline, ceiling 32 MiB).
+- `specs/traceability.md`: the RF-14 / RF-15 Opus row now records the tests of #161 instead of "tests pending".
+
+**Pending**
+- G2 on #161. Then `just prune-branches`.
+- #158 step 1 is still open apart from the first bullet above: the RNF-01 and RNF-02 rows of `specs/traceability.md` ("Draft revision for G1") and the "other RF" row (only RF-12 is left). It goes through G1 as a `spec/` PR.
+- #158 steps 2 to 8 are unchanged (#146 and #147 need the owner's option; step 3, 4, 5, 6, 7 as listed).
+- Not verified: whether #159 explains part of the 64 error tracks of the owner's library (they were taken to be corrupt files). Check it with `just census` after #161 is merged and before the census baseline of #158 steps 7 and 8, and before choosing the M1 option of step 3.
+- Worktrees start with an empty `node_modules`: run `npm ci` before `just check` there, or every frontend test file fails with a missing `@testing-library/svelte`.
+
+**Blockers / questions for the human**
+- None.
+
+**Next step:** Review #161 at G2, then run `just census` on the library and see whether the Opus errors drop; after that, step 1 of #158 (traceability) or step 8.
+
 ## 2026-11-15 - RP-12 closed in PR #157 (branch `feat/RP-12-folder-guard`)
 
 **Done**

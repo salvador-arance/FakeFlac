@@ -16,7 +16,8 @@ use std::path::Path;
 
 /// Version of the extraction: bump it in the same PR as any adapter change that alters the `AudioProbe`
 /// produced for the same file and parameters, and whenever `symphonia` is upgraded (ADR-0036, OQ-3).
-pub const EXTRACTION_VERSION: u32 = 2;
+/// 3: the start offset of an Opus stream (lossy-source.md §2.4.3, Q43–Q44).
+pub const EXTRACTION_VERSION: u32 = 3;
 
 /// RNF-02 hidden test seam (memory.md section 3.5).
 #[doc(hidden)]
