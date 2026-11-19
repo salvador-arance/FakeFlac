@@ -2,6 +2,32 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-19 - Release 0.3.0 published (#158 step 6)
+
+**Done**
+- The owner published v0.3.0 on 2026-11-19 (M7), after M3 to M6. The tag is on `6cb702c`, the merge commit of #170.
+- The first tag (on `e0e3cc2`, #169) had its `verify` job cancelled at the 40-minute limit (v0.2.0's `verify` took 38 min). #170 raised the limit to 60 minutes; the owner deleted the old tag (no draft or release existed) and tagged `6cb702c`. The Release workflow (run 44601724510) succeeded and left a draft with three assets.
+- M2 (RNF-06), from the draft's assets: `FakeFlac_0.3.0_x64-setup.exe` 2,937,336 bytes (2.94 MB) and `FakeFlac_0.3.0_x64_en-US.msi` 4,079,616 bytes, both far below the 20,000,000-byte limit; `SHA256SUMS.txt` 190 bytes. Against v0.2.0 the installers grew by 65,246 and 98,304 bytes.
+- M3 to M6 on a clean Windows 11 (Windows Sandbox and the owner's machine), run by an agent with computer use and reported to the owner:
+  - M4: `Get-FileHash` of both installers equals `SHA256SUMS.txt` (setup.exe `a672f048…`, msi `7b191246…`). Both `gh attestation verify … --repo salvador-arance/FakeFlac` exit 0; one attestation covers both installers (`release.yml@refs/tags/v0.3.0`, `6cb702c`). This confirms the `publish` job's permissions are enough for `attest-build-provenance@v4`.
+  - M3: SmartScreen warned (unknown publisher; More info, Run anyway); the NSIS installer put the app in `%LOCALAPPDATA%\FakeFlac` with its uninstall entry in HKCU and asked for no administrator rights. The app started from the Start menu and analysed a small folder: two tracks `suspicious` and a 1 s file reported as too short to analyse.
+  - M5: uninstall from Settings completed; the three test WAV files kept their size, date and SHA-256; the install folder, shortcuts and uninstall entry are gone. The uninstaller offered "Delete the application data" (unticked); the owner left it unticked and `io.github.fakeflac.app` was kept.
+  - M6: the MSI installed, the app started and the uninstall completed; the test files were unchanged. The report said it passed "after starting a service by hand"; the owner confirmed that service was a Windows Sandbox matter, not a defect of the MSI or the app.
+- M7: the draft's notes have the section 3.5 text first and GitHub's generated list after it (46 PRs, #119 to #170, from the `v0.2.0` tag), so the `--notes-file` + `--generate-notes` ordering of `release.md` 3.6 is confirmed by a real draft. Three assets.
+- Paired `just perf` (in #169, same machine, base v0.2.0 against head): no gated median above its base by 10 %; T1 off 175 to 169 ms, T2 off 650 to 537 ms. No `just memory` report: #169 touched no `crates/fakeflac-audio/src/` file.
+
+**Pending**
+- #158 step 7, the owner's decisions for H3: the false-positive target, the census baseline at the 0.3.0 commit (the detection and the extraction did not change in the version bump, so the aggregates of run `20261119T155033Z` should be equal), the H3 scope, the carried-over detection candidates, and Windows 10.
+- #158 step 8: `just accept` on the labelled corpus (`FAKEFLAC_CORPUS`) for the 17 kHz AAC edge and the V3-only fakes, to end in a rule proposal at G1 or a recorded reason for no change (the census aggregates are in the block of "#158 step 1").
+- `/feature RNF-03` (small: a lint module, tests and `deny.toml` bans; Q1 to Q10 of `privacy.md`) and `/feature RNF-10` (Q3 icon origins and Q6 accent first).
+- Optional: `agent-process.md` Q11 (`guard-bash` rules for `gh api` merges and `git -C … push … main`); skipping `check-app` in the `verify` job of `release.yml` (it ran for 38 min in v0.2.0 and cancelled at 40 in the first 0.3.0 tag); `crates/fakeflac-core/CLAUDE.md` line 4 "(dev-dependencies: ADR-0051)" then `just agents-sync`.
+- Cleanup on the owner's machine: the folders `.claude/worktrees/next-steps-github-issues-e67b04`, `calibrate-62fdf7` and `h2-closeout-158`.
+
+**Blockers / questions for the human**
+- The step 7 decisions above.
+
+**Next step:** the owner answers step 7, then step 8 with `just accept`; or `/feature RNF-03`.
+
 ## 2026-11-19 - #158 steps 4 and 5: RNF-03 and RNF-10 specified, requirement statuses
 
 **Done**
