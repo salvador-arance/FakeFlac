@@ -16,6 +16,8 @@ pub const ENCODED: [&str; 6] = [
     "opus_160_swb",
     "opus_short",
 ];
+/// Start offset of `opus_start_offset` in samples (lossy-fixtures.md §2.2, issue #159).
+pub const START_OFFSET: i64 = 360;
 #[derive(Clone)]
 pub struct Encoded {
     pub channels: usize,
@@ -88,6 +90,10 @@ pub fn encoded(name: &str) -> Arc<Encoded> {
 }
 /// Independent decoder oracle: decoder output, per channel, before mono mixing.
 pub fn reference(e: &Encoded, pre_skip: usize) -> Vec<Vec<f32>> {
+    reference_until(e, pre_skip, e.samples + 120)
+}
+/// Independent decoder oracle: decoder output samples `pre_skip..end`, per channel.
+pub fn reference_until(e: &Encoded, pre_skip: usize, end: usize) -> Vec<Vec<f32>> {
     let mut decoder = OpusDecoder::new(48000, e.channels).unwrap();
     let mut all = vec![Vec::new(); e.channels];
     let mut buf = vec![0f32; 5760 * e.channels];
@@ -99,9 +105,7 @@ pub fn reference(e: &Encoded, pre_skip: usize) -> Vec<Vec<f32>> {
             }
         }
     }
-    all.into_iter()
-        .map(|s| s[pre_skip..e.samples + 120].to_vec())
-        .collect()
+    all.into_iter().map(|s| s[pre_skip..end].to_vec()).collect()
 }
 #[derive(Clone, Debug)]
 pub struct Page {
@@ -339,6 +343,18 @@ pub fn bytes(name: &str) -> Vec<u8> {
         "opus_granule_beyond_audio" => {
             p.last_mut().unwrap().granule = (e.packets.len() * 960 + 1) as i64
         }
+        // lossy-fixtures.md §2.2 (Q43): every audio page but the last + 360; the last page
+        // = samples of all packets + 360 (no end trim), or one more for the `_beyond` variant.
+        "opus_start_offset" | "opus_start_offset_beyond" => {
+            let last = p.len() - 1;
+            for page in &mut p[2..last] {
+                page.granule += START_OFFSET;
+            }
+            let beyond = i64::from(name == "opus_start_offset_beyond");
+            p[last].granule = (e.packets.len() * 960) as i64 + START_OFFSET + beyond;
+        }
+        // Audio page 1 completes 50 packets (48 000 samples) but declares 960 fewer.
+        "opus_first_page_short" => p[2].granule = 47_040,
         "opus_serial_change" => p[3].serial += 1,
         "opus_family1_6ch" | "opus_family255_3ch" => {
             let (ch, family, streams, coupled) = if name == "opus_family1_6ch" {

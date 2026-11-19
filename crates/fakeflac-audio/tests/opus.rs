@@ -133,6 +133,40 @@ fn rf14_opus_preskip_and_end_trim() {
     assert_eq!(b[0], a[0][960..]);
     assert_eq!(b[0].len(), 1439040);
 }
+/// @RF-14 Scenario: A start offset is read from the first audio page and is not audio.
+/// opus.feature; lossy-source.md §2.4.3 (Q43, issue #159); lossy-fixtures.md §2.2 `opus_start_offset`.
+#[test]
+fn rf14_opus_start_offset_is_read_from_the_first_audio_page() {
+    let e = opus::encoded("opus_128_fb");
+    let decoded = decode_opus_samples_for_test(&opus::fixture("opus_start_offset"))
+        .expect("opus_start_offset must decode (start offset E = 360)");
+    // The decoder output with its first 120 samples removed and nothing removed at the end.
+    let expected = opus::reference_until(&e, 120, e.packets.len() * 960);
+    assert!(decoded.iter().all(|s| s.len() == 1_440_840));
+    assert_eq!(decoded, expected);
+    // Its first 1 440 000 samples are those of opus_128_fb.
+    let plain = decode_opus_samples_for_test(&opus::fixture("opus_128_fb")).unwrap();
+    assert_eq!(decoded[0][..1_440_000], plain[0][..]);
+
+    let a = analyze("opus_start_offset");
+    assert_eq!(a.error, None, "{:?}", a.error);
+    assert_eq!(a.info.duration_ms, 30017);
+    let total: usize = e.packets.iter().map(Vec::len).sum();
+    let expected = (8.0 * total as f64 / (1_440_840.0 / 48000.0) / 1000.0).round() as u32;
+    assert_eq!(a.info.declared_bitrate_kbps, Some(expected));
+    assert!(expected.abs_diff(128) <= 1, "declared bitrate {expected}");
+    assert_eq!(a.verdict, Verdict::Real, "{a:?}");
+    assert_eq!(a.verdict, analyze("opus_128_fb").verdict);
+}
+/// @RF-14 Scenario: A first audio page below its samples is not a start offset.
+/// opus.feature; lossy-source.md §2.4.3 (Q43); lossy-fixtures.md §2.2 `opus_first_page_short`.
+#[test]
+fn rf14_opus_first_page_below_its_samples_is_not_a_start_offset() {
+    let a = analyze("opus_128_fb");
+    let b = analyze("opus_first_page_short");
+    assert_eq!(a.info.size_bytes, b.info.size_bytes);
+    compare(a, b);
+}
 /// Scenario: The output gain of OpusHead is applied to every sample.
 #[test]
 fn rf14_opus_output_gain() {
@@ -215,6 +249,10 @@ fn rf14_broken_opus_streams() {
         ),
         (
             "opus_granule_beyond_audio",
+            "granule position beyond the audio",
+        ),
+        (
+            "opus_start_offset_beyond",
             "granule position beyond the audio",
         ),
         ("opus_bad_packet", "Opus packet 100"),

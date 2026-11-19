@@ -111,6 +111,112 @@ fn rf14_opus_fixture_preconditions() {
     }
 }
 
+/// Fake analyzer port: returns a fixed probe (the oracle's measurement of a fixture).
+struct Probe(fakeflac_core::ports::AudioProbe);
+impl SpectrumAnalyzer for Probe {
+    fn analyze(
+        &self,
+        _: &std::path::Path,
+        _: &DetectionParams,
+    ) -> Result<fakeflac_core::ports::AudioProbe, fakeflac_core::TrackError> {
+        Ok(self.0.clone())
+    }
+}
+
+// @RF-14 Scenario: A start offset is read from the first audio page and is not audio
+// (fixture precondition). lossy-fixtures.md §3 check 1 for `opus_start_offset`: 1501 packets and
+// durationMs 30017 from the written pages (RFC 7845 §4.5, read here independently of the adapter),
+// plus its §2.2 truth (Real, declared bitrate within 1 kbps of 128) measured on the decoder
+// oracle's samples. The adapter's own reading is checked by the scenario test in tests/opus.rs.
+#[test]
+fn rf14_opus_start_offset_fixture_preconditions() {
+    let file = opus::bytes("opus_start_offset");
+    let e = opus::encoded("opus_128_fb");
+    let (mut pos, mut packets, mut page_index) = (0, 0usize, 0);
+    let (mut pre_skip, mut first, mut last) = (None, None, None);
+    while pos < file.len() {
+        assert_eq!(&file[pos..pos + 4], b"OggS");
+        let flags = file[pos + 5];
+        let granule = i64::from_le_bytes(file[pos + 6..pos + 14].try_into().unwrap());
+        let segments = file[pos + 26] as usize;
+        let lace = &file[pos + 27..pos + 27 + segments];
+        let completed = lace.iter().filter(|x| **x < 255).count();
+        if page_index == 0 {
+            let body = pos + 27 + segments;
+            pre_skip = Some(i64::from(u16::from_le_bytes([
+                file[body + 10],
+                file[body + 11],
+            ])));
+        } else if page_index >= 2 {
+            packets += completed;
+            if first.is_none() {
+                first = Some((granule, completed as i64 * 960));
+            }
+            last = Some((granule, flags));
+        }
+        pos += 27 + segments + lace.iter().map(|x| *x as usize).sum::<usize>();
+        page_index += 1;
+    }
+    assert_eq!(packets, 1501);
+    let (f, s1) = first.unwrap();
+    assert_eq!((f, s1), (48_360, 48_000));
+    let offset = (f - s1).max(0);
+    assert_eq!(offset, 360);
+    let (g, flags) = last.unwrap();
+    assert_eq!(flags & 4, 4, "end-of-stream flag on the last page");
+    assert_eq!(g, 1_441_320);
+    let pre_skip = pre_skip.unwrap();
+    assert_eq!(pre_skip, 120);
+    let samples_of_all_packets = packets as i64 * 960;
+    assert!(g - offset >= pre_skip && g - offset <= samples_of_all_packets);
+    let l = g - offset - pre_skip;
+    assert_eq!(l, 1_440_840);
+    let duration_ms = (1000 * l / 48000) as u64;
+    assert_eq!(duration_ms, 30017);
+    let bytes: usize = e.packets.iter().map(Vec::len).sum();
+    let kbps = (8.0 * bytes as f64 / (l as f64 / 48000.0) / 1000.0).round() as u32;
+    assert!(kbps.abs_diff(128) <= 1, "declared bitrate {kbps}");
+
+    // Truth (v8): the oracle's samples after the pre-skip, with no end trim.
+    let samples = opus::reference_until(&e, 120, e.packets.len() * 960);
+    assert_eq!(samples[0].len(), l as usize);
+    let wav = opus::fixture("opus_start_offset").with_extension("reference.wav");
+    let mut w = hound::WavWriter::create(
+        &wav,
+        hound::WavSpec {
+            channels: 1,
+            sample_rate: 48000,
+            bits_per_sample: 32,
+            sample_format: hound::SampleFormat::Float,
+        },
+    )
+    .unwrap();
+    for x in &samples[0] {
+        w.write_sample(*x).unwrap();
+    }
+    w.finalize().unwrap();
+    let params = DetectionParams::default();
+    let mut probe = SymphoniaAnalyzer.analyze(&wav, &params).unwrap();
+    probe.bit_depth = None;
+    probe.duration_ms = duration_ms;
+    probe.codec = Some(fakeflac_core::AudioCodec::Opus);
+    probe.declared_bitrate_kbps = Some(kbps);
+    let path = opus::fixture("opus_start_offset");
+    let entry = fakeflac_core::ports::FileEntry {
+        folder: path.parent().unwrap().into(),
+        path,
+        format: fakeflac_core::AudioFormat::Opus,
+        size_bytes: file.len() as u64,
+        modified_unix: 0,
+    };
+    let a = fakeflac_core::analysis::analyze_track(&Probe(probe), &entry, &params);
+    eprintln!("opus_start_offset (oracle): {a:?}");
+    assert_eq!(a.verdict, fakeflac_core::Verdict::Real, "{a:?}");
+    assert_eq!(a.estimated_source_bitrate_kbps, Some(kbps));
+    let fc = f64::from(a.cutoff.as_ref().unwrap().frequency_hz);
+    assert!((fc - 20000.0).abs() <= 200.0, "fc={fc}");
+}
+
 // @RF-14 Scenario: A packet split across pages is reassembled (fixture precondition).
 // Check the independent writer in memory so an old generated file cannot hide a broken recipe.
 #[test]
