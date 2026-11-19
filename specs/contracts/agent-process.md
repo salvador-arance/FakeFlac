@@ -1,10 +1,10 @@
 ---
 id: SPEC-AGENT-PROCESS
-requirements: [RP-02, RP-05, RP-07, RP-08, RP-09]
+requirements: [RP-02, RP-05, RP-07, RP-08]
 status: proposed
 ---
 
-# Agent process: what enforces RP-02, RP-05, RP-07, RP-08 and RP-09 today
+# Agent process: what enforces RP-02, RP-05, RP-07 and RP-08 today
 
 This spec gives each of the five agent-process requirements a criterion that exists today. It adds no hook, script, recipe, workflow, skill or dependency, and it changes no approved spec. Each mechanism below was read in the repository at the time of writing (line numbers refer to that revision). Where nothing enforces a requirement, the spec says so and either names the owner check that replaces it or raises a G1 question. Owner decision for issue #158 step 5, option A: one short spec for the five requirements without scenarios.
 
@@ -133,29 +133,9 @@ Test: `just trace` itself, run on the repository in every PR (CI job `specs`) an
 - `.claude/settings.json` sets no `timeout` on the PreToolUse or PostToolUse hooks, so the host's default applies; the 5 s bound is not configured anywhere.
 - CI job times are visible in GitHub but are not compared with any bound.
 
-## 5. RP-09: bounded cost
+## 5. RP-09: removed
 
-**Statement.** A monthly agent usage budget is defined and reviewed per milestone.
-
-**What exists today.** There is no budget figure anywhere in the repository; no file in `docs/` or `specs/` states a monthly amount or plan for agent usage. Planning section 1.7 gives only an indicative range for Claude, "20–200 $/month depending on plan and usage", and section 1.10 says the usage plan is "a personal decision outside the document". No record of a per-milestone review was found. These mechanisms limit cost, but none of them is a budget:
-
-- Model per role: ADR-0024, applied as the `model:` field on line 5 of each `.claude/agents/*.md`.
-- Never resume a large subagent: the `guard-agents` hook, with a 150k-token limit (`.claude/hooks/guard-agents.mjs` lines 8 and 34–36, overridable with `FAKEFLAC_AGENT_CONTEXT_LIMIT`). Tested in `.claude/hooks/hooks.test.mjs` lines 141–161.
-- At most 2–3 agents in parallel, and one fresh agent per iteration (`docs/agents/workflow.md` lines 22–23).
-- No agents run in CI (ADR-0023), so CI incurs no agent cost.
-
-**What "defined and reviewed per milestone" means (owner checklist).** At every milestone close:
-
-1. **Defined.** A monthly budget exists, recorded where Q1 decides, with the figure given by the owner (Q2). This spec proposes no figure.
-2. **Reviewed.** The owner compares the agent usage of the months the milestone spanned with the budget, using the provider's usage or billing page. Agents cannot read that page.
-3. **Recorded.** The milestone-closing `/handoff` block has one line: `RP-09 review <milestone>: within | over budget; action: <none | …>`. If Q1 keeps the figure private, the line carries no amount.
-4. **Acted on.** When usage is over budget, the action is named. Examples: change the model assignment (ADR-0024), lower `FAKEFLAC_AGENT_CONTEXT_LIMIT`, or run fewer agents in parallel.
-
-**Measurable acceptance.** For every milestone closed after this spec's G1, `Select-String -Path docs/agents/progress.md -Pattern 'RP-09 review'` finds a line for that milestone.
-
-**Not enforced.** Everything in this section is an owner check. No tool knows the budget or the usage. Until Q2 is answered, the "defined" part of RP-09 is unmet.
-
-**Status.** `requirements/RP-09.md` stays `draft`, with this reason written in it: the acceptance above measures a budget that does not exist yet. The change that records the owner's answer to Q2 sets it to `specified`. This is the one requirement of RP-01 to RP-10 left at `draft` below H3.
+RP-09 (a monthly agent usage budget, defined and reviewed per milestone) is removed at the owner's instruction of 2026-11-19: a usage budget is not a requirement of this project and nothing in the repository needs to represent it. `requirements/RP-09.md` is deleted in this change; the planning document keeps its historical text. The limits on cost that exist for other reasons stay as they are: the model per role (ADR-0024), the `guard-agents` 150k-token limit, at most 2–3 agents in parallel, and no agents in CI (ADR-0023).
 
 ## 6. G1 questions
 
@@ -163,21 +143,20 @@ Each question has a default, which applies if the owner accepts it at G1.
 
 | # | Requirement | Question | Default |
 |---|---|---|---|
-| Q1 | RP-09 | Where is the monthly budget recorded? (a) As a figure in the repository, in `docs/agents/workflow.md`. (b) Outside the repository (the repository is public), with only the review result recorded in `progress.md`. | (b), consistent with planning section 1.10. |
-| Q2 | RP-09 | What is the monthly budget? Give an amount or a plan tier. | None proposed: the owner gives it. Under Q1 (b), the owner confirms only that it is defined. |
-| Q3 | RP-09, RP-02, RP-05, RP-08 | When are the owner checks first done? | At the H2 close (#158), with no retroactive reviews of H0 and H1. |
-| Q4, Q9, Q12, Q13 | RP-09, RP-07, RP-02, RP-05 | **Defaults taken, no decision needed** (accept them by merging): "cost per feature" (planning section 3.11.12) is only an optional note in the RP-09 review line (Q4); the PR template is not changed and RP ids are written by hand in its requirement line (Q9); no `just` recipe reads the branch protection of `main`, because it needs administrator scope, so section 1 A2 stays an owner check (Q12); `/handoff` is not changed (Q13). | As stated. |
+| Q3 | RP-02, RP-05, RP-08 | When are the owner checks first done? | At the H2 close (#158), with no retroactive reviews of H0 and H1. |
+| Q9, Q12, Q13 | RP-07, RP-02, RP-05 | **Defaults taken, no decision needed** (accept them by merging): the PR template is not changed and RP ids are written by hand in its requirement line (Q9); no `just` recipe reads the branch protection of `main`, because it needs administrator scope, so section 1 A2 stays an owner check (Q12); `/handoff` is not changed (Q13). | As stated. |
 | Q5 | RP-08 | Is the 5 s bound per hook, or the total of the hooks one tool call triggers? | The total per tool call, as in section 4 A2. |
 | Q6 | RP-08 | Should the bound be enforced, with a timing assertion in the hook tests or a `timeout` on the PreToolUse and PostToolUse hooks in `.claude/settings.json`? | No. It stays an owner measurement. A timing assertion on shared runners would fail at random (the reasoning of ADR-0046). |
 | Q7 | RP-08 | Is `just check-fast` measured with warm or cold caches? | Warm. A cold run may be reported but is not held to the bound. |
 | Q8 | RP-07 | Should CI check the PR body (References filled: requirement id, spec path, issue number)? This needs a new script and a workflow change. | No, not now. It stays an owner check at G1 and G2 and is recorded as a gap. |
 | Q10 | RP-07 | `specs/traceability.md` line 3 says "Validated by `just trace`", but `scripts/trace.mjs` never reads that file. Correct the sentence, or extend `trace.mjs`? And add a `scripts/trace.test.mjs` for its failure paths? | Correct the sentence in a later `spec/` PR to "Requirement ↔ scenario tags are validated by `just trace`; rows are kept by `/handoff`". No new test now. |
 | Q11 | RP-02 | Should `guard-bash` also block `gh api` calls to a pull request's merge endpoint (and `git -C … push … main`), with new `hooks.test.mjs` rows? | Yes, in a separate harness PR after this spec. It is listed here because this spec changes no hook. |
-| Q14 | RP-01, RP-03, RP-04, RP-06, RP-10 | These five are set to `specified` on the strength of `agent-harness.md`, which the issue counts as their scenarios. That spec specifies harness parity (Claude to Codex), not each requirement's own criterion. RP-03 and RP-04 are really enforced (CI runs only `just` recipes; `guard-protected` and `guard-tests`) and RP-06 in part (`Read(./.env*)` is denied, the corpus tests are read-only). **RP-01 ("the human does not edit code") and RP-10 (a repeated error is fixed in the harness) have no mechanism and no owner check.** Is that enough for `specified`? | Yes for RP-03, RP-04 and RP-06. For RP-01 and RP-10 the owner decides: keep `specified`, or set them back to `draft` until an owner check with a milestone-close cadence is added, as for RP-02 to RP-09. A gap found later goes through G1 like any other. |
+| Q14 | RP-01, RP-03, RP-04, RP-06, RP-10 | **Decided by the owner on 2026-11-19: they stay `specified`.** They are specified by `agent-harness.md` and its scenarios, as the issue counts them, and the owner states that this work is done in full. No owner check is added for RP-01 or RP-10. | Decided. A gap found later goes through G1 like any other. |
 
 ## 7. Changes made by this spec
 
 - Adds this contract and `../features/agent-process.feature`.
-- Changes `status: draft` to `status: specified` in `requirements/RP-01.md` to `RP-08.md` and `RP-10.md`, keeping each statement and appending a pointer to its spec. `RP-09.md` stays `draft` with its reason (section 5).
-- Adds one row for RP-02, RP-05, RP-07, RP-08 and RP-09 to `traceability.md`.
+- Changes `status: draft` to `status: specified` in `requirements/RP-01.md` to `RP-08.md` and `RP-10.md`, keeping each statement and appending a pointer to its spec.
+- Deletes `requirements/RP-09.md` (section 5).
+- Adds one row for RP-02, RP-05, RP-07 and RP-08 to `traceability.md`.
 - Changes no code, test, hook, script, recipe, workflow, skill, `CLAUDE.md` or approved spec. G1 approves this contract and the feature file. G2 remains human-only.

@@ -1,8 +1,8 @@
 Feature: Agent process checks that run today
   Only behavior that an existing test or CI command checks is written here
-  (specs/contracts/agent-process.md). The owner checks of RP-02, RP-05, RP-07,
-  RP-08 and RP-09 are written in the contract, not as scenarios. RP-08 and RP-09
-  have no scenario: nothing measures a time or a budget automatically.
+  (specs/contracts/agent-process.md). The owner checks of RP-02, RP-05, RP-07
+  and RP-08 are written in the contract, not as scenarios. RP-08 has no
+  scenario: nothing measures a time automatically.
 
   # --- RP-02: agents never merge or push to main (tested in .claude/hooks/hooks.test.mjs,
   # --- "guard-bash: \"<command>\" -> exit <code>"; Codex payloads in scripts/codex-hooks.test.mjs,
