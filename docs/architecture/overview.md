@@ -40,7 +40,7 @@ Why hexagonal: the detection core is the most valuable and most delicate asset (
 | RF-03/RF-04 detection | Band spectra (power mean and per-frame median), relative cutoff step and 16 kHz gap step (ADR-0035); thresholds as versioned data (ADR-0011) |
 | RNF-01 performance | parallel tracks on std scoped threads (ADR-0006, ADR-0034), window sampling (ADR-0010), cache (ADR-0007/0008), real FFT (ADR-0026); budget, fixtures and the opt-in harness `just perf`: `specs/contracts/performance.md`, ADR-0046 |
 | RNF-02 memory | Streaming decode, bounded working set per track; criterion and gate: `specs/contracts/memory.md`, `just memory` |
-| RNF-03 privacy | No network dependencies; Tauri CSP without external `connect-src`; minimal capabilities |
+| RNF-03 privacy | No network dependencies; Tauri CSP without external sources; capabilities on an allow-list; rules and checks: `specs/contracts/privacy.md` (`just lint-arch`, `cargo deny check`) |
 | RNF-04 reliability | Typed per-track errors (ADR-0013) |
 | RNF-05 read-only | No write port over audio; cache stored outside the music folder |
 | RNF-06 size | No bundled ffmpeg (ADR-0030); `lto` + `strip` in release; size gate `just release-assets` on every PR and release (ADR-0045) |
@@ -55,7 +55,7 @@ Why hexagonal: the detection core is the most valuable and most delicate asset (
 
 ## Tauri security
 
-Minimal capabilities (folder dialog, read of the chosen path, write only of the destination CSV), restrictive CSP, no `shell`, no open `fs` from the frontend. All disk access happens in Rust.
+Capabilities: `core:default` and four `core:window` permissions for the custom title bar; no plugin permission. Dialogs, reads and the CSV write happen in Rust. Restrictive CSP, no `shell`, no open `fs` from the frontend. All disk access happens in Rust.
 
 ## Related
 
