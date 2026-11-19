@@ -2,6 +2,28 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-19 - #158 step 1: handoff and traceability
+
+**Done**
+- #161 is merged at G2 (`91e90cb`) and #159 is closed, so the "G2 on #161" of the block below is closed. The three RF-14 branches are deleted.
+- `specs/traceability.md`: the RNF-01 and RNF-02 rows say "approved at G1 (#149)" instead of "Draft revision for G1"; the RNF-02 row names the reading recorded in #151 (`contracts/memory.md` section 12.7, inconclusive) and that the F7 row has no final state until #158 step 3; the "other RF" row is now the RF-12 row (H3, no spec yet, the only RF without one).
+- #158 step 2: the owner delegated the option of #146 and #147; the cheapest of each was taken and is in spec PR #163 (criteria X8 and X9). The tests follow with `/feature RF-17` after G1.
+- Census of the whole library (owner's folder, run `20261119T155033Z`, main at `91e90cb`, detection 8, default params, 409 s, read-only). Aggregates only; per-track files stay under the ignored `target/` (ADR-022). 11 420 tracks, 904 albums, 150 718 MB: 9 027 real, 1 173 suspicious, 1 156 fake, 64 error.
+  - **The 64 errors are unchanged by #159.** 55 FLAC and 9 MP3 `corruptStream`, no Opus error. The library has 14 Opus tracks and all are `real`. The 64 are therefore the same corrupt files as in the M1 reading of 2026-11-15 (step 3, `contracts/memory.md` section 12.7).
+  - **The 17 kHz AAC edge (step 8, first case).** 162 AAC tracks (all 44.1 kHz): 133 `suspicious` and 29 `real`, none `fake`. All 133 have the reason `cutoffBelowDeclared`, declare 320 kbps, have a cutoff in [17 000, 17 250) Hz and lie in 14 albums. No `real` AAC track declares 320 kbps (22 at 128 kbps, 7 at 259 to 288 kbps), and the `real` cutoffs are 15 750 to 18 750 Hz or full band. So the 133 are the whole 320 kbps AAC population, as the 2026-11-14 diagnosis said. Not done: whether an encoder-specific cutoff rule separates them from real low-bitrate transcodes without breaking the E6 gate; that needs `just accept` on the corpus.
+  - **V3-only fakes (step 8, second case).** 95 lossless fakes are decided by `gapStep` alone (188 by `cutoffStep` alone, 218 by both). By album stratum: 22 in whole, 38 in mixed, 35 in isolated albums. Gap margin bands (below 1, 1 to 3, 3 to 6, 6 to 12, 12 or more dB): isolated 5, 10, 6, 5, 9; mixed 5, 3, 2, 8, 20; whole 0, 2, 2, 6, 12. 44 of the 95 have a full-band cutoff (21 kHz or more). 15 of the 35 isolated ones are under 3 dB. Nothing in the census says which of them are real transcodes: that needs the labelled corpus (`just accept`), crossed with these bands.
+  - This run is not the step 7 baseline: that one is taken at the 0.3.0 commit (the detection and the extraction do not change in a version bump, so the aggregates should be equal).
+
+**Pending**
+- #158 steps 3 to 8. Step 3 now has its evidence: the 64 are the corrupt files, so the owner picks "accept the reading" or "repeat M1 on a folder without error tracks". Step 8 needs `just accept` on the labelled corpus to finish both cases (a rule proposal at G1, or a recorded reason for no change).
+- Cleanup left on the owner's machine: the folders `.claude/worktrees/next-steps-github-issues-e67b04` (no longer registered in git) and `.claude/worktrees/calibrate-62fdf7`; `just prune-branches` failed on the first while it was in use.
+
+**Blockers / questions for the human**
+- G1 on spec PRs #162 (this one) and #163.
+- Step 3: which of the two options.
+
+**Next step:** G1 on #162 and #163, then `/feature RF-17` for the two guard tests; in parallel, `just accept` on the corpus for step 8.
+
 ## 2026-11-19 - RF-14: Opus start offset (#159), spec merged and feature PR open
 
 **Done**
