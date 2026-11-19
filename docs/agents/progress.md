@@ -2,6 +2,24 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-19 - #158 steps 2 and 3: RF-17 guard tests, M1 reading accepted
+
+**Done**
+- Spec PRs #162 (step 1), #163 (#146 and #147, criteria X8 and X9) and #164 (step 3) are merged at G1. Step 3: the owner accepted the 12.7 reading as the final state of F7 (`contracts/memory.md` section 12.8); the RNF-02 row of `specs/traceability.md` says so now.
+- `/feature RF-17` for X8 and X9, branch `feat/RF-17-guard-tests`: tests `821f6c1` in `crates/fakeflac-core/tests/fake_evidence.rs` (three tests, about 3 s in the dev profile; they pass on the code as it is, because the spec says no production change), ADR-0051 `df5952e` (`toml` as a dev-dependency of the core's tests, amends ADR-0033; the owner chose this over moving X8 to `fakeflac-audio`). Review: no blocking findings; the reviewer's mutations (a `Fake` path without evidence, a changed `gaps.edge_hz`, a text without "16 kHz") each fail the intended test. `just ci` exit 0. No perf or memory report: the diff touches no `crates/fakeflac-audio/src/` file.
+- Library census of 2026-11-19: see the block below.
+
+**Pending**
+- G2 on the feature PR. It closes #146 and #147 and takes ADR-0051 from `proposed` to `accepted` (ADR file and `docs/adr/README.md`; ADR-0033 already names it).
+- `crates/fakeflac-core/CLAUDE.md` line 4 (and the generated `AGENTS.md`) says "Only `serde` and `thiserror`". It stays true for the shipped core; a human may add "(dev-dependencies: ADR-0051)" and run `just agents-sync` (agent configuration, ADR-0048).
+- #158 steps 4 to 8: step 4 (RNF-03, RNF-10 specs) and step 5 (RNF-04, RNF-05, RNF-09 to `specified`; RP-01 to RP-10 need the owner's option) are independent specs; step 6 (0.3.0) comes after this PR; step 7 are the owner's decisions; step 8 needs `just accept` on the corpus.
+
+**Blockers / questions for the human**
+- G2 on the feature PR.
+- Step 5: RP-01 to RP-10, one short spec pointing at what enforces each, or a status for process requirements.
+
+**Next step:** merge the feature PR at G2, then the `/new-spec` rounds of steps 4 and 5.
+
 ## 2026-11-19 - #158 step 1: handoff and traceability
 
 **Done**
