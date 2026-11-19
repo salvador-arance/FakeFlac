@@ -1,7 +1,7 @@
 ---
 id: SPEC-AGENT-PROCESS
 requirements: [RP-02, RP-05, RP-07, RP-08]
-status: proposed
+status: approved
 ---
 
 # Agent process: what enforces RP-02, RP-05, RP-07 and RP-08 today
@@ -36,12 +36,12 @@ G1 has no hook of its own. A spec or ADR is approved when the owner merges its `
 **Measurable acceptance**
 
 - A1 (automated): `node --test ".claude/hooks/*.test.mjs"` exits 0, and so does `just check-fast`, which includes it. Every row listed above is part of that run.
-- A2 (owner check, at every milestone close): in the repository settings on GitHub, the protection of `main` still requires a pull request and the `ci-ok` check, and it blocks force-pushes and branch deletion. The owner records one line: `RP-02 review <milestone>: branch protection checked`.
+- A2 (owner check, at every milestone close): in the repository settings on GitHub, the protection of `main` requires a pull request and the `ci-ok` check, and it blocks force-pushes and branch deletion. The owner records one line: `RP-02 review <milestone>: branch protection checked`. **A2 fails today** (section 1, "Not enforced"): on 2026-11-20 `main` has no protection, and the owner decided to turn it on. A2 passes when the setting is changed.
 - A3 (owner check, at every G1 and G2): the owner, not an agent, performs the merge.
 
 **Not enforced**
 
-- Branch protection of `main` is a GitHub setting and cannot be seen in the repository. The repository only says that `ci-ok` is the required check (the comment on `ci-ok`, `docs/agents/workflow.md` line 44, and the v0.1 progress archive); it cannot show the setting itself. Whether administrators can bypass it, and whether "Require review from Code Owners" is on, is also not visible. Planning section 3.11.11 (d) says that formal PR approval is not used and that G2 is the merge itself, so `CODEOWNERS` probably only requests a review.
+- **Branch protection of `main` is off.** It is a GitHub setting and is not in the repository, but it can be read with the GitHub API. On 2026-11-20, a read-only query with the owner's `gh` authentication (administrator scope) returned: no branch protection (`404 Branch not protected`), `protected: false`, no rulesets (`[]`), squash merge only, auto-merge off, delete-branch-on-merge on. So `ci-ok` is the check that the documents call "required", but nothing makes it required, and GitHub does not block a force-push to `main` or its deletion. The owner decided on 2026-11-20 to turn the protection on (require a pull request and `ci-ok`; block force-pushes and deletion); the change is a GitHub setting that the owner makes, and no agent changes it. Until then `guard-bash` and the `ask` permission are the only barrier (next point). Whether administrators can bypass it, and whether "Require review from Code Owners" is on, will be visible once it is set. Planning section 3.11.11 (d) says that formal PR approval is not used and that G2 is the merge itself, so `CODEOWNERS` probably only requests a review.
 - `guard-bash` matches command text, so it is a guard rail, not a security boundary. Several forms are not matched: `git -C dir push origin main`, `git -c k=v push …`, git aliases, scripts that push, and `gh api` calls to the merge endpoint. `release.md` line 511 records the same limit for tags and releases. A bare `git push` while `main` is checked out does not name `main` either. The `ask` permission on `git push` and branch protection remain the boundary.
 - The `deny` rules apply to the Claude `Bash` tool only. The Codex harness does not translate them (`agent-harness.md` section 4).
 
@@ -116,7 +116,7 @@ Test: `just trace` itself, run on the repository in every PR (CI job `specs`) an
 **Measured**
 
 - `just check-fast`: 24 s, exit 0, on 2026-11-19 on the development machine, warm build caches, branch based on `85dad04`. This is one warm-cache run and only indicative.
-- Per-edit hooks: **not measured.** No figure exists in the repository.
+- Per-edit hooks, measured on 2026-11-20 on the development machine, 8 runs each: `guard-protected` median 45 ms (max 47 ms), `guard-bash` median 50 ms (max 51 ms), and `rustfmt --check` as a proxy for `format` median 78 ms (max 87 ms). `format.mjs` itself was not run, to avoid writing, and `guard-agents` was not measured. An `Edit` of a `.rs` file takes about 125 ms in total (`guard-protected` plus `format`), about 40 times under the bound. These figures are indicative; A2 below is still the owner's measurement.
 
 **Measurable acceptance**
 
@@ -137,20 +137,20 @@ Test: `just trace` itself, run on the repository in every PR (CI job `specs`) an
 
 RP-09 (a monthly agent usage budget, defined and reviewed per milestone) is removed at the owner's instruction of 2026-11-19: a usage budget is not a requirement of this project and nothing in the repository needs to represent it. `requirements/RP-09.md` is deleted in this change; the planning document keeps its historical text. The limits on cost that exist for other reasons stay as they are: the model per role (ADR-0024), the `guard-agents` 150k-token limit, at most 2–3 agents in parallel, and no agents in CI (ADR-0023).
 
-## 6. G1 questions
+## 6. G1 questions (answered by the owner on 2026-11-20)
 
-Each question has a default, which applies if the owner accepts it at G1.
+Each question had a default. On 2026-11-20 the owner accepted every default, after a read-only check of each one against the repository and the GitHub settings. The facts that check added are in the answers.
 
 | # | Requirement | Question | Default |
 |---|---|---|---|
-| Q3 | RP-02, RP-05, RP-08 | When are the owner checks first done? | At the H2 close (#158), with no retroactive reviews of H0 and H1. |
-| Q9, Q12, Q13 | RP-07, RP-02, RP-05 | **Defaults taken, no decision needed** (accept them by merging): the PR template is not changed and RP ids are written by hand in its requirement line (Q9); no `just` recipe reads the branch protection of `main`, because it needs administrator scope, so section 1 A2 stays an owner check (Q12); `/handoff` is not changed (Q13). | As stated. |
-| Q5 | RP-08 | Is the 5 s bound per hook, or the total of the hooks one tool call triggers? | The total per tool call, as in section 4 A2. |
-| Q6 | RP-08 | Should the bound be enforced, with a timing assertion in the hook tests or a `timeout` on the PreToolUse and PostToolUse hooks in `.claude/settings.json`? | No. It stays an owner measurement. A timing assertion on shared runners would fail at random (the reasoning of ADR-0046). |
-| Q7 | RP-08 | Is `just check-fast` measured with warm or cold caches? | Warm. A cold run may be reported but is not held to the bound. |
-| Q8 | RP-07 | Should CI check the PR body (References filled: requirement id, spec path, issue number)? This needs a new script and a workflow change. | No, not now. It stays an owner check at G1 and G2 and is recorded as a gap. |
-| Q10 | RP-07 | `specs/traceability.md` line 3 says "Validated by `just trace`", but `scripts/trace.mjs` never reads that file. Correct the sentence, or extend `trace.mjs`? And add a `scripts/trace.test.mjs` for its failure paths? | Correct the sentence in a later `spec/` PR to "Requirement ↔ scenario tags are validated by `just trace`; rows are kept by `/handoff`". No new test now. |
-| Q11 | RP-02 | Should `guard-bash` also block `gh api` calls to a pull request's merge endpoint (and `git -C … push … main`), with new `hooks.test.mjs` rows? | Yes, in a separate harness PR after this spec. It is listed here because this spec changes no hook. |
+| Q3 | RP-02, RP-05, RP-08 | When are the owner checks first done? | At the H2 close (#158), with no retroactive reviews of H0 and H1. **Resolved (owner, 2026-11-20): as stated.** RP-02 A2 fails at that first check until the branch protection is turned on (section 1). |
+| Q9, Q12, Q13 | RP-07, RP-02, RP-05 | **Defaults taken, no decision needed** (accept them by merging): the PR template is not changed and RP ids are written by hand in its requirement line (Q9); no `just` recipe reads the branch protection of `main`, because it needs administrator scope, so section 1 A2 stays an owner check (Q12); `/handoff` is not changed (Q13). | As stated. **Resolved (owner, 2026-11-20): as stated.** The premise of Q12 was that the protection "cannot be seen"; it can be read with the GitHub API, and it is off (section 1). The default still holds: no `just` recipe reads it, and A2 stays an owner check. |
+| Q5 | RP-08 | Is the 5 s bound per hook, or the total of the hooks one tool call triggers? | The total per tool call, as in section 4 A2. **Resolved (owner, 2026-11-20): as stated.** This is the stricter reading, and the measured hooks pass it by a wide margin (section 4, "Measured"). |
+| Q6 | RP-08 | Should the bound be enforced, with a timing assertion in the hook tests or a `timeout` on the PreToolUse and PostToolUse hooks in `.claude/settings.json`? | No. It stays an owner measurement. A timing assertion on shared runners would fail at random (the reasoning of ADR-0046). **Resolved (owner, 2026-11-20): no enforcement.** The last four CI runs of `just check-fast` on `main` took 15 s, 23 s, 70 s and 81 s (the 70 s and 81 s ran on a cache miss), so a timing assertion on shared runners would fail at random. |
+| Q7 | RP-08 | Is `just check-fast` measured with warm or cold caches? | Warm. A cold run may be reported but is not held to the bound. **Resolved (owner, 2026-11-20): warm.** The CI runs above show the difference: cold 70 s and 81 s, warm 15 s and 23 s. |
+| Q8 | RP-07 | Should CI check the PR body (References filled: requirement id, spec path, issue number)? This needs a new script and a workflow change. | No, not now. It stays an owner check at G1 and G2 and is recorded as a gap. **Resolved (owner, 2026-11-20): no CI check.** Of the last 60 merged pull requests, 53 are not from a bot; 41 of them (77 %) have a References section and 36 (68 %) have all six elements (References, requirement id, spec path, issue number, plan followed, checks run). The 12 without References are #111 to #160, and every non-bot PR after #160 in that sample has one. It is revisited if gaps reappear. |
+| Q10 | RP-07 | `specs/traceability.md` line 3 says "Validated by `just trace`", but `scripts/trace.mjs` never reads that file. Correct the sentence, or extend `trace.mjs`? And add a `scripts/trace.test.mjs` for its failure paths? | Correct the sentence in a later `spec/` PR to "Requirement ↔ scenario tags are validated by `just trace`; rows are kept by `/handoff`". No new test now. **Resolved (owner, 2026-11-20): as stated, done in this PR.** `traceability.md` line 3 now says that the requirement ↔ scenario tags are validated by `just trace` and that the rows are kept by `/handoff`. `trace.mjs` never reads `traceability.md`; a check that every requirement id is named in a row would pass today and is left for a later change. |
+| Q11 | RP-02 | Should `guard-bash` also block `gh api` calls to a pull request's merge endpoint (and `git -C … push … main`), with new `hooks.test.mjs` rows? | Yes, in a separate harness PR after this spec. It is listed here because this spec changes no hook. **Resolved (owner, 2026-11-20): yes.** The hook was run with sample payloads: it blocks `git push` naming `main` (including `HEAD:refs/heads/main`) and `gh pr merge`, and it allows `gh api` calls to the merge endpoint of a pull request, the GraphQL `mergePullRequest` mutation, `gh api` changes to the protection of `main`, `git -C . push origin main` and `git -c k=v push origin main`. The harness PR adds those rules and normalises `-C` and `-c` before matching, with new `hooks.test.mjs` rows; it does not deny `gh api` as a whole, which agents use for read-only queries. It goes after, or together with, turning the branch protection on. |
 | Q14 | RP-01, RP-03, RP-04, RP-06, RP-10 | **Decided by the owner on 2026-11-19: they stay `specified`.** They are specified by `agent-harness.md` and its scenarios, as the issue counts them, and the owner states that this work is done in full. No owner check is added for RP-01 or RP-10. | Decided. A gap found later goes through G1 like any other. |
 
 ## 7. Changes made by this spec
@@ -160,3 +160,4 @@ Each question has a default, which applies if the owner accepts it at G1.
 - Deletes `requirements/RP-09.md` (section 5).
 - Adds one row for RP-02, RP-05, RP-07 and RP-08 to `traceability.md`.
 - Changes no code, test, hook, script, recipe, workflow, skill, `CLAUDE.md` or approved spec. G1 approves this contract and the feature file. G2 remains human-only.
+- The answers of 2026-11-20 add the measured hook times (section 4), the state of the branch protection (section 1) and the resolution of Q3 to Q14 (section 6), and correct line 3 of `traceability.md` (Q10). They change no hook, script or recipe.
