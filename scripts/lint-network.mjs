@@ -54,7 +54,7 @@ const FRONTEND_APIS = [
   ['EventSource', /\bEventSource\b/],
   ['sendBeacon', /\bsendBeacon\b/],
   ['RTCPeerConnection', /\bRTCPeerConnection\b/],
-  ['window.open', /\bwindow\.open\s*\(/],
+  ['window.open', /\bwindow\s*\.\s*open\s*\(/],
 ]
 const FRONTEND_EXTENSIONS = ['.ts', '.js', '.svelte', '.css', '.html']
 
@@ -432,12 +432,13 @@ export function checkFrontendSource(relPath, text) {
   if (text === null || text === undefined) return []
   const src = String(text)
   const out = []
-  // (a) absolute URLs with a network scheme.
-  for (const m of src.matchAll(/(?<![A-Za-z0-9+.-])(?:https?|wss?|ftp):\/\/[^\s'"`<>()\\]*/g)) {
+  // (a) absolute URLs with a network scheme; the match stops at quotes, brackets and the
+  // punctuation that ends a statement or a list (';', ',', '}').
+  for (const m of src.matchAll(/(?<![A-Za-z0-9+.-])(?:https?|wss?|ftp):\/\/[^\s'"`<>()\\;,}]*/g)) {
     if (!ALLOWED_URLS.includes(m[0])) out.push(f1(`URL '${m[0]}'`))
   }
   // (b) protocol-relative URLs where the browser would load them.
-  const relative = /(?:\b(?:src|href|action)\s*=\s*["']?|@import\s+(?:url\(\s*)?["']?|\burl\(\s*["']?)(\/\/[^\s'"`<>()\\]+)/g
+  const relative = /(?:\b(?:src|href|action)\s*=\s*["']?|@import\s+(?:url\(\s*)?["']?|\burl\(\s*["']?)(\/\/[^\s'"`<>()\\;,}]+)/g
   for (const m of src.matchAll(relative)) out.push(f1(`URL '${m[1]}'`))
   // (c) network APIs, as whole words.
   for (const [api, re] of FRONTEND_APIS) if (re.test(src)) out.push(f1(`'${api}' not allowed`))
@@ -499,11 +500,22 @@ const subfolders = (root, rel) =>
 
 export function lintNetwork(root) {
   const out = []
+  // The rule each checker answers for when it cannot run.
+  const ruleOf = new Map([
+    [checkTauriConf, 'T1'],
+    [checkCapability, 'T3'],
+    [checkCargoManifest, 'R1'],
+    [checkCargoLock, 'R2'],
+    [checkRustSource, 'R4'],
+    [checkFrontendSource, 'F1'],
+    [checkPackageJson, 'F2'],
+  ])
   const run = (check, rel) => {
     try {
       out.push(...check(rel, readText(root, rel)))
     } catch {
-      // The checkers never throw; this keeps one file from stopping the others.
+      // The checkers never throw; if one does, the file fails closed instead of passing unchecked.
+      out.push(`${rel}: RNF-03 ${ruleOf.get(check) ?? 'T1'}: could not be checked`)
     }
   }
 
