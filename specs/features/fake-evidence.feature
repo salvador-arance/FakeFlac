@@ -5,7 +5,7 @@ Feature: Explain a Fake verdict (evidence and album context)
   So that I can judge the verdict instead of trusting it blindly
 
   Spec: specs/detection/fake-evidence.md (the rule, invariants, cache, CSV,
-  acceptance X1-X7 and M1-M2, G1 questions Q1-Q16). Contract:
+  acceptance X1-X9 and M1-M2, G1 questions Q1-Q16). Contract:
   specs/contracts/commands.md, "Fake evidence (version 9)". Interface and
   texts: specs/ui/fake-evidence.md. RF-17 changes no verdict, reason, cutoff,
   estimate, threshold or version: the default DetectionParams stay
@@ -273,6 +273,21 @@ Feature: Explain a Fake verdict (evidence and album context)
     Then in every result the evidence is not empty exactly when the verdict is "fake"
     And its kinds are exactly the rules of fake-evidence.md section 2 whose conditions hold on the measurements of that analysis with those parameters, in the order of that section, without repetition
     And every item has a finite value, the threshold of its kind in those parameters, and a margin of at least 0 equal to its value minus its threshold within 0.001
+
+  @RF-04 @RF-15 @RNF-04
+  Scenario: A Fake never has an empty evidence, on every verdict path (issue #146)
+    Given the lossless verdict function and the lossy verdict function with the default parameters and with the parameters of each of specs/detection/detection-params.v2.toml to specs/detection/detection-params.v8.toml
+    And measurements that cross every threshold of those parameters, each one below it, at it and above it, in every combination, for every codec of fake-evidence.md section 2, including the ones that make the verdict "suspicious", "real" or silent
+    When the verdict and the evidence of each combination are computed
+    Then the evidence is not empty exactly when the verdict is "fake"
+    And a verdict "fake" has at least one item in the lossless case and exactly two in the lossy case
+
+  @RF-17 @RF-04
+  Scenario: The "16 kHz" of the gap texts is the start of the gap band of the default parameters (issue #147)
+    Given the default DetectionParams of the code
+    Then gaps.edge_hz is 16000
+    And the texts evidence.gapStep and evidence.gapOnly of specs/ui/fake-evidence.md section 6 name 16 kHz in English and in Spanish
+    And the failure message of this check says that a different gaps.edge_hz needs those two texts changed at G1
 
   @RF-04 @RF-15
   Scenario: RF-17 changes no verdict, reason, cutoff, estimate or version of any fixture
