@@ -2,6 +2,33 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-19 - #158 step 8: the two cases measured, no rule change proposed
+
+**Done**
+- Both cases were measured on the existing per-track report of the labelled corpus, `20261114T153457Z` (`just accept` at tool commit `701336f`, defaults: calibration v5 and detection v8, 49,443 rows, read-only). No new `just accept` run, so nothing was written under `FAKEFLAC_CALIBRATION`. The report predates #137, #145 and #161, but none of them changes detection, and the census at the 0.3.0 commit (previous block) reproduces the totals of the earlier one exactly. The scripts stayed under the ignored `target/`; the corpus has no path or name in this diff (ADR-022).
+- **The 17 kHz AAC edge: no rule change; it cannot be measured on the labelled corpus.**
+  - The labelled corpus holds no AAC at or near 320 kbps. Its AAC rows are 14 real corpus files (all 128 kbps, cutoff 15,750 to 16,650 Hz, all `real`), 2,052 generated `aac128` and 2,052 generated `aac256` transcodes of lossless (`real`), and 2,052 generated 128 kbps MP3 to AAC 256 chains (fake, margin of `cutoffBelowDeclared`). The highest declared bitrate among them is 280 kbps.
+  - So an exemption such as "AAC declaring 320 kbps with a cutoff in [17,000, 17,250) Hz is not suspicious" would touch 0 labelled rows: the E6 gate cannot be broken by it, and it cannot be shown to be right either. The only labelled cutoffs in or near that edge are the native ffmpeg encoder at 128 kbps (median 17,350 Hz, 1 row in [17,000, 17,250)) and the MP3 to AAC chain (median 16,650 Hz, none in the edge).
+  - What would settle it: a labelled sample of the 133 census tracks, i.e. the owner knows which of them are the platform's own 320 kbps encoding (`real` lines in `confirmed.txt`, `lossy.md` section 1.3) and which are transcodes of a lower bitrate. Without that truth, a rule would be fitted blind.
+- **The V3-only fakes: no rule change.**
+  - In the labelled lossless set, 0 of the 2,052 authentic corpus tracks is decided by V3 (`gapStep`) alone; 4 of them reach the gap threshold and all 4 are guarded by `FullBand`. The 17 authentic tracks that are `Fake` (nine albums: 15 of the `reviewed` class, 2 of `reference`, 0 of `primary` and `clean`) are all decided by V4 (`cutoffStep`), with margins from 0.1 to 7.7 dB.
+  - The 419 V3-only `Fake` tracks are all true fakes: 7 of the 15 confirmed corpus fakes and 412 generated ones (MP3 V0 208, V2 103, CBR 128 to 320: 26, 38, 34, 3). 35 of the 419 are within 3 dB of `gap_fake_db` (12 under 1 dB); no corpus negative sits there. Raising `gap_fake_db` to move those would lose true fakes and remove no false positive from the corpus.
+  - The case the census cannot see is an authentic release whose own master carries lossy traces (the 3 database-verified rips that the second-agent labelling found marked `Fake`). By `rules.md` section 6 and `calibration.md` OQ-32 that is the `lossy-master` class, where `Fake` reports what is in the audio and is not a false positive. `confirmed.txt` has no `lossy-master` line yet (0 of them), so those rips are not measured by the report; the owner adds them with the proof of `inputs.md` section 2.1 if they want them counted.
+- **For the false-positive target of step 7:** on this report the `reviewed` class has 15 `Fake` of 626 authentic lossless tracks (2.4 %), above the 1 % the owner chose; `primary` and `clean` are at 0 %. H3's first spec must define the population of that target before using it as an exit criterion. The primary figure is 0/78 tracks from 6 albums (95 % CI 0.0 to 4.7 %, small sample).
+
+**Pending**
+- Owner, at G2 of this PR: confirm the two outcomes (no rule change now), or ask for the labelled sample that would let the AAC edge be measured.
+- Optional, owner's call: `lossy-master` lines in `confirmed.txt` for the 3 verified rips, and a few `real` lines for streaming-platform AAC tracks the owner knows to be genuine; then `just accept` would measure both.
+- #158 can be closed: steps 1 to 8 have an outcome. Its checklist is not ticked here (public issue).
+- `/feature RNF-03` (small: a lint module, tests and `deny.toml` bans; Q1 to Q10 of `privacy.md`) and `/feature RNF-10` (Q3 icon origins and Q6 accent first).
+- Optional: `agent-process.md` Q11 (`guard-bash` rules for `gh api` merges and `git -C … push … main`); skipping `check-app` in the `verify` job of `release.yml`; `crates/fakeflac-core/CLAUDE.md` line 4 "(dev-dependencies: ADR-0051)" then `just agents-sync`.
+- Cleanup on the owner's machine: the folders `.claude/worktrees/next-steps-github-issues-e67b04`, `calibrate-62fdf7`, `h2-closeout-158` and `priceless-germain-0d699b`.
+
+**Blockers / questions for the human**
+- Whether to accept "no change" for both cases, and whether the labelled samples above are worth adding.
+
+**Next step:** close #158 once this PR is merged, then `/feature RNF-03`.
+
 ## 2026-11-19 - #158 step 7: decisions for H3 and the census baseline
 
 **Done**
