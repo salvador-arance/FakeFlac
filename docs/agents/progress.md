@@ -2,6 +2,29 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-19 - #158 step 7: decisions for H3 and the census baseline
+
+**Done**
+- The owner decided the five points of #158 step 7 (no spec changes; H3's first spec starts from these):
+  - **False-positive target:** at most 1 % of the authentic lossless tracks of the labelled corpus (the one `just accept` uses) get a `Fake` verdict, measured with the same E6 gate. The corpus population and the exact counting rule are for H3's first spec to define at G1.
+  - **Census baseline:** run `20261119T220711Z`, `just census` on the owner's library at `e055d50` (`origin/main`, code of v0.3.0 plus docs), detection 8, default params, 647.6 s, read-only. Aggregates only; per-track files stay under the ignored `target/census/` (ADR-022).
+  - **Scope of H3:** RF-12 (upsamples) only. The MDCT double-compression fingerprints stay after H3, with their own feasibility spike (ADR-0043).
+  - **Carried-over detection candidates** (encoder-specific AAC cutoffs for the 17 kHz edge, L6a on 48 kHz files): decided after step 8, with its result. A proposed rule goes to G1 before H3; otherwise the reason for no change is recorded here.
+  - **Windows 10:** stays as it is, a stated target not verified at runtime (decision of 2026-11-02 confirmed).
+- The baseline equals the census of run `20261119T155033Z` (main at `91e90cb`), as expected: the detection and the extraction did not change in the version bump. 11,420 tracks, 904 albums, 150,718.4 MB; 9,027 real, 1,173 suspicious, 1,156 fake, 64 error (55 FLAC and 9 MP3 `corruptStream`). By codec: FLAC 4,268 (3,382 / 336 / 495 / 55), PCM 30 (23 / 1 / 6 / 0), MP3 6,946 (5,579 / 703 / 655 / 9), AAC 162 (29 / 133 / 0 / 0), Opus 14 (all real). Lossless fakes by evidence: `gapStep` 95, `cutoffStep` 188, both 218. Albums with exactly one `Fake` among two or more analysed tracks: 92.
+
+**Pending**
+- #158 step 8: `just accept` on the labelled corpus (`FAKEFLAC_CORPUS`) for the 17 kHz AAC edge (133 `suspicious` AAC tracks, all 320 kbps, `cutoffBelowDeclared`) and the 95 V3-only fakes, to end in a rule proposal at G1 or a recorded reason for no change. The owner has to say how the corpus is launched.
+- `/feature RNF-03` (small: a lint module, tests and `deny.toml` bans; Q1 to Q10 of `privacy.md`) and `/feature RNF-10` (Q3 icon origins and Q6 accent first).
+- Optional: `agent-process.md` Q11 (`guard-bash` rules for `gh api` merges and `git -C … push … main`); skipping `check-app` in the `verify` job of `release.yml`; `crates/fakeflac-core/CLAUDE.md` line 4 "(dev-dependencies: ADR-0051)" then `just agents-sync`.
+- Cleanup on the owner's machine: the folders `.claude/worktrees/next-steps-github-issues-e67b04`, `calibrate-62fdf7` and `h2-closeout-158`.
+- #158 itself: its checklist (steps 1 to 7) can be ticked and the issue closed when step 8 has its outcome.
+
+**Blockers / questions for the human**
+- How the labelled corpus is launched for `just accept` (step 8).
+
+**Next step:** step 8 with `just accept`, or `/feature RNF-03`.
+
 ## 2026-11-19 - Release 0.3.0 published (#158 step 6)
 
 **Done**
