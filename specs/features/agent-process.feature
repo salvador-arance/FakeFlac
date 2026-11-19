@@ -36,7 +36,10 @@ Feature: Agent process checks that run today
     And its output does not contain the older block
 
   # --- RP-07: scenario tags trace to requirements (checked by `just trace` in the CI job
-  # --- `specs` and in `just ci`; scripts/trace.mjs has no test of its own, contract Q10) ---
+  # --- `specs` and in `just ci`; scripts/trace.mjs has no test of its own, contract Q10).
+  # --- This is the only automated part of RP-07. It does NOT check that a PR body cites
+  # --- the requirement, the spec and the issue: that is the owner check of the contract
+  # --- (section 3, A2) ---
 
   @RP-07
   Scenario: Every scenario tag names an existing requirement

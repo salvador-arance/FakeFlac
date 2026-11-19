@@ -41,7 +41,7 @@ G1 has no hook of its own. A spec or ADR is approved when the owner merges its `
 
 **Not enforced**
 
-- Branch protection of `main` is a GitHub setting and cannot be seen in the repository. The only trace in the repository is the comment on `ci-ok`. Whether administrators can bypass it, and whether "Require review from Code Owners" is on, is also not visible. Planning section 3.11.11 (d) says that formal PR approval is not used and that G2 is the merge itself, so `CODEOWNERS` probably only requests a review.
+- Branch protection of `main` is a GitHub setting and cannot be seen in the repository. The repository only says that `ci-ok` is the required check (the comment on `ci-ok`, `docs/agents/workflow.md` line 44, and the v0.1 progress archive); it cannot show the setting itself. Whether administrators can bypass it, and whether "Require review from Code Owners" is on, is also not visible. Planning section 3.11.11 (d) says that formal PR approval is not used and that G2 is the merge itself, so `CODEOWNERS` probably only requests a review.
 - `guard-bash` matches command text, so it is a guard rail, not a security boundary. Several forms are not matched: `git -C dir push origin main`, `git -c k=v push …`, git aliases, scripts that push, and `gh api` calls to the merge endpoint. `release.md` line 511 records the same limit for tags and releases. A bare `git push` while `main` is checked out does not name `main` either. The `ask` permission on `git push` and branch protection remain the boundary.
 - The `deny` rules apply to the Claude `Bash` tool only. The Codex harness does not translate them (`agent-harness.md` section 4).
 
@@ -155,6 +155,8 @@ Test: `just trace` itself, run on the repository in every PR (CI job `specs`) an
 
 **Not enforced.** Everything in this section is an owner check. No tool knows the budget or the usage. Until Q2 is answered, the "defined" part of RP-09 is unmet.
 
+**Status.** `requirements/RP-09.md` stays `draft`, with this reason written in it: the acceptance above measures a budget that does not exist yet. The change that records the owner's answer to Q2 sets it to `specified`. This is the one requirement of RP-01 to RP-10 left at `draft` below H3.
+
 ## 6. G1 questions
 
 Each question has a default, which applies if the owner accepts it at G1.
@@ -164,21 +166,18 @@ Each question has a default, which applies if the owner accepts it at G1.
 | Q1 | RP-09 | Where is the monthly budget recorded? (a) As a figure in the repository, in `docs/agents/workflow.md`. (b) Outside the repository (the repository is public), with only the review result recorded in `progress.md`. | (b), consistent with planning section 1.10. |
 | Q2 | RP-09 | What is the monthly budget? Give an amount or a plan tier. | None proposed: the owner gives it. Under Q1 (b), the owner confirms only that it is defined. |
 | Q3 | RP-09, RP-02, RP-05, RP-08 | When are the owner checks first done? | At the H2 close (#158), with no retroactive reviews of H0 and H1. |
-| Q4 | RP-09 | Is "cost per feature" (planning section 3.11.12) required? | No. It is an optional note in the review line. |
+| Q4, Q9, Q12, Q13 | RP-09, RP-07, RP-02, RP-05 | **Defaults taken, no decision needed** (accept them by merging): "cost per feature" (planning section 3.11.12) is only an optional note in the RP-09 review line (Q4); the PR template is not changed and RP ids are written by hand in its requirement line (Q9); no `just` recipe reads the branch protection of `main`, because it needs administrator scope, so section 1 A2 stays an owner check (Q12); `/handoff` is not changed (Q13). | As stated. |
 | Q5 | RP-08 | Is the 5 s bound per hook, or the total of the hooks one tool call triggers? | The total per tool call, as in section 4 A2. |
 | Q6 | RP-08 | Should the bound be enforced, with a timing assertion in the hook tests or a `timeout` on the PreToolUse and PostToolUse hooks in `.claude/settings.json`? | No. It stays an owner measurement. A timing assertion on shared runners would fail at random (the reasoning of ADR-0046). |
 | Q7 | RP-08 | Is `just check-fast` measured with warm or cold caches? | Warm. A cold run may be reported but is not held to the bound. |
 | Q8 | RP-07 | Should CI check the PR body (References filled: requirement id, spec path, issue number)? This needs a new script and a workflow change. | No, not now. It stays an owner check at G1 and G2 and is recorded as a gap. |
-| Q9 | RP-07 | Should the PR template's requirement line offer `RP-xx`? | No change. RP ids are written in the same line. |
 | Q10 | RP-07 | `specs/traceability.md` line 3 says "Validated by `just trace`", but `scripts/trace.mjs` never reads that file. Correct the sentence, or extend `trace.mjs`? And add a `scripts/trace.test.mjs` for its failure paths? | Correct the sentence in a later `spec/` PR to "Requirement ↔ scenario tags are validated by `just trace`; rows are kept by `/handoff`". No new test now. |
 | Q11 | RP-02 | Should `guard-bash` also block `gh api` calls to a pull request's merge endpoint (and `git -C … push … main`), with new `hooks.test.mjs` rows? | Yes, in a separate harness PR after this spec. It is listed here because this spec changes no hook. |
-| Q12 | RP-02 | Should a `just` recipe read the branch protection of `main` (`gh api …/branches/main/protection`) instead of the owner looking at the settings page? | No. It needs administrator scope on the token. It stays owner check A2. |
-| Q13 | RP-05 | Should `/handoff` require the issue number in each block, and should anything check that a block was written? | No change. The issue is cited when there is one, and the fresh-session check (A2) is the measure. |
-| Q14 | RP-01, RP-03, RP-04, RP-06, RP-10 | These five are set to `specified` on the strength of `agent-harness.md`. That spec specifies harness parity (Claude to Codex), not each requirement's own criterion: for example, nothing checks that "the human does not edit code" (RP-01) or that "no secrets are read" beyond `Read(./.env*)` (RP-06). Is that enough for `specified`? | Yes, as is. A gap found later goes through G1 like any other. |
+| Q14 | RP-01, RP-03, RP-04, RP-06, RP-10 | These five are set to `specified` on the strength of `agent-harness.md`, which the issue counts as their scenarios. That spec specifies harness parity (Claude to Codex), not each requirement's own criterion. RP-03 and RP-04 are really enforced (CI runs only `just` recipes; `guard-protected` and `guard-tests`) and RP-06 in part (`Read(./.env*)` is denied, the corpus tests are read-only). **RP-01 ("the human does not edit code") and RP-10 (a repeated error is fixed in the harness) have no mechanism and no owner check.** Is that enough for `specified`? | Yes for RP-03, RP-04 and RP-06. For RP-01 and RP-10 the owner decides: keep `specified`, or set them back to `draft` until an owner check with a milestone-close cadence is added, as for RP-02 to RP-09. A gap found later goes through G1 like any other. |
 
 ## 7. Changes made by this spec
 
 - Adds this contract and `../features/agent-process.feature`.
-- Changes `status: draft` to `status: specified` in `requirements/RP-01.md` to `RP-10.md`, keeping each statement and appending a pointer to its spec.
+- Changes `status: draft` to `status: specified` in `requirements/RP-01.md` to `RP-08.md` and `RP-10.md`, keeping each statement and appending a pointer to its spec. `RP-09.md` stays `draft` with its reason (section 5).
 - Adds one row for RP-02, RP-05, RP-07, RP-08 and RP-09 to `traceability.md`.
 - Changes no code, test, hook, script, recipe, workflow, skill, `CLAUDE.md` or approved spec. G1 approves this contract and the feature file. G2 remains human-only.
