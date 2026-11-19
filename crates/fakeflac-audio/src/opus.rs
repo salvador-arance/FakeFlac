@@ -167,6 +167,9 @@ impl OpusStream {
         let mut ended = false;
         let mut unfinished = false;
         let mut granule = None;
+        // F and S1 (lossy-source.md §2.4.3, Q43): the granule position of the first page
+        // that completes an audio packet and the samples of the packets it completes.
+        let mut first_page: Option<(i64, u64)> = None;
         let mut channels = 0;
         let mut pre_skip = 0;
         let mut gain = 1.0;
@@ -239,6 +242,7 @@ impl OpusStream {
             }
             let mut offset = 0;
             let mut audio_completed = false;
+            let total_before_page = total;
             for (segment_index, segment) in lacing.iter().enumerate() {
                 let len = usize::from(*segment);
                 let bytes = &body[offset..offset + len];
@@ -305,6 +309,11 @@ impl OpusStream {
                     return Err(corrupt("Ogg granule position decreases"));
                 }
                 granule = Some(current);
+                if first_page.is_none() {
+                    // After a TOC error `total` stops growing; R22 is reported before the
+                    // stream checks, so S1 is never used then.
+                    first_page = Some((current, total.saturating_sub(total_before_page)));
+                }
             }
             ended = flags & 4 != 0;
             page_number += 1;
@@ -321,11 +330,19 @@ impl OpusStream {
         if let Some(error) = packet_error {
             return Err(error);
         }
-        let granule = granule.unwrap_or(-1);
-        if granule < 0 || (granule as u64) < pre_skip {
-            return Err(corrupt("granule position below pre-skip"));
-        }
-        let granule = granule as u64;
+        // E = max(0, F - S1), the start offset (RFC 7845 §4.5). A negative F or a first page
+        // below its samples gives E = 0 (Q43).
+        let start_offset = first_page
+            .and_then(|(first, samples)| u64::try_from(first).ok().map(|f| (f, samples)))
+            .map_or(0, |(first, samples)| first.saturating_sub(samples));
+        // G - E; granule positions never decrease (R16), so G >= F >= E when G is present.
+        let granule = granule
+            .and_then(|g| u64::try_from(g).ok())
+            .and_then(|g| g.checked_sub(start_offset));
+        let granule = match granule {
+            Some(g) if g >= pre_skip => g,
+            _ => return Err(corrupt("granule position below pre-skip")),
+        };
         if granule > total {
             return Err(corrupt("granule position beyond the audio"));
         }

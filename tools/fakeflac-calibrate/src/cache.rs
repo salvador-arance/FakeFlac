@@ -200,7 +200,8 @@ struct ProbeJson {
     channels: u8,
     duration_ms: u64,
     spectrum: Option<SpectrumJson>,
-    /// Absent in lines written before RF-15 (EXTRACTION_VERSION stays 2, lossy.md C7).
+    /// Absent in lines written before RF-15 (EXTRACTION_VERSION 2, lossy.md C7). Since version 3
+    /// (lossy-source.md Q44) such lines have another fingerprint and are re-extracted.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     stream: Option<StreamJson>,
 }
