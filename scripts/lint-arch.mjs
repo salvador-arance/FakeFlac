@@ -3,6 +3,7 @@
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { lintNetwork } from './lint-network.mjs'
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..')
 const violations = []
@@ -114,6 +115,9 @@ if (existsSync(libDir)) {
     }
   }
 }
+
+// ---- 4. Privacy: no path to the Internet (RNF-03, specs/contracts/privacy.md) ----
+violations.push(...lintNetwork(root))
 
 if (violations.length) {
   console.error('lint-arch: violations found\n' + violations.map((v) => ' - ' + v).join('\n'))
