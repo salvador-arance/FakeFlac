@@ -423,7 +423,7 @@ If the allowed levers do not meet a gate, the implement stage stops and reports 
 | F4 | File sizes of every pair, and the growth that A1 checks | A1 (4 MiB) | Measured (12.5) |
 | F5 | Chunks per format: `max_chunk_frames`, chunks and frames of one decoding pass | A5 (65 535), the length tolerance of section 4 | Measured (12.5) |
 | F6 | The peaks of the long suite (A10) | A10 bounds, 64 MiB hi-res ceiling (provisional) | **Not measured.** Measured in the opt-in `just memory` run, whose report goes in the feature PR (M2). Expected: like F1; hi-res about 3 MB more than 44.1 kHz; `opus_1h` fails until Q4 is done (27–36 MB, estimated) |
-| F7 | M1 on the owner's machine (the whole app) | M1 indicative targets | Analysis met the target on 2026-11-14 (12.6). The revised spectrogram reading on 2026-11-15 was inconclusive (12.7) |
+| F7 | M1 on the owner's machine (the whole app) | M1 indicative targets | Analysis met the target on 2026-11-14 (12.6). The revised spectrogram reading on 2026-11-15 was inconclusive (12.7). **Final state (12.8, owner's decision of 2026-11-19): analysis met, spectrogram reading accepted as inconclusive on this library; no further M1 reading is planned** |
 
 ### 12.1 How F1–F5 were measured
 
@@ -523,6 +523,19 @@ Measured on 2026-11-15 with the release app built from `faa9fcf` on the developm
 
 **Inconclusive.** Neither peak increased and both upper bounds exceed the indicative target of 33 554 432 bytes. The 64 cache misses also limit what this reading establishes about the spectrogram. A read-only inventory confirmed that all 13 203 files in the library retained their sizes and modification times.
 
+### 12.8 F7 final state: the 12.7 reading is accepted as inconclusive
+
+Decided by the owner on 2026-11-19 (issue #158, step 3), after the library census of the same day. M1 stays as written in section 10, as a manual and indicative check. The reading of 12.7 is its record on this library and is **not repeated**. Nothing else in this spec changes: no gate, bound, suite, test, code or recipe.
+
+Why this is acceptable:
+
+- **The 64 cache misses are not going away.** The census of 2026-11-19 (`just census`, 11 420 tracks, read-only) found 64 error tracks: 55 FLAC and 9 MP3, all `corruptStream`, and none of the library's 14 Opus tracks. They are errors on every run, so a new M1 on the same folder gives the same 64 misses. Repeating the check would need a folder without error tracks; the owner accepted the reading instead.
+- **The upper bound cannot answer on this library.** The peaks are lifetime figures, so P2b peak is at least P2a peak, and the upper bound (P2b peak − P2a current) is at least P2a peak − P2a current. In 12.7 that difference is 49 270 784 bytes (private) and 44 670 976 bytes (working set), and the bound equals it because the peak increase is 0. Both are above 32 MiB before the spectrogram is drawn, whatever it uses. A session that has analysed this library holds a gap between its peak and its current memory that is already larger than the target.
+- **The spectrogram is bounded where it can be measured.** A4 (the spectrogram of a 300 s FLAC among its cases, in `just test`) and A10 (the spectrogram of a 1-hour FLAC, in `just memory`) measure it in a fresh child process against the ceiling of 32 MiB. The 12.6 reading adds that the analysis of the whole library met its indicative target (221.5 MiB private against 544 MiB).
+- **What stays unknown.** Only the app's own wiring around the spectrogram call is not measured in the app. The owner accepts that risk.
+
+If a later change touches that wiring, the check is repeated on a folder without error tracks and the figures replace 12.7.
+
 ## 13. Edits to approved specs and docs
 
 - **In this spec PR:**
@@ -544,7 +557,7 @@ Measured on 2026-11-15 with the release app built from `faa9fcf` on the developm
   - **M4A per-sample table growth (Q8)** was measured by F1 at 69 632 bytes (working set) and 94 208 bytes (private) from 30 s to 300 s, and A3 gates it at 300 s. The hour-long M4A remains out of scope (section 1).
 - **`performance.md` is not edited.** Its D7 ("Memory is RNF-02") stays true.
 
-## 14. Revision after F7 (draft 2026-11-15, G1 pending)
+## 14. Revision after F7 (approved at G1, #149, 2026-11-15)
 
 - **What changes.** M1's steps 3 to 5 (section 10), the F7 row of section 12, the new section 12.6 with the F7 figures, the scenario "The app's peak memory on a real folder is reported" of `memory.feature`, and the "Manual check" line of `requirements/RNF-02.md`.
 - **Why.** M1 compared lifetime peaks read before and after the spectrogram, in the session that had just analysed the whole folder. F7 measured 0 for both metrics (12.6), and 0 is what any spectrogram below about 220 MiB would have given.
