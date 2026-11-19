@@ -1,7 +1,7 @@
 ---
 id: SPEC-LOOK-AND-FEEL
 requirements: [RNF-10]
-status: proposed
+status: approved
 ---
 
 # Look and feel (RNF-10)
@@ -40,7 +40,7 @@ Scenarios of `../features/look-and-feel.feature` (new, for the test stage):
 
 ### 2.1 What the repository ships (listed on 2026-11-19)
 
-- **App icon.** Six files in `src-tauri/icons/`: `32x32.png`, `64x64.png`, `128x128.png`, `128x128@2x.png`, `icon.png`, `icon.ico`. `tauri.conf.json` `bundle.icon` names four of them (`32x32.png`, `128x128.png`, `128x128@2x.png`, `icon.ico`); the six are treated as shipped. `icon.png` and `32x32.png` were viewed: they show the drawing of `docs/reference/app-icon-source.png` (orange bars on a dark square), which is the owner's own icon source. How the six files were produced from it is not recorded.
+- **App icon.** Six files in `src-tauri/icons/`: `32x32.png`, `64x64.png`, `128x128.png`, `128x128@2x.png`, `icon.png`, `icon.ico`. `tauri.conf.json` `bundle.icon` names four of them (`32x32.png`, `128x128.png`, `128x128@2x.png`, `icon.ico`); the six are treated as shipped. `icon.png` and `32x32.png` were viewed: they show the drawing of `docs/reference/app-icon-source.png` (orange bars on a dark square), which the owner confirmed on 2026-11-20 as their own drawing (Q3). The tool that made the six files from it is not recorded.
 - **UI icons.** 15 inline SVG paths in `src/lib/components/atoms/Icon.svelte`, one per `IconName` of `src/lib/components/atoms/icons.ts`. No icon package is a dependency (`package.json`: the only runtime dependency is `@tauri-apps/api`).
 - **Fonts.** None shipped. `--font-ui` uses the Windows system font (Segoe UI) with system fallbacks; there is no `@font-face`.
 - **Logos, illustrations, images.** None. There is no `public/` folder, no image under `src/`, and `index.html` has no favicon link. The window title and the product name are "FakeFlac" (`tauri.conf.json`).
@@ -65,21 +65,23 @@ The data that check A1 reads. A new shipped image, icon or font file, or a new `
 
 | `IconName` (inline SVG in `Icon.svelte`) | Origin |
 |---|---|
-| `folder-open` | unrecorded |
-| `cancel` | unrecorded |
-| `export` | unrecorded |
-| `clear-cache` | unrecorded |
-| `minimize` | unrecorded |
-| `maximize` | unrecorded |
-| `close` | unrecorded: a review found its path identical to a glyph of a third-party MIT icon set (Q3) |
-| `verdict-real` | unrecorded |
-| `verdict-suspicious` | unrecorded |
-| `verdict-fake` | unrecorded |
-| `verdict-error` | unrecorded |
-| `sort-asc` | unrecorded |
-| `sort-desc` | unrecorded |
-| `search` | unrecorded |
-| `settings` | unrecorded |
+| `folder-open` | own drawing |
+| `cancel` | own drawing |
+| `export` | own drawing |
+| `clear-cache` | own drawing |
+| `minimize` | own drawing (the bar has the same commands as Bootstrap Icons `dash-lg`, with coordinates shifted by 0.5 px; see the note below) |
+| `maximize` | own drawing |
+| `close` | redrawn (the feature stage replaces the path in both branches of `Icon.svelte`; until that PR is merged the path is the glyph `x-lg` of Bootstrap Icons 1.10 and 1.11.0, MIT) |
+| `verdict-real` | own drawing (the check mark has the same commands as Bootstrap Icons `check2`, with other coordinates; see the note below) |
+| `verdict-suspicious` | own drawing |
+| `verdict-fake` | own drawing |
+| `verdict-error` | own drawing |
+| `sort-asc` | own drawing |
+| `sort-desc` | own drawing |
+| `search` | own drawing |
+| `settings` | own drawing |
+
+**How the origins were recorded (owner, 2026-11-20, Q3).** The owner accepted the proposal: the app icon files are derived from the owner's own drawing, the tool that made them is not recorded, and 14 of the 15 UI icons are the owner's own drawing. The 15 paths were compared on 2026-11-20 with the 2,050 symbols of the Bootstrap Icons 1.11.3 sprite (MIT, from its public text), by token overlap. Only `close` is identical to a symbol (`x-lg` in 1.10.5 and 1.11.0; 1.11.3 only drops a redundant tail): it is redrawn. The next highest matches were `export` 68 %, `minimize` 62 % and `verdict-real` 59 %, none identical. `minimize` and `verdict-real` follow the construction of two Bootstrap glyphs and the owner kept them; redrawing them is an optional change that needs no spec change. Not compared: Octicons, Lucide, Feather, Material, Fluent, Phosphor and Tabler. A later check can only change a row in a `spec/…` PR.
 
 ### 2.3 How a copied asset would be noticed
 
@@ -98,7 +100,7 @@ The data that check A1 reads. A new shipped image, icon or font file, or a new `
 ## 3. Acceptance (measurable)
 
 - **K1.** Every scenario of `look-and-feel.feature` except the M1 one has a passing test in `just check` (S1 to S6).
-- **K2.** The asset register is complete: A1 passes and no row is `unrecorded`. A1 does not fail on `unrecorded` rows, so K2 is closed by the owner, by recording each origin in a `spec/…` PR (G1). Until then RNF-10 is not verified, and the build stays green.
+- **K2.** The asset register is complete: A1 passes and no row is `unrecorded`. A1 does not fail on `unrecorded` rows, so K2 is closed by the owner, by recording each origin in a `spec/…` PR (G1). The owner recorded every origin on 2026-11-20 (Q3). K2 holds when the redraw of `close` is merged; until then RNF-10 is not verified, and the build stays green.
 - **K3.** M1 is recorded on a release build, with each of E1 to E7 marked pass, or marked as a deliberate difference that the owner accepted at G1 (section 4 lists the known ones).
 
 RNF-10 is verified when K1 to K3 hold.
@@ -123,14 +125,16 @@ Deliberate differences known before the check (record them, do not fail on them)
 
 Record only aggregates: candidate commit, date, build (installer type and version), window sizes, and per element pass, fail or deliberate difference with one line of note. **No screenshot is committed, and no name or path of a music file is recorded** (ADR-0022). A failure stays visible as pending.
 
-## 5. Open questions for G1
+## 5. Questions for G1 (answered by the owner on 2026-11-20)
 
-| # | Question | Default |
+The owner accepted every default, after a read-only check of each one against the repository. The facts that check added are in the answers.
+
+| # | Question | Default (and answer) |
 |---|---|---|
-| Q1 | **Folder tree.** Does the Albums panel (`album-summary.md`) close RNF-10's "folder tree" for v1, leaving the reference's tree (drives and folders, selecting a folder lists its files, collapsible) to a future requirement? Note: the source row of RNF-10 in the planning document (section 2.4) names a single window, a file list with columns, a spectrum panel and drag and drop, but no folder tree. The tree comes from section 3.14.2 and ADR-0027 | Yes. M1 E3 records it as a deliberate difference. This spec creates no new requirement; the owner may open one |
-| Q2 | Make the asset register checks A1 and A2 automated tests (S5, S6), or rely on M1 only? | Automated. Like `catalogue.test.ts`, which reads `translations.md`, the test reads the register from this spec |
-| Q3 | **Origin of the icons.** `components.md` says "Own SVG set (no copied icons)", but nothing records who drew the 15 icons. The `close` path appears to match the large "x" glyph of Bootstrap Icons (MIT), and other paths follow that set's 16 × 16 conventions. This impression is from memory and was not checked against that set's source. The tool that produced `src-tauri/icons/` from `app-icon-source.png` is not recorded either | The owner records the origin of each icon and the icon tool in the register (K2). If any glyph is a copy of a third-party icon, it is redrawn (so the approved "no copied icons" stays true) rather than the approved text being amended. Alternative: keep it with its licence notice shipped and an ADR for the new third-party asset. A review that compared the 15 paths from memory found `close` identical to a glyph of Bootstrap Icons (MIT) and `minimize`, `maximize`, `cancel`, `export`, `verdict-real` and `clear-cache` built with the same conventions; `settings`, `sort-asc`, `sort-desc`, `search`, `folder-open`, `verdict-suspicious` and `verdict-error` look hand-built. Not checked against the set's source. Each path appears twice in `Icon.svelte` (labelled and decorative branch): a redraw changes both |
-| Q4 | Guard the density with a token test (`--row-height: 22px`, `--font-size: 12px`)? | No. No approved spec fixes these numbers as requirements, and a guard would freeze a styling choice. Density stays the visual M1 E4 |
-| Q5 | Two `frontend.md` decisions are not built: "size and position remembered" and "light optional (H2)". Are they in RNF-10's scope? | No. M1 records them as deliberate differences. Updating `frontend.md` is left to `docs-keeper` |
-| Q6 | **Accent color.** D12 forbids the reference's brand colors. `frontend.md` adopts the orange accent seen in the reference (`--color-accent: #e8892b`), and the app icon is orange on dark. Is a dark theme with an orange accent acceptable as layout and handling rather than branding? | Yes, as a generic accent, if the owner confirms at G1 that the orange is not the reference tool's brand color (the reference's accent was not measured). The answer is recorded in this table; M1 E7 checks it again. Changing it would be a separate styling task |
-| Q7 | M1 data and language: synthetic fixtures, English only? | Yes. The Spanish layout is covered by RF-13 M2 and RNF-08 U3 |
+| Q1 | **Folder tree.** Does the Albums panel (`album-summary.md`) close RNF-10's "folder tree" for v1, leaving the reference's tree (drives and folders, selecting a folder lists its files, collapsible) to a future requirement? Note: the source row of RNF-10 in the planning document (section 2.4) names a single window, a file list with columns, a spectrum panel and drag and drop, but no folder tree. The tree comes from section 3.14.2 and ADR-0027 | Yes. M1 E3 records it as a deliberate difference. This spec creates no new requirement; the owner may open one. **Resolved (owner, 2026-11-20): yes.** The sentence of `requirements/RNF-10.md` now says that the Albums panel takes the place of the folder tree for v1, so the requirement and this spec agree |
+| Q2 | Make the asset register checks A1 and A2 automated tests (S5, S6), or rely on M1 only? | Automated. Like `catalogue.test.ts`, which reads `translations.md`, the test reads the register from this spec. **Resolved (owner, 2026-11-20): automated.** Both checks were run by hand on 2026-11-20 and pass: the image and font files under `src/`, `src-tauri/` and `public/` are exactly the six icon files, and none is byte-identical to a file of `docs/reference/` |
+| Q3 | **Origin of the icons.** `components.md` says "Own SVG set (no copied icons)", but nothing records who drew the 15 icons. The `close` path appears to match the large "x" glyph of Bootstrap Icons (MIT), and other paths follow that set's 16 × 16 conventions. This impression is from memory and was not checked against that set's source. The tool that produced `src-tauri/icons/` from `app-icon-source.png` is not recorded either | The owner records the origin of each icon and the icon tool in the register (K2). If any glyph is a copy of a third-party icon, it is redrawn (so the approved "no copied icons" stays true) rather than the approved text being amended. Alternative: keep it with its licence notice shipped and an ADR for the new third-party asset. A review that compared the 15 paths from memory found `close` identical to a glyph of Bootstrap Icons (MIT) and `minimize`, `maximize`, `cancel`, `export`, `verdict-real` and `clear-cache` built with the same conventions; `settings`, `sort-asc`, `sort-desc`, `search`, `folder-open`, `verdict-suspicious` and `verdict-error` look hand-built. Not checked against the set's source. Each path appears twice in `Icon.svelte` (labelled and decorative branch): a redraw changes both. **Resolved (owner, 2026-11-20): the proposal was accepted.** `close` is identical to the Bootstrap Icons glyph `x-lg` (verified against the public text of versions 1.10.5, 1.11.0 and 1.11.3) and is redrawn; the other 14 icons are recorded as the owner's own drawing and the app icon files as derived from the owner's own drawing, with the tool unrecorded. The register in 2.2 has every row and the method of the comparison |
+| Q4 | Guard the density with a token test (`--row-height: 22px`, `--font-size: 12px`)? | No. No approved spec fixes these numbers as requirements, and a guard would freeze a styling choice. Density stays the visual M1 E4. **Resolved (owner, 2026-11-20): no guard.** `tokens.css` has `--row-height: 22px` and `--font-size: 12px`, and the rows of the reference screenshot sit at the same 22 px pitch, so E4 is expected to pass |
+| Q5 | Two `frontend.md` decisions are not built: "size and position remembered" and "light optional (H2)". Are they in RNF-10's scope? | No. M1 records them as deliberate differences. Updating `frontend.md` is left to `docs-keeper`. **Resolved (owner, 2026-11-20): out of scope.** There is no window-state plugin and no light theme today; panel widths are remembered, window size and position are not. `docs-keeper` moves both items of `frontend.md` to the backlog |
+| Q6 | **Accent color.** D12 forbids the reference's brand colors. `frontend.md` adopts the orange accent seen in the reference (`--color-accent: #e8892b`), and the app icon is orange on dark. Is a dark theme with an orange accent acceptable as layout and handling rather than branding? | Yes, as a generic accent, if the owner confirms at G1 that the orange is not the reference tool's brand color (the reference's accent was not measured). The answer is recorded in this table; M1 E7 checks it again. Changing it would be a separate styling task. **Resolved (owner, 2026-11-20): yes, as a generic accent.** Measured on the PNGs of 2026-11-20: the accent `#e8892b` is also the orange of the app icon (hue about 30°, lightness 54 %, saturation 80 %). The orange UI pixels of the reference are `#cc802a`, `#c77d2e` and `#c27a2d` (hue about 32°, lightness 48 %, saturation 66 %): the same family, not the same value. The reference tool's own logo is also orange, so this is a choice of an orange accent on a dark theme as layout and handling (ADR-0027), not a copy of a brand value. M1 E7 checks it again |
+| Q7 | M1 data and language: synthetic fixtures, English only? | Yes. The Spanish layout is covered by RF-13 M2 and RNF-08 U3. **Resolved (owner, 2026-11-20): yes.** `detection/fixtures.md` holds the synthetic fixtures |
