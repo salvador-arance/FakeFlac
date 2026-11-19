@@ -113,7 +113,7 @@ Anything else is a miss, not a failure.
 
 The engine is the triple (`params_json`, `extraction_version`, `app_version`):
 - `params_json`: `serde_json::to_string(&p)`, the exact text. Its fields come in the order the struct declares them, and `None` sections appear as `null`. It contains `algorithm_version`, so a new version means a new engine (as `rules.md` and `lossy-source.md` already state). So does any changed value, even under the same version, which covers a params file chosen by the user later (RF-13). So does a new optional section, even when it is `None`.
-- `extraction_version`: `fakeflac_audio::EXTRACTION_VERSION` (2 today). It is bumped on any adapter change that alters the `AudioProbe`, and on every `symphonia` upgrade (`fakeflac-audio/CLAUDE.md`).
+- `extraction_version`: `fakeflac_audio::EXTRACTION_VERSION` (3 since the Opus start offset, `lossy-source.md` Q44; 2 before). It is bumped on any adapter change that alters the `AudioProbe`, and on every `symphonia` upgrade (`fakeflac-audio/CLAUDE.md`).
 - `app_version`: `env!("CARGO_PKG_VERSION")` of `src-tauri`, "0.0.1" today (Q3).
 
 The composition root passes `extraction_version` and `app_version` when it opens the store (`EngineTag`, section 10.2). `params_json` comes from the `p` that the core passes to every `get` and `put`. So a store can never be opened with one set of params and used with another.

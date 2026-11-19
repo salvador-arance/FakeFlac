@@ -73,7 +73,7 @@ fingerprint JSON = { "extraction_version": fakeflac_audio::EXTRACTION_VERSION,
 fingerprint id   = 16 hex digits of fmix64(fnv1a64(fingerprint JSON))
 ```
 
-- `EXTRACTION_VERSION` is a public integer of `fakeflac-audio` (2 today). It must be bumped in the same PR as any adapter change that alters the `AudioProbe` produced for the same file and parameters (ADR-0036).
+- `EXTRACTION_VERSION` is a public integer of `fakeflac-audio` (3 since the Opus start offset, `lossy-source.md` Q44; 2 before). It must be bumped in the same PR as any adapter change that alters the `AudioProbe` produced for the same file and parameters (ADR-0036).
 - **Decoder version bump:** `EXTRACTION_VERSION` **must also be bumped whenever the `symphonia` crate version is updated**, because decoder changes or bugfixes in symphonia can alter decoded audio samples and resulting spectra.
 - `algorithm_version` and every rule parameter (`[bands]`, `[extent]`, `[step]`, `[gaps]`, `[verdict]`, and the optional `[full_band]`, `[lossy]` and `[edge]`) and `[spectrogram]` are **not** part of the fingerprint. Params files that differ only in those values share one cache, whatever their `algorithm_version`.
 - Files: `features/<fingerprint id>.meta.json` (the fingerprint JSON) and `features/<fingerprint id>.jsonl` (entries). A params file with a different fingerprint gets its own extraction pass and its own files. The report says which params file used which fingerprint.

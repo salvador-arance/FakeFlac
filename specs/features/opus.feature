@@ -74,7 +74,8 @@ Feature: Opus files (detection v8)
     Opus always decodes at 48 kHz, whatever input rate its OpusHead records.
     The declared bitrate is the total size of the audio packets (Ogg page
     headers and the two header packets excluded) over the duration
-    (granule position of the last page minus pre-skip, at 48 kHz).
+    (granule position of the last page minus the start offset and the pre-skip,
+    at 48 kHz; the offset is 0 for these fixtures, see "A start offset").
     Given the Opus fixture "<fixture>"
     When it is analysed
     Then the TrackInfo has format "opus", codec "opus", sample rate 48000 Hz, <channels> channel(s), no bit depth and no bitrate mode
@@ -108,6 +109,30 @@ Feature: Opus files (detection v8)
     When the adapter decodes them
     Then "opus_128_fb" gives exactly 1 440 000 samples per channel: the decoder output with its first 120 and last 840 samples removed
     And "opus_128_fb_preskip" gives exactly 1 439 040 samples per channel, equal to those of "opus_128_fb" from sample 960 on
+
+  @RF-14
+  Scenario: A start offset is read from the first audio page and is not audio
+    RFC 7845 section 4.5. The first audio page of opus_start_offset has granule
+    position 48 360 and completes 50 packets (48 000 samples), so the start
+    offset is 360 samples. Its last granule position is 1 441 320, the 1 440 960
+    samples of all packets plus 360, so nothing is trimmed at the end. This is
+    what ffmpeg writes when it remuxes a stream with -c copy (issue #159).
+    Given the Opus fixtures "opus_128_fb" and "opus_start_offset"
+    When the adapter decodes them
+    Then "opus_start_offset" gives exactly 1 440 840 samples per channel: the decoder output with its first 120 samples removed and nothing removed at the end
+    And its first 1 440 000 samples are those of "opus_128_fb"
+    And its TrackInfo has durationMs 30017
+    And its declared bitrate is round(8 x the fixture's audio packet bytes / (1 440 840 / 48000) / 1000), which is within 1 kbps of 128
+    And its verdict is "real", as that of "opus_128_fb"
+
+  @RF-14
+  Scenario: A first audio page below its samples is not a start offset
+    opus_first_page_short is opus_128_fb with the granule position of audio
+    page 1 set to 47 040, 960 below its 48 000 samples. The offset is 0 and the
+    stream is read as before (lossy-source.md Q43).
+    Given the Opus fixtures "opus_128_fb" and "opus_first_page_short"
+    When both are analysed
+    Then their TrackAnalysis are equal except for the path
 
   @RF-14
   Scenario: The output gain of OpusHead is applied to every sample
@@ -270,6 +295,7 @@ Feature: Opus files (detection v8)
       | opus_granule_decreases     | Ogg granule position decreases             |
       | opus_granule_below_preskip | granule position below pre-skip            |
       | opus_granule_beyond_audio  | granule position beyond the audio          |
+      | opus_start_offset_beyond   | granule position beyond the audio          |
       | opus_bad_packet            | Opus packet 100                            |
 
   @RF-14 @RNF-04
