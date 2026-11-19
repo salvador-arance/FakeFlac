@@ -123,6 +123,10 @@ This amendment was proposed in the Opus spec PR (#103) and accepted at its G1 (d
   - Acceptance O3 allows `Fake` ≤ 2 % (Q37).
   - An unclamped float output, through an upstream request or a separate CELT path, is not pursued now. If it is wanted later, it needs a new ADR and a new `EXTRACTION_VERSION`, because it changes the decoded samples.
 
+## Amendment: the start offset of an Opus stream (issue #159, `lossy-source.md` Q43 and Q44; proposed, pending G1)
+
+- **Point 5 is amended.** `EXTRACTION_VERSION` stays 2 no longer: it becomes **3**. Point 5 rested on "Opus results never existed before"; they do now. Reading the start offset of RFC 7845 section 4.5 changes the `AudioProbe` of Opus files that ffmpeg remuxed (an error becomes a duration, a bitrate and spectra), which ADR-0036 says to bump for. The decoder, the dependency and the pin do not change, and no other point of this ADR is touched.
+
 ## Notes from implementation
 
 - Confirmed `rusty-opus` `=1.0.2`, with no transitive dependencies. Test-only composition roots name the same pin to reuse the independent fixture writer; this adds no package to the graph.
