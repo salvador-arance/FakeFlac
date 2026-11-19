@@ -2,6 +2,22 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-19 - #158 step 1: handoff and traceability
+
+**Done**
+- #161 is merged at G2 (`91e90cb`) and #159 is closed, so the "G2 on #161" of the block below is closed. The three RF-14 branches are deleted.
+- `specs/traceability.md`: the RNF-01 and RNF-02 rows say "approved at G1 (#149)" instead of "Draft revision for G1"; the RNF-02 row names the reading recorded in #151 (`contracts/memory.md` section 12.7, inconclusive) and that the F7 row has no final state until #158 step 3; the "other RF" row is now the RF-12 row (H3, no spec yet, the only RF without one).
+
+**Pending**
+- #158 steps 2 to 8, unchanged. Step 3 (M1 reading) and step 8 (census on the 17 kHz AAC edge and the V3-only fakes) need `just census` on the owner's library; it also tells whether #159 explained part of the 64 error tracks.
+- Cleanup left on the owner's machine: the folders `.claude/worktrees/next-steps-github-issues-e67b04` (no longer registered in git) and `.claude/worktrees/calibrate-62fdf7`; `just prune-branches` failed on the first while it was in use.
+
+**Blockers / questions for the human**
+- G1 on this spec PR (traceability rows only, no behaviour change).
+- Library path for `just census` (kept outside the repository, ADR-022).
+
+**Next step:** after G1, step 8 (census), run on the same commit as the step 7 baseline; or step 2 (#146 and #147: the owner picks the option).
+
 ## 2026-11-19 - RF-14: Opus start offset (#159), spec merged and feature PR open
 
 **Done**
