@@ -21,6 +21,14 @@ allow = [
 
 [bans]
 multiple-versions = "warn"
+# RNF-03: crates that can reach the network, the NET list of specs/contracts/privacy.md 3.2 (same names as scripts/lint-network.mjs).
+deny = [
+    "reqwest", "hyper", "hyper-util", "h2", "h3", "quinn", "ureq", "curl", "curl-sys", "isahc",
+    "attohttpc", "surf", "awc", "tungstenite", "tokio-tungstenite", "async-tungstenite", "rustls",
+    "native-tls", "openssl", "openssl-sys", "hyper-rustls", "hyper-tls", "tokio-rustls",
+    "tokio-native-tls", "tauri-plugin-updater", "tauri-plugin-http", "tauri-plugin-websocket",
+    "tauri-plugin-upload", "tauri-plugin-shell", "tauri-plugin-opener",
+]
 
 [sources]
 unknown-registry = "deny"
