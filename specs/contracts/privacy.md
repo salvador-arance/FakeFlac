@@ -127,6 +127,28 @@ Use an installed release candidate, with WebView2 already present. Record the ap
    - **WebView2 processes:** record any address of theirs with its host name, as a finding (Q7).
 3. **Record** the date, OS build, WebView2 version, the result of each step and the count of remote addresses per process. Aggregates only: no audio names or paths (ADR-0022).
 
+### 6.1 Result (2026-11-20): M1 passed
+
+Owner-run, with a desktop agent for steps 2 and 3. Step 1 was done by the owner with the network cut.
+
+| Item | Value |
+|---|---|
+| Candidate | FakeFlac 0.3.0, per-user install, tag `v0.3.0` (`6cb702c`). Feature PR #181 changes no production code (P5), so 0.3.0 is the app under test. The installed files were not compared with the installer. |
+| Installer SHA-256 | `A672F0481819C0D9CE43955871DEC87044855697B5B9F6F30D94E4BFC25BE4AF`, which matches the release's `SHA256SUMS.txt` |
+| OS / WebView2 | Windows 11 Pro 26H2, build 26300.9974; WebView2 Runtime 157.0.4341.60; wired Ethernet |
+| Fixtures | Synthetic, generated for this run: two valid WAVs (5 s, 1 kHz sine, 44.1 kHz, 16-bit, stereo; one with a Unicode name), one corrupt `.flac` (4 KiB of random bytes) and one empty folder |
+| Step 1 (offline) | Every step OK: two verdicts (`real`) and one Error row (`corruptStream`); spectrogram; CSV export (3 rows); `NO_AUDIO_FOUND`; language saved; cache cleared; app closed. The first export went to the dialog's default location, and the owner then copied the file to the planned path. It was not recorded whether that copy was made while still offline. |
+| Step 2 (online, watched) | Every step OK. The app was then left idle for 5 minutes. Watching combined Resource Monitor (5 captures, unfiltered because it runs elevated) with a 1 s sampler of `Get-NetTCPConnection` and `Get-NetUDPEndpoint` over `fakeflac.exe` and its descendants (712 samples over 12 minutes, up to 7 `msedgewebview2.exe` processes). |
+| `fakeflac.exe` | **0 remote addresses** in the sampler and in Resource Monitor (no TCP connection, no UDP endpoint) |
+| WebView2 (finding, Q7) | 2 remote addresses, both port 443 and both registered to Microsoft Corporation (ARIN), with no PTR record. 52.98.200.210 was held by the main WebView2 process for the whole session, starting 4 s after launch, with reconnections. 150.171.27.11 was used by the NetworkService process for about 3 minutes. Resource Monitor also showed System (PID 4) exchanging a few bytes per second with 52.98.200.210. These connections belong to the WebView2 runtime (Q1: an OS component). Restricting them would be a spec change. |
+
+**Deviations.**
+- A second instance was opened by mistake. It was watched like the first and closed normally.
+- The first instance, while minimized, did not exit on `CloseMainWindow()` and was force-closed. This is a window-close behaviour of the framework, not a network finding, and it is tracked outside RNF-03.
+- 1 s sampling can miss very short connections (section 7).
+
+Result: **M1 passed**. P6 is met.
+
 ## 7. Limitations (what a static check cannot prove)
 
 - **Names and patterns only.** The rules show that known network crates, plugins, permissions, CSP sources and API names are absent. They do not show that no socket is opened:

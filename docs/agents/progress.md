@@ -13,11 +13,15 @@
   - `ec24ffd` fix: review improvements. A checker that throws now fails closed; `window . open (` is caught; URL matches stop at `;`, `,` and `}`.
 - Review: no blocking findings. The repository already meets every rule, so no production code changed (D1, P5).
 - R3 precondition: on 2026-11-20 at `bb6db23`, with tauri 2.12.6, `cargo tree --workspace --target x86_64-pc-windows-msvc -e normal,build,dev -i` gives "nothing to print" for `reqwest`, `hyper` and `hyper-util`. The output is in the PR.
-- `just ci` green locally. `specs/traceability.md` RNF-03 row updated.
+- `just ci` green locally. `specs/traceability.md` RNF-03 row updated. PR #181 opened.
+- M1 passed on 2026-11-20 on the installed 0.3.0, recorded in `privacy.md` 6.1:
+  - Offline: every step worked.
+  - Online: `fakeflac.exe` had 0 remote addresses.
+  - Finding (Q7): WebView2 keeps a TLS connection to Microsoft (52.98.200.210:443) open for the whole session, and briefly used 150.171.27.11:443. Restricting that would be a spec change.
 
 **Pending**
-- Owner, at G2: review and merge the RNF-03 PR. CI's `supply-chain` job is the first real `cargo deny check` with the bans, since cargo-deny is not installed locally.
-- Owner: M1 (`privacy.md` section 6) on a release candidate. RNF-03 closes when P1 to P5 are green and M1 is passed.
+- Owner, at G2: review and merge #181. RNF-03 closes with it, since P1 to P5 are green and P6 is passed. CI's `supply-chain` job is the first real `cargo deny check` with the bans, since cargo-deny is not installed locally.
+- Side finding from M1, not RNF-03: a minimized FakeFlac window did not exit on `CloseMainWindow()` (WM_CLOSE) and had to be force-closed. The cause the agent gave (tao 0.37.1 hidden event window) is unverified. The owner decides whether it becomes an issue.
 - `/feature RNF-10`: its G1 answers are merged (#179). It needs tests for S1 to S6 and a redrawn `close` icon.
 - Unchanged from the previous block: close #158, the optional items, and the worktree cleanup.
 
