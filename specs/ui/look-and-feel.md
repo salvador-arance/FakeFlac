@@ -125,6 +125,32 @@ Deliberate differences known before the check (record them, do not fail on them)
 
 Record only aggregates: candidate commit, date, build (installer type and version), window sizes, and per element pass, fail or deliberate difference with one line of note. **No screenshot is committed, and no name or path of a music file is recorded** (ADR-0022). A failure stays visible as pending.
 
+### 4.1 Result (2026-11-20): M1 passed
+
+Run with a desktop agent for E1 to E6 and by the owner for E7. The owner marked every element pass.
+
+| Item | Value |
+|---|---|
+| Candidate | Branch `feat/RNF-10` at `398e6ca` (feature PR #182), FakeFlac 0.3.0 |
+| Build | Release executable from `npm run tauri build -- --no-bundle` on Windows 11 Pro, build 26300. No installer was built or run by the agent |
+| Window sizes | The default size (1296 × 729 outer, as measured) and 900 × 500 outer. English |
+| Fixtures | Synthetic, generated for this run (`fixtures.md`): one full-band noise WAV (Genuine), the same noise low-passed at 16 kHz (Fake, cutoff 16.1 kHz), one 1 s WAV (Error) and one corrupt `.flac` (Error) |
+| E1 | **Pass.** One window, no native title bar; minimize, maximize and close present; drag and double-click (maximize, restore) work; Settings opens inside the window, dark, with only the language |
+| E2 | **Pass.** Icon buttons in groups with separators, search field at the right, as in `ftf-main-window-1.png` |
+| E3 | **Pass.** The Albums panel takes the full content height, where the reference has the folder tree |
+| E4 | **Pass.** Dense rows; State is the first column with icon, text and color; sortable headers; horizontal scroll; selected row highlighted |
+| E5 | **Pass.** Spectrogram with the cutoff line and the verdict text; the splitter resizes it (checked with the keyboard) |
+| E6 | **Pass.** Dark on every surface; system font; reads as a desktop tool |
+| E7 | **Pass** (owner). FakeFlac's own icon; no mark of the reference tool. The redrawn `close` icon is part of this check |
+
+**Deviations.**
+- The agent could not resolve the text of the toolbar tooltips (drawn by a WebView2 process that the screen capture hides) or the end caps of the redrawn `close` (about 10 px on screen). Both are covered by the owner's pass, not by the agent's capture.
+- Dragging the splitter and the window edge with the mouse did not register from the agent's synthetic input. The splitter was moved with the keyboard and the 900 × 500 size was set with a window API. This is a limit of the tool, not a finding in the app.
+- The first run used the installed app by mistake. It was discarded, that instance was closed, and every result above is from the branch build.
+- At 900 × 500 the table shows about three and a half rows until the detail panel is made smaller. Nothing overlaps. The deliberate differences of section 4 were seen as listed, with no new ones.
+
+Result: **M1 passed**. K3 is met.
+
 ## 5. Questions for G1 (answered by the owner on 2026-11-20)
 
 The owner accepted every default, after a read-only check of each one against the repository. The facts that check added are in the answers.

@@ -2,6 +2,31 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-20 - RNF-10 look and feel implemented, M1 passed (`feat/RNF-10`, G2 pending)
+
+**Done**
+- RNF-03 closed: #181 merged on 2026-11-20.
+- `/feature RNF-10` on `feat/RNF-10`, PR #182:
+  - `9f09ebd` test: S1 and S2 in `src/App.lookAndFeel.test.ts`, S3 in `Toolbar.lookAndFeel.test.ts`, S4 to S6 in `scripts/look-and-feel.test.mjs`. S1 to S6 already held. An extra `close` check (no shipped source draws the Bootstrap `x-lg` glyph, from the register note and K2) was the only red test.
+  - `285f036` feat: the `close` path in `Icon.svelte` (both branches) is redrawn as an original filled ×.
+  - `6ae120f` docs: RNF-10 row in `traceability.md`.
+- Review: no blocking findings. `just ci` green locally.
+- M1 passed on 2026-11-20 on the branch release build, recorded in `look-and-feel.md` 4.1. A desktop agent covered E1 to E6 and the owner E7, and every element is pass. The agent could not read the tooltip text or the end caps of the new `close`; both are covered by the owner's pass. K1 to K3 hold.
+
+**Pending**
+- Owner, at G2: review and merge #182.
+- After merge, in a `spec/…` PR: refresh the `close` row note in `look-and-feel.md` 2.2 and the K2 sentence. Both still say the path is `x-lg` until the PR merges. 2.2 allows changing a row only in a spec PR.
+- Unchanged from the previous block:
+  - The minimized-window WM_CLOSE finding (owner decides on an issue).
+  - Close #158 once RNF-10 is merged.
+  - The optional items.
+  - Worktree and branch cleanup (`just prune-branches`; `spec/RNF-03-privacy` is still local).
+
+**Blockers / questions for the human**
+- None.
+
+**Next step:** G2 of #182, then the `spec/…` PR for the 2.2 and K2 notes and the close-out of #158.
+
 ## 2026-11-20 - RNF-03 privacy lint implemented (`feat/RNF-03`, G2 pending)
 
 **Done**
