@@ -2,6 +2,30 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-20 - RNF-03 privacy lint implemented (`feat/RNF-03`, G2 pending)
+
+**Done**
+- The owner answered the open G1 questions on 2026-11-20 and the answers are merged: RNF-03 Q1 to Q10 (#178), RNF-10 Q1 to Q7 (#179), and RP-02/07/08 (#180).
+- `/feature RNF-03` on `feat/RNF-03`, in four commits:
+  - `3b79001` test: `scripts/lint-network.test.mjs`, 80 tests.
+  - `55f467f` feat: new `scripts/lint-network.mjs` with rules T1 to T3, R1, R2, R4, F1 and F2; a call from `lint-arch.mjs`; the 30 NET crates in `deny.toml` `[bans] deny`.
+  - `1aa6840` docs: "Network (RNF-03)" section in `dependencies.md`, and in `overview.md` the RNF-03 row plus the Q10 sentence.
+  - `ec24ffd` fix: review improvements. A checker that throws now fails closed; `window . open (` is caught; URL matches stop at `;`, `,` and `}`.
+- Review: no blocking findings. The repository already meets every rule, so no production code changed (D1, P5).
+- R3 precondition: on 2026-11-20 at `bb6db23`, with tauri 2.12.6, `cargo tree --workspace --target x86_64-pc-windows-msvc -e normal,build,dev -i` gives "nothing to print" for `reqwest`, `hyper` and `hyper-util`. The output is in the PR.
+- `just ci` green locally. `specs/traceability.md` RNF-03 row updated.
+
+**Pending**
+- Owner, at G2: review and merge the RNF-03 PR. CI's `supply-chain` job is the first real `cargo deny check` with the bans, since cargo-deny is not installed locally.
+- Owner: M1 (`privacy.md` section 6) on a release candidate. RNF-03 closes when P1 to P5 are green and M1 is passed.
+- `/feature RNF-10`: its G1 answers are merged (#179). It needs tests for S1 to S6 and a redrawn `close` icon.
+- Unchanged from the previous block: close #158, the optional items, and the worktree cleanup.
+
+**Blockers / questions for the human**
+- None.
+
+**Next step:** after G2 of the RNF-03 PR, `/feature RNF-10`.
+
 ## 2026-11-19 - #158 step 8: the two cases measured, no rule change proposed
 
 **Done**
