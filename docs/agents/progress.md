@@ -2,6 +2,22 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-20 - H3 planned as issues (#184 to #196)
+
+**Done**
+- H3 is split into GitHub issues: the tracking issue #184 with sub-issues #185 to #196. #184 holds the dependency table and graph, the critical path, the owner inputs in order, the risks and the definition of done. No repo change other than this block.
+- Exit criteria (planning section 1.9, decisions of #176): RF-12 `verified`; at most 1 % of authentic lossless corpus tracks `Fake` on the default params, with population and counting rule fixed at G1 (#186); v0.4.0 published.
+- Order: #185 (H2 carry-overs), #186 (false-positive target, then v8 measured against it) and #188 (read-only RF-12 spike) can start now, in parallel. Critical path: #188 → #189 (RF-12 spec, detection v9) → #192 (core and adapter) → #193 / #194 → #195 (acceptance, census against `20261119T220711Z`) → #196 (release 0.4.0, milestone close). #187 (false-positive reduction) only has work if v8 fails the target of #186.
+
+**Pending**
+- Everything in #184. The carry-overs of the previous block (#183 at G1, the `WM_CLOSE` finding, `just prune-branches`) are now tracked in #185.
+
+**Blockers / questions for the human**
+- The decisions of #186 (population, unit, statistic, split, lifetime of the gate).
+- The verdict of an upsample (#189, first open question): it decides how a label-upsampled release counts in #186.
+
+**Next step:** #188 (spike: census aggregates by sample rate and bit depth, hi-res negatives in the labelled corpus, LSB and sample-rate signals). #186 can be specified in parallel. `/new-spec RF-12` waits for both.
+
 ## 2026-11-20 - RNF-10 verified, H2 closed (#158)
 
 **Done**
