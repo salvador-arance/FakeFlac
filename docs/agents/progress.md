@@ -2,6 +2,23 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-20 - H3 widened: MDCT fingerprints, competitor benchmark, speech codecs out (`spec/h3-scope-mdct-benchmark`, G1 pending)
+
+**Done**
+- The owner widened H3 again and accepts that it takes several months. The plan in #184 is updated.
+  - **MDCT quantisation fingerprints move into H3** (until now "after H3", #176). New draft requirement RF-21 and issues #214 (read-only spike), #215 (spec), #216 (core and adapter) and #217 (UI, CSV and calibration).
+  - **Benchmark against comparable detectors**: new draft requirement RP-13 and issue #213.
+  - **Speech codecs out of the format scope**: AMR (`.amr`, `.3gp`, `.3g2`) and Speex (`.spx`) give no detection value. RF-19 now covers 31 of the 35 extensions, 26 to add. #204 and #210 are updated.
+- **Competitors are anonymised in issues** (owner's decision): tool A to tool E. The bodies of #184 and #198 to #210 were rewritten without names, source file names, identifiers or URLs. The mapping is kept outside the repository. New text in the repository uses letters too; the existing requirement texts (RF-19, RF-20, RNF-12, RNF-13) still name that tool, pending the owner's answer.
+- This branch: RF-21 and RP-13 (draft), RF-19 scope, a pointer note in RF-15, and three traceability rows. No detection, contract, params or code change.
+
+**Pending**
+- Owner, at G1: review and merge this branch's PR. Priorities to confirm: RF-21 and RP-13 medium.
+- Owner: whether to anonymise the competitor names already in the repository (requirements and earlier PR descriptions). GitHub keeps the previous issue bodies in each issue's edit history; only a maintainer can delete those revisions.
+- Everything in the previous block.
+
+**Next step:** unchanged for the original line (#188, with #186 in parallel). The MDCT spike #214 is read-only and can start now, in parallel with #188 and #203.
+
 ## 2026-11-20 - H3 extended: format parity, CLI, website and real-library findings (`spec/h3-extension`, G1 pending)
 
 **Done**
