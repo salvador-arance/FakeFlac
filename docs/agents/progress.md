@@ -2,6 +2,24 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-20 - RNF-10 verified, H2 closed (#158)
+
+**Done**
+- #182 merged. M1 passed: the owner recorded it in `look-and-feel.md` 4.1 within #182. K1 to K3 hold, so RNF-10 is verified.
+- PR #183 (`spec/RNF-10-m1`) brings the `close` row note in 2.2, the K2 sentence and the traceability row up to date after the merge.
+- #158 is closed, with a comment mapping each step to its PRs. Every item of its definition of done holds, and H2 is closed.
+
+**Pending**
+- Owner, at G1: review and merge #183.
+- Carried over:
+  - The minimized-window WM_CLOSE finding from RNF-03 M1: the owner decides whether it becomes an issue.
+  - `just prune-branches`: `spec/RNF-03-privacy` and `feat/RNF-10` are still local.
+
+**Blockers / questions for the human**
+- None.
+
+**Next step:** H3 begins with `/new-spec RF-12` (upsamples). It is the only H3 requirement. The decisions it needs are in the 2026-11-19 block (#176): the false-positive target is at most 1 %, and the census baseline is `20261119T220711Z`.
+
 ## 2026-11-20 - RNF-10 look and feel implemented, M1 passed (`feat/RNF-10`, G2 pending)
 
 **Done**
