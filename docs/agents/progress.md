@@ -2,6 +2,19 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-20 - RNF-14 draft: no re-decode after an update or a recalibration (`spec/RNF-14`, G1 pending)
+
+**Done**
+- New draft requirement RNF-14 (priority high, H3): a two-level result cache, so that an app release or a rule-only `DetectionParams` change decodes no unchanged file. Features are keyed by file and by the calibration tool's extraction fingerprint (`EXTRACTION_VERSION`, `[input]`, `[fft]`; `calibration.md` OQ-3); the decision is recomputed by the running build. The `[input]` and `[fft]` sections are identical from params v2 to v8, so the seven recalibrations since v2 would all have reused the features; today each one, and each release, re-decodes the whole library (`result-cache.md` Q3, ADR-0044 decision 1).
+- Pointer note in RF-11, one traceability row. No spec, contract, params or code change.
+
+**Pending**
+- Owner, at G1: review and merge this branch's PR; confirm priority high. Open question for the spec: replace the app version in the key with an automatic adapter fingerprint, or keep it for releases that touch the adapter.
+- Then `/new-spec RNF-14` (amends `contracts/result-cache.md`) with an ADR revisiting ADR-0044 decision 1.
+- Everything in the previous block.
+
+**Next step:** unchanged (#188, with #186 in parallel; spike #214 can start).
+
 ## 2026-11-20 - H3 widened: MDCT fingerprints, competitor benchmark, speech codecs out (`spec/h3-scope-mdct-benchmark`, G1 pending)
 
 **Done**
