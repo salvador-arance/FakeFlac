@@ -2,6 +2,33 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-20 - H3 extended: format parity, CLI, website and real-library findings (`spec/h3-extension`, G1 pending)
+
+**Done**
+- The owner compared FakeFlac with AudioAuditor 2.0.0, both on a sample of the owner's library and in AudioAuditor's source, and extended H3 beyond RF-12. The plan is in #184 (retitled "Fine detection, format parity, CLI and website"), with a second issue table, the updated graph, order, owner inputs, risks and definition of done.
+- New issues:
+  - Real-library detection findings, with measurements only (ADR-0022): #198 (one damaged MP3 packet makes the track `corruptStream`), #199 (an `EdgeStep` false positive missed by 0.04 dB of `R`), #200 (a cbr320 transcode just above `fake_max_cutoff_hz`), #203 (spike: per-channel spectra against the `(L+R)/2` mono mix).
+  - #201 (source bitrate of fake lossless files).
+  - Format parity: tracking #204 (35 extensions), with #206 to #210 by group.
+  - #202 (user CLI), #205 (website), #211 (this record).
+- This branch records the extension at G1:
+  - draft requirements RF-18 (CLI), RF-19 (format parity), RF-20 (source bitrate of lossless files with lossy evidence), RNF-12 (damaged streams) and RNF-13 (website);
+  - pointer notes in RF-14, RF-15 and RNF-04, which stay as specified;
+  - one traceability row each.
+- No detection, contract, params or code change. #199, #200 and #203 need no requirement change: they go through detection specs and calibration as usual.
+
+**Pending**
+- Owner, at G1: review and merge this branch's PR (#211). Priorities to confirm: RF-19 high; RF-18, RF-20, RNF-12 and RNF-13 medium.
+- Release split: one release for all of H3, or detection and RF-12 first, then formats, CLI and website (#184, risks).
+- Everything in the previous block and in #184.
+
+**Blockers / questions for the human**
+- The owner inputs of #184, items 3 and 7 to 9: #211 at G1, the open questions of #198, #201, #202 and #205, and the per-codec decisions of #209 and #210 once their surveys exist.
+
+**Next step:** unchanged for the original line (#188, with #186 in parallel). Read-only work of the extension that can start now: the spike #203, the surveys of #209 and #210, and the measurements of #200.
+
+The planning document (section 1.9) is historical and is not edited. For H3, #184 and this file supersede it.
+
 ## 2026-11-20 - H3 planned as issues (#184 to #196)
 
 **Done**
