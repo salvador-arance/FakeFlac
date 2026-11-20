@@ -71,7 +71,7 @@ The data that check A1 reads. A new shipped image, icon or font file, or a new `
 | `clear-cache` | own drawing |
 | `minimize` | own drawing (the bar has the same commands as Bootstrap Icons `dash-lg`, with coordinates shifted by 0.5 px; see the note below) |
 | `maximize` | own drawing |
-| `close` | redrawn (the feature stage replaces the path in both branches of `Icon.svelte`; until that PR is merged the path is the glyph `x-lg` of Bootstrap Icons 1.10 and 1.11.0, MIT) |
+| `close` | redrawn (an original filled × in both branches of `Icon.svelte`, #182, merged 2026-11-20; before it the path was the glyph `x-lg` of Bootstrap Icons 1.10 and 1.11.0, MIT) |
 | `verdict-real` | own drawing (the check mark has the same commands as Bootstrap Icons `check2`, with other coordinates; see the note below) |
 | `verdict-suspicious` | own drawing |
 | `verdict-fake` | own drawing |
@@ -100,7 +100,7 @@ The data that check A1 reads. A new shipped image, icon or font file, or a new `
 ## 3. Acceptance (measurable)
 
 - **K1.** Every scenario of `look-and-feel.feature` except the M1 one has a passing test in `just check` (S1 to S6).
-- **K2.** The asset register is complete: A1 passes and no row is `unrecorded`. A1 does not fail on `unrecorded` rows, so K2 is closed by the owner, by recording each origin in a `spec/…` PR (G1). The owner recorded every origin on 2026-11-20 (Q3). K2 holds when the redraw of `close` is merged; until then RNF-10 is not verified, and the build stays green.
+- **K2.** The asset register is complete: A1 passes and no row is `unrecorded`. A1 does not fail on `unrecorded` rows, so K2 is closed by the owner, by recording each origin in a `spec/…` PR (G1). The owner recorded every origin on 2026-11-20 (Q3). The redraw of `close` was merged on 2026-11-20 (#182), so K2 holds.
 - **K3.** M1 is recorded on a release build, with each of E1 to E7 marked pass, or marked as a deliberate difference that the owner accepted at G1 (section 4 lists the known ones).
 
 RNF-10 is verified when K1 to K3 hold.
