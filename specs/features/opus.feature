@@ -10,8 +10,9 @@ Feature: Opus files (detection v8)
   OpusHead and OpusTags, granule positions (specs/detection/lossy-source.md
   section 2.4). Only channel mapping family 0 (mono and stereo) is decoded;
   every other family is unsupportedFormat. Only ".opus" is scanned.
-  Rules: lossy-source.md section 12 with DetectionParams v8 (the defaults,
-  detection-params.v8.toml = v7 plus the "opus" rows of [lossy.cutoffs]):
+  Rules: lossy-source.md section 12 with DetectionParams v8 (the parameters of
+  detection-params.v8.toml = v7 plus the "opus" rows of [lossy.cutoffs]; the
+  defaults until detection v9, see the end of this description):
   every Opus row from 48 to 192 kbps has cutoff 20000 Hz, there is no row
   below 48 kbps, and the rest is the v5 lossy rules (detection-lossy.feature):
   fc = fs when D >= 7 dB, otherwise fe; c_exp = min(table row of the declared
@@ -52,6 +53,17 @@ Feature: Opus files (detection v8)
   section 2.2); a check of lossy-fixtures.md section 3 that contradicts a row of
   this feature returns it to G1. The fixtures use pre-skip 120, the measured
   delay of rusty-opus 1.0.2's encoder (section 12.8 F7).
+  Changed for detection v9 (rules.md Q28 (A) and Q30 (e), ADR-0052, proposed
+  for G1): the defaults are now detection-params.v9.toml, which keeps every v8
+  section and value, the Opus rows included, and adds only
+  edge.content_edge_cutoff, read by lossless files only; every lossy result
+  with v9 equals the v8 result (lossy-source.md section 3), with
+  algorithmVersion 9. So in this feature "DetectionParams v8" means the
+  parameters of detection-params.v8.toml, no longer the defaults; the tests may
+  use the defaults for v8's values except where a step checks algorithmVersion 8
+  or the reported cutoff of a lossless file (a content edge, rules.md section 2).
+  "The defaults are the v9 file" names the defaults, and the real runs in the
+  app ("Opus rows in the table") expect algorithmVersion 9.
 
   # --- Scan ---------------------------------------------------------------------
 
@@ -232,15 +244,22 @@ Feature: Opus files (detection v8)
   # --- Parameter files ----------------------------------------------------------------
 
   @RF-15
-  Scenario: The defaults are the v8 file
+  Scenario: The defaults are the v9 file
+    Changed for detection v9 (rules.md Q30 (e)): the defaults were the v8
+    file; v9 keeps every v8 section and value and adds edge.content_edge_cutoff.
     Given the default DetectionParams of the code
-    Then they are equal to specs/detection/detection-params.v8.toml
-    And their sections and values other than lossy.cutoffs.opus are equal to those of specs/detection/detection-params.v7.toml
+    Then they are equal to specs/detection/detection-params.v9.toml
+    And their sections and values other than edge.content_edge_cutoff are equal to those of specs/detection/detection-params.v8.toml
+    And their sections and values other than edge.content_edge_cutoff and lossy.cutoffs.opus are equal to those of specs/detection/detection-params.v7.toml
     And lossy.cutoffs.opus has 6 rows, for 48, 64, 96, 128, 160 and 192 kbps, each with cutoff_hz 20000
-    And every TrackAnalysis computed with them carries algorithmVersion 8
+    And every TrackAnalysis computed with them carries algorithmVersion 9
 
   @RF-15 @RF-04
   Scenario: v8 gives the v7 results on every file that is not Opus
+    "DetectionParams v8" is the parameters of
+    specs/detection/detection-params.v8.toml here, not the v9 defaults: the
+    fixture edge_bump12k5 reports another cutoff with v9
+    (detection-reported-cutoff.feature).
     Given every synthetic signal of specs/detection/fixtures.md saved as FLAC and every MP3 and M4A fixture of specs/detection/lossy-fixtures.md
     When each one is analysed with the parameters of specs/detection/detection-params.v7.toml and with DetectionParams v8
     Then the two results have the same verdict, reasons, cutoff and estimated source bitrate for every file
@@ -337,7 +356,7 @@ Feature: Opus files (detection v8)
   Scenario: Opus rows in the table
     Given a folder "Opus" with the Opus fixtures "opus_128_fb.opus" and "opus_160_src16k.opus"
     When I analyse "Opus"
-    Then every trackDone event carries a complete TrackAnalysis with algorithmVersion 8
+    Then every trackDone event carries a complete TrackAnalysis with algorithmVersion 9
     And the table shows "opus_128_fb.opus" with format "OPUS", samplerate "48000", bitrate "128 kbps", real bitrate "128 kbps" and state "Real"
     And the table shows "opus_160_src16k.opus" with format "OPUS", bitrate "160 kbps", real bitrate "—" and state "Fake", and a cutoff within 200 Hz of 16.0 kHz
 

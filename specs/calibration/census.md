@@ -225,7 +225,7 @@ Generated inside the tests, in a temporary folder outside the repository, from t
 
 **Expected `summary.md`** (every line but `run:`; the size is the sum of the 15 files' sizes):
 
-- Header: `detection: algorithm_version 8, params default`; `tracks 15 | albums 5 | <size> MB`.
+- Header: `detection: algorithm_version 9, params default`; `tracks 15 | albums 5 | <size> MB`. (It was 8 with the v8 defaults; detection v9, `rules.md` Q30 (g), changes no verdict, reason or evidence of this table, and the census reports no cutoff.)
 - 4.2: `flac` 14 tracks: 5 real, 1 suspicious, 6 fake, 2 error. `pcm` 1 track: 1 real. `total` 15: 6, 1, 6, 2.
 - 4.3: lossless `gapStep` 3, `cutoffStep` 3, `gapStep + cutoffStep` 0, `other` 0; lossy 0 and 0.
 - 4.4: `whole` 1 album, 4 fake tracks (album A: `f = 4`, `n = 4`); `mixed` 1 album, 1 fake track (CD1: `f = 1`, `n = 2`); `isolated` 1 album, 1 fake track (album B: `f = 1`, `n = 5`, and `4 < 5`); `total` 3 albums, 6 fake tracks; every fake is lossless. Albums with exactly one Fake among 2 or more analysed tracks: 2.

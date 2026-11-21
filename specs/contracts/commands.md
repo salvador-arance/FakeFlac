@@ -105,7 +105,7 @@ type TrackAnalysis = {
   reasons: SuspicionReason[]
   evidence: FakeEvidence[]                           // version 9 (RF-17): not empty exactly when verdict is 'fake'
   error: TrackError | null
-  algorithmVersion: number                           // 8 with the default DetectionParams (detection v8: lossless rules of rules.md, lossy rules of lossy-source.md)
+  algorithmVersion: number                           // 9 with the default DetectionParams (detection v9, proposed for G1: lossless rules of rules.md, lossy rules of lossy-source.md; 8 with detection v8)
 }
 
 type AnalysisSummary = {
@@ -168,6 +168,10 @@ Detection v7 (RF-16, ADR-0043) **does** change them: it adds the reason `streami
 Detection v8 (RF-14, RF-15, ADR-0047) does not change them: `AudioFormat` and `AudioCodec` already hold `opus`. It adds Opus files to the scan and the `opus` rows of `[lossy.cutoffs]` ("Opus files (detection v8)"); `algorithmVersion` is 8 with the defaults.
 
 RF-17 (no detection version) **does** change them: `TrackAnalysis` gains `evidence` and there are two new types (contract version 9, "Fake evidence (version 9)"); `algorithmVersion` stays 8.
+
+Detection v9 (RF-04, ADR-0052, proposed for G1; `specs/detection/rules.md` section 2, "Reported cutoff") does not change them, and the contract stays version 9 (rules.md Q32). It adds the optional key `edge.content_edge_cutoff` to `DetectionParams` (internal to the backend; values: `specs/detection/detection-params.v9.toml`). What a client sees:
+- **`cutoff` of a lossless track** is where its content ends. When the step at `fs` is a content edge (a short narrow-band sound with content continuing far above it) and the verdict is not `suspicious` with `ambiguousCutoff`, `cutoff.frequencyHz` is the content extent (often `maxFrequencyHz`, shown as "Full band") and `steepnessDbPerKhz` is 0, instead of the step's frequency and steepness. `noiseFloorDb` does not change.
+- **Nothing else changes.** For the same file the verdict, reasons, evidence, error and `estimatedSourceBitrateKbps` are those of detection v8, and so is the `cutoff` of every lossy track. `algorithmVersion` is 9 with the defaults (cached results of version 8 are recomputed, ADR-0008, ADR-0044). The CSV keeps `csv_format_version` 1: only values of `cutoff_hz` change.
 
 ## Lossy formats (version 3)
 

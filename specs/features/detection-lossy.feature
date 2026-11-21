@@ -10,13 +10,18 @@ Feature: Source bitrate of lossy files (detection v5)
   and the fixture mp3_320_48k_lp20k are suspicious (streamingSampleRate,
   detection-streaming-source.feature). So in this feature "DetectionParams v5"
   means a params set without [lossy.streaming], the parameters of
-  detection-params.v5.toml or detection-params.v6.toml, never the v7 or v8
+  detection-params.v5.toml or detection-params.v6.toml, never the v7, v8 or v9
   defaults; only the algorithmVersion they carry differs. Changed for detection
   v8 (lossy-source.md section 12.9 (c), Opus): the defaults are now
   detection-params.v8.toml, which also has Opus rows in [lossy.cutoffs], so
   "the default DetectionParams of the code" below holds the v5 MP3 and AAC rows
   and the v8 Opus rows; no scenario here analyses an Opus file with v8,
-  opus.feature does): the content edge fc (the reported
+  opus.feature does. Since detection v9 (rules.md, proposed for G1, ADR-0052;
+  Q30 (e)) the defaults are detection-params.v9.toml, which keeps every
+  section and value of v8 and adds only edge.content_edge_cutoff, read by
+  lossless files only: lossy results with v9 equal those with v8 (lossy-source.md
+  section 3), and "the default DetectionParams of the code" below holds the
+  same [lossy] values as with v8): the content edge fc (the reported
   cutoff: fs when D >= step_suspicious_db = 7, otherwise fe), the expected
   cutoff c_exp = min(table row of the declared bitrate, LAME tag low-pass,
   nyquist - 400), the shortfall s = c_exp - fc, and rules L0-L6:
@@ -192,6 +197,8 @@ Feature: Source bitrate of lossy files (detection v5)
   Scenario: The defaults hold the v5 lossy values
     Changed for detection v8 (lossy-source.md section 12.9 (c)): the defaults
     also have the 6 Opus rows of detection-params.v8.toml (opus.feature).
+    Since detection v9 the defaults are detection-params.v9.toml, whose
+    [lossy] section is v8's.
     Given the default DetectionParams of the code
     Then lossy.suspicious_shortfall_hz is 1000, lossy.fake_shortfall_hz is 2500 and lossy.fake_min_step_db is 10
     And lossy.cutoffs has the 14 mp3 rows and the 7 aac rows of specs/detection/detection-params.v5.toml, and 6 opus rows
