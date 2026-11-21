@@ -6,8 +6,8 @@ Feature: Calibration and acceptance against a labelled corpus
   FAKEFLAC_CORPUS and FAKEFLAC_CALIBRATION. Unless a scenario says otherwise,
   the params file is specs/detection/detection-params.v2.toml: "accept"
   scenarios pass it with --params, and "calibrate" scenarios name it as the
-  grid baseline (the tool's default is detection-params.v8.toml, calibration.md
-  OQ-18; "Defaults" below).
+  grid baseline (the tool's default is detection-params.v9.toml since detection
+  v9, detection-params.v8.toml before, calibration.md OQ-18; "Defaults" below).
   The v4 expectations on fxv0 (sfb21_gaps) rest on a step of 3 to 10 dB in the
   lossy range (fixtures.md, "Verdicts with v4": derived, and measured once
   before G1 at D 6.15 dB, fs 16050 Hz); the test stage confirms it first and
@@ -25,13 +25,19 @@ Feature: Calibration and acceptance against a labelled corpus
   Changed for detection v8 (specs/detection/lossy-source.md section 12.9 (g);
   RF-14/RF-15 Opus): with detection-params.v8.toml in the repository,
   proposals take algorithm_version 9.
+  Changed for detection v9 (specs/detection/rules.md Q28 (A) and Q30 (h),
+  ADR-0052, proposed for G1): with detection-params.v9.toml in the repository,
+  proposals take algorithm_version 10 and are written as
+  detection-params.v10.toml. v9 changes no verdict, reason or evidence, so no
+  count of this feature changes; the source-limited rule reads the source's
+  step cutoff f_step (specs/calibration/lossy.md section 4.5, Q29).
   Changed for the shipped baseline (calibration.md OQ-18 to OQ-24): the default
-  params are the app's (v8 today) and the default grid is calibrate-grid.v3.toml,
+  params are the app's (v8 then, v9 today) and the default grid is calibrate-grid.v3.toml,
   which has no baseline key and excludes v0 and aac256 from the cost;
   must_catch feasibility is non-regression against the baseline, and a
   confirmed fake that is Fake at the baseline must stay Fake. No earlier
   scenario changes its expectations: in each of them the baseline has no
-  must_catch Real (fx128 is Fake under v2 to v8), the confirmed fake stays Fake
+  must_catch Real (fx128 is Fake under v2 to v9), the confirmed fake stays Fake
   at every point, and every grid has a baseline and no cost_exclude. Default
   files and relative grid baselines are read from the repository root, so the
   tests do not depend on the current folder.
@@ -665,7 +671,7 @@ Feature: Calibration and acceptance against a labelled corpus
     And the grid of sample-corpus.md section 5
     When "calibrate" runs on the lossy-master variant
     Then the baseline costs 1.1 and the point "gap_fake_db = 4.0" costs 0.5
-    And the proposal is detection-params.v9.toml with gap_fake_db 4.0, as without the variant
+    And the proposal is detection-params.v10.toml with gap_fake_db 4.0, as without the variant
     And the report has the section "Authentic releases with a lossy master" for the baseline and for the proposal
 
   @RP-11
@@ -765,8 +771,8 @@ Feature: Calibration and acceptance against a labelled corpus
     When "calibrate" runs on the sample corpus
     Then the exit code is 0
     And the baseline cost is 1.1 and the cost of "gap_fake_db = 4.0" is 0.5
-    And the report folder holds detection-params.v9.toml
-    And that file parses to detection-params.v2.toml with algorithm_version 9 and gap_fake_db 4.0
+    And the report folder holds detection-params.v10.toml
+    And that file parses to detection-params.v2.toml with algorithm_version 10 and gap_fake_db 4.0
     And its first two lines are the "PROPOSAL" and "Changed: verdict.gap_fake_db 6.0 -> 4.0" comments
     And no file in the repository has changed
 
@@ -803,7 +809,7 @@ Feature: Calibration and acceptance against a labelled corpus
     When "calibrate" runs on the sample corpus
     Then the exit code is 0
     And with the point "full_band.min_burst_db = 100.0" the fxv0 entries are "fake" instead of "suspicious", and its cost is lower than the baseline cost
-    And the report folder holds detection-params.v9.toml with algorithm_version 9 and full_band.min_burst_db 100.0
+    And the report folder holds detection-params.v10.toml with algorithm_version 10 and full_band.min_burst_db 100.0
     And its second line is the comment "# Changed: full_band.min_burst_db 3.0 -> 100.0"
 
   @RP-11 @RF-04

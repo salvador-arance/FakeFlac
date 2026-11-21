@@ -154,7 +154,7 @@ The last stage writes `<generated>/<id>.<ext>`. There is no decode call. The sam
 ### 4.5 Undetectable cascades and source-limited honest encodes
 
 - **Undetectable** (positives): the rule of evaluation.md section 2, with `lowpass_hz` = the lowest `lowpass_hz` of the stages before the last, comparing the source with the final lossy file. Such a cascade removed nothing the last stage would have kept.
-- **Source-limited** (honest generated negatives, C9), per params file with `[lossy]`: the source's own reported cutoff (lossless rules of the same params file, rules.md section 2, `fakeflac_core::detect::cutoff_estimate`) is below `c_exp − lossy.suspicious_shortfall_hz`, where `c_exp` is the final file's expected cutoff as computed by the core's lossy functions (lossy-source.md section 3, "Where it is computed"). The lossy rule cannot tell such a file from a fake, so it is counted apart and left out of the rates (lossy-source.md section 8).
+- **Source-limited** (honest generated negatives, C9), per params file with `[lossy]`: the source's own step cutoff `f_step` (rules.md section 2 with the same params file, `fakeflac_core::detect::cutoff_estimate`; up to v8 it is the source's reported cutoff, and from v9 it stays `f_step` even where the source's reported cutoff is `fe` at a content edge: proposed with rules.md Q29, G1 pending) is below `c_exp − lossy.suspicious_shortfall_hz`, where `c_exp` is the final file's expected cutoff as computed by the core's lossy functions (lossy-source.md section 3, "Where it is computed"). The lossy rule cannot tell such a file from a fake, so it is counted apart and left out of the rates (lossy-source.md section 8).
 
 ### 4.6 Cost
 

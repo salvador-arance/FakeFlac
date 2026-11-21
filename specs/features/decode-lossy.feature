@@ -8,7 +8,10 @@ Feature: Decode MP3 and M4A files (H2; Opus in opus.feature)
   (ADR-0040); the test stage first confirms the checks of its section 3.
   Opus (decoded with rusty-opus since detection v8, ADR-0047) is specified in
   specs/features/opus.feature.
-  Parameters: the default DetectionParams (detection-params.v8.toml since
+  Parameters: the default DetectionParams (detection-params.v9.toml since
+  detection v9, rules.md Q28 (A) and Q30 (e), ADR-0052: v8's values plus
+  edge.content_edge_cutoff, read by lossless files only, algorithmVersion 9;
+  no fixture here is a lossless content edge; detection-params.v8.toml since
   detection v8, lossy-source.md Q38: v7's values plus the Opus rows of
   [lossy.cutoffs], algorithmVersion 8; detection-params.v7.toml since detection
   v7, lossy-source.md Q25 (d): v6's values plus [lossy.streaming]; no scenario
@@ -104,7 +107,7 @@ Feature: Decode MP3 and M4A files (H2; Opus in opus.feature)
   Scenario: A lossy row has the same fields as a lossless row
     Given a folder "Mixed" with "full_band.flac" and the lossy fixtures "mp3_320_lp17k.mp3" and "m4a_aac_128_lp16k.m4a"
     When I analyse "Mixed"
-    Then every trackDone event carries a complete TrackAnalysis with algorithmVersion 8
+    Then every trackDone event carries a complete TrackAnalysis with algorithmVersion 9
     And the table shows "mp3_320_lp17k.mp3" with format "MP3", bitrate "320 kbps", real bitrate "≈128 kbps" and state "Fake", and a cutoff within 200 Hz of 17.0 kHz
     And the table shows "m4a_aac_128_lp16k.m4a" with format "M4A", bitrate "128 kbps", real bitrate "128 kbps" and state "Real"
     And the table shows "full_band.flac" with "—" in its bitrate and real bitrate cells
