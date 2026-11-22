@@ -10,6 +10,14 @@ Feature: Explain a Fake verdict (evidence and album context)
   texts: specs/ui/fake-evidence.md. RF-17 changes no verdict, reason, cutoff,
   estimate, threshold or version: the default DetectionParams stay
   detection-params.v8.toml and every analysis carries algorithmVersion 8.
+  Changed for detection v9 (specs/detection/rules.md Q28 (A) and Q30 (f),
+  ADR-0052, proposed for G1; not part of RF-17): the defaults are
+  detection-params.v9.toml, which keeps every v8 threshold and adds
+  edge.content_edge_cutoff, and every analysis with them carries
+  algorithmVersion 9. v9 changes no verdict, reason or evidence; it only
+  reports fe instead of fs for a lossless content edge whose verdict was not
+  decided by V6, V7 or V8 (rules.md section 2, "Reported cutoff"), so one
+  reported cutoff below changes ("gap with an edge step: V3 listed, V4 not").
   Thresholds of the defaults: gap_fake_db 6 dB, step_fake_db 10 dB (lossless,
   rules V3 and V4), lossy.fake_shortfall_hz 2500 Hz and
   lossy.fake_min_step_db 10 dB (lossy, rule L3). Lossless FullBand: U >= -70,
@@ -31,6 +39,11 @@ Feature: Explain a Fake verdict (evidence and album context)
   # --- The rule from given measurements: lossless (fake-evidence.md 2.1) -------
 
   Scenario Outline: Evidence of a lossless track from given measurements
+    Changed for detection v9 (rules.md Q30 (f)): in the row "gap with an edge
+    step: V3 listed, V4 not" the track is a content edge (D 14.22, D_Q 0.32,
+    R 17.48) and V3 decides, so its reported cutoff is fe = 22050 Hz (it was
+    fs = 19450 Hz with v8); its verdict and evidence do not change. W4 is
+    decided by V6 and keeps fs (Q27 (2)).
     Given a lossless track with codec "flac" and sample rate 44100 Hz
     And the measurements H = <H> dB, G = <G> dB, D = <D> dB, fs = <fs> Hz, fe = <fe> Hz, U = <U> dB, B = <B> dB, D_Q = <D_Q> dB and R = <R> dB
     When the verdict rules and the evidence of the default DetectionParams are applied
@@ -48,7 +61,7 @@ Feature: Explain a Fake verdict (evidence and album context)
       | both: V3 decides, V4 also holds                        | -20 | 12    | 24.7  | 16050 | 22050 | -90    | 0.2  | 10   | 0     | fake       |                         | 16050  | gapStep 12.00/6.00/6.00; cutoffStep 24.70/10.00/14.70 |
       | both at their thresholds                               | -20 | 6     | 10    | 19450 | 22050 | -90    | 0.2  | 10   | 0     | fake       |                         | 19450  | gapStep 6.00/6.00/0.00; cutoffStep 10.00/10.00/0.00 |
       | both just below their thresholds                       | -20 | 5.99  | 9.99  | 19450 | 22050 | -90    | 0.2  | 10   | 0     | suspicious | highBandGaps            | 19450  | —                                                   |
-      | gap with an edge step: V3 listed, V4 not               | -20 | 7     | 14.22 | 19450 | 22050 | -47.06 | 2.86 | 0.32 | 17.48 | fake       |                         | 19450  | gapStep 7.00/6.00/1.00                              |
+      | gap with an edge step: V3 listed, V4 not               | -20 | 7     | 14.22 | 19450 | 22050 | -47.06 | 2.86 | 0.32 | 17.48 | fake       |                         | 22050  | gapStep 7.00/6.00/1.00                              |
       | W4: the edge step keeps it from Fake                   | -20 | -0.25 | 14.22 | 19450 | 22050 | -47.06 | 2.86 | 0.32 | 17.48 | suspicious | ambiguousCutoff         | 19450  | —                                                   |
       | FP2: the full-band guard keeps it from Fake            | -20 | 13.18 | 14.79 | 21450 | 21400 | -44.74 | 30.6 | 0    | 0     | suspicious | highBandGaps            | 21450  | —                                                   |
       | little treble: V2 comes first                          | -65 | 12    | 24.7  | 16050 | 22050 | -90    | 0.2  | 10   | 0     | suspicious | lowHighFrequencyContent | 16050  | —                                                   |
@@ -268,8 +281,10 @@ Feature: Explain a Fake verdict (evidence and album context)
 
   @RF-04 @RF-15
   Scenario: The evidence agrees with the measurements on every fixture and params file
+    Changed for detection v9 (rules.md Q30 (f)): the defaults are v9, so the
+    v8 file, the defaults until then, is listed with the older files.
     Given every synthetic signal of specs/detection/fixtures.md saved as FLAC and every lossy fixture of specs/detection/lossy-fixtures.md sections 2 and 2.2
-    When each one is analysed with the default parameters and with the parameters of each of specs/detection/detection-params.v2.toml to specs/detection/detection-params.v7.toml
+    When each one is analysed with the default parameters and with the parameters of each of specs/detection/detection-params.v2.toml to specs/detection/detection-params.v8.toml
     Then in every result the evidence is not empty exactly when the verdict is "fake"
     And its kinds are exactly the rules of fake-evidence.md section 2 whose conditions hold on the measurements of that analysis with those parameters, in the order of that section, without repetition
     And every item has a finite value, the threshold of its kind in those parameters, and a margin of at least 0 equal to its value minus its threshold within 0.001
@@ -291,11 +306,16 @@ Feature: Explain a Fake verdict (evidence and album context)
 
   @RF-04 @RF-15
   Scenario: RF-17 changes no verdict, reason, cutoff, estimate or version of any fixture
+    Changed for detection v9 (rules.md Q30 (f)): the defaults are v9, so the
+    truth is the one its fixture spec gives for v9 (for edge_bump12k5 the
+    "Truth (v9)" column of fixtures.md, "Reported cutoff"; every other fixture
+    has the same truth with v8 and v9), and the version is 9. RF-17 itself
+    still changes none of them.
     Given every synthetic signal of specs/detection/fixtures.md saved as FLAC and every lossy fixture of specs/detection/lossy-fixtures.md sections 2 and 2.2
     When each one is analysed with the default parameters
     Then its verdict, reasons, error, estimated source bitrate and cutoff (within the tolerance of its fixture spec) are the truth its fixture spec gives
-    And every analysis carries algorithmVersion 8
-    And the default DetectionParams of the code are equal to specs/detection/detection-params.v8.toml
+    And every analysis carries algorithmVersion 9
+    And the default DetectionParams of the code are equal to specs/detection/detection-params.v9.toml
 
   # --- In the app: a real run (src-tauri) ---------------------------------------
 
@@ -303,7 +323,7 @@ Feature: Explain a Fake verdict (evidence and album context)
   Scenario: A gap-only fake in a real run with Unicode names, an error track and its album
     Given a folder "Álbum ″Ñandú″" with the synthetic signal "sfb21_gaps" saved as "01 – Canción ‘x’.flac", the synthetic signal "full_band" saved as "02 – Ópera «Ça va» 🎵.flac" and as "03 – Ñandú.flac", and the synthetic signal "corrupt" saved as "04 – Roto.flac"
     When I analyse "Álbum ″Ñandú″" with the default parameters
-    Then the trackDone event of "01 – Canción ‘x’.flac" carries verdict "fake", no reasons, the evidence kinds "gapStep" and algorithmVersion 8
+    Then the trackDone event of "01 – Canción ‘x’.flac" carries verdict "fake", no reasons, the evidence kinds "gapStep" and algorithmVersion 9
     And the trackDone events of "02 – Ópera «Ça va» 🎵.flac" and "03 – Ñandú.flac" carry verdict "real" and an empty evidence
     And the trackDone event of "04 – Roto.flac" carries verdict "error" with error "corruptStream" and an empty evidence
     And the album update of "Álbum ″Ñandú″" after the four tracks has real 2, suspicious 0, fake 1, errors 1 and verdict "fake"

@@ -38,6 +38,12 @@ Feature: Streaming sample rate of lossy files (detection v7)
   result with algorithmVersion 8. So in this feature "DetectionParams v7" means
   the parameters of detection-params.v7.toml, no longer the defaults, and the
   scenarios that analyse with "the default parameters" expect algorithmVersion 8.
+  Changed for detection v9 (rules.md Q28 (A) and Q30 (e), ADR-0052, proposed
+  for G1): the defaults are now detection-params.v9.toml, which keeps every v8
+  section and value and adds only edge.content_edge_cutoff, read by lossless
+  files only. For every lossy track v9 gives exactly the v8 result
+  (lossy-source.md section 3) with algorithmVersion 9, so the scenarios that
+  analyse with "the default parameters" expect algorithmVersion 9.
 
   # --- Verdicts on lossy fixtures ----------------------------------------------
 
@@ -145,8 +151,9 @@ Feature: Streaming sample rate of lossy files (detection v7)
     Opus is natively 48 kHz, and "opus" cannot be listed in lossy.streaming.codecs
     (next scenario outline). With v7 an Opus track is an error by L0 (no Opus
     rows, detection-lossy.feature); here Opus rows are added so that the track
-    reaches the shortfall rules. The v8 defaults have Opus rows of their own
-    and give the same answer (opus.feature).
+    reaches the shortfall rules. The defaults since v8 (v8, and v9 since
+    detection v9) have Opus rows of their own and give the same answer
+    (opus.feature).
     Given the text of specs/detection/detection-params.v7.toml with an "opus" array in [lossy.cutoffs] equal to its "mp3" array
     And a lossy track with codec "opus", sample rate 48000 Hz, declared bitrate 160 kbps and tag low-pass — Hz
     And the measurements H = -20 dB, G = 0 dB, D = 40 dB, fs = 20050 Hz and fe = 24000 Hz
@@ -218,7 +225,9 @@ Feature: Streaming sample rate of lossy files (detection v7)
   @RF-16
   Scenario: The v7 file adds [lossy.streaming] to v6, and the defaults keep it
     Changed for detection v8: the defaults are detection-params.v8.toml
-    (opus.feature, "The defaults are the v8 file"), whose [lossy.streaming] is v7's.
+    (opus.feature), whose [lossy.streaming] is v7's. Changed for detection v9:
+    the defaults are detection-params.v9.toml (opus.feature, "The defaults are
+    the v9 file"), whose [lossy.streaming] is still v7's.
     Given the parameters of specs/detection/detection-params.v7.toml
     Then their sections other than [lossy.streaming] are equal to those of specs/detection/detection-params.v6.toml
     And lossy.streaming.sample_rates_hz is [48000], lossy.streaming.codecs is [mp3, aac], lossy.streaming.min_declared_bitrate_kbps is 192, lossy.streaming.min_cutoff_hz is 19800 and lossy.streaming.max_cutoff_hz is 20200
@@ -278,7 +287,7 @@ Feature: Streaming sample rate of lossy files (detection v7)
   Scenario: A 48 kHz rip with a Unicode name is flagged in a real run and left unchanged
     Given a folder "Álbum ″Ñandú″" with the lossy fixture "mp3_320_48k_lp20k" saved as "01 – Canción ‘x’.mp3" and the lossy fixture "mp3_320_lp20k" saved as "02 – Ópera «Ça va» 🎵.mp3"
     When I analyse "Álbum ″Ñandú″" with the default parameters
-    Then the trackDone event of "01 – Canción ‘x’.mp3" carries verdict "suspicious", reasons ["streamingSampleRate"], sample rate 48000, declared bitrate 320, no estimated source bitrate and algorithmVersion 8
+    Then the trackDone event of "01 – Canción ‘x’.mp3" carries verdict "suspicious", reasons ["streamingSampleRate"], sample rate 48000, declared bitrate 320, no estimated source bitrate and algorithmVersion 9
     And the trackDone event of "02 – Ópera «Ça va» 🎵.mp3" carries verdict "real", no reasons, sample rate 44100 and estimated source bitrate 320
     And both paths in the events equal the names on disk code point for code point
     And the album update of "Álbum ″Ñandú″" after both tracks has verdict "suspicious"

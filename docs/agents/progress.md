@@ -2,6 +2,22 @@
 
 > Newest block first. Read the first block before starting. Updated with `/handoff`.
 
+## 2026-11-21 - RF-04 detection v9: the reported cutoff of a lossless file is not a narrow content edge (`spec/RF-04`, G1 pending)
+
+**Done**
+- Owner report: a genuine FLAC showed "Cutoff 12.8 kHz · Genuine" while its content reaches Nyquist. Measured with v8: a narrow tonal peak in the mean spectrum makes a 7.4 dB step at 12750 Hz (`D_Q` 2.3, `R` 28.5, `fe` 22050). The verdict (V10) is right; rules.md section 2 reports `fs` whenever `D ≥ step_suspicious_db`, so the cutoff is wrong by spec, not by code.
+- Spec for detection v9 (default `detection-params.v9.toml` = v8 plus `edge.content_edge_cutoff = true`, `algorithm_version` 9, next free 10): new predicate `ContentEdge` (`EdgeStep` without `InRange`; `EdgeStep` = `ContentEdge ∧ InRange(fs)`, unchanged); a lossless track reports `fe` when `ContentCutoff` holds and V6–V8 did not decide. No verdict, reason or evidence changes; lossy `fc` stays `f_step` (v8). Open questions Q24–Q32 in rules.md with defaults; ADR-0052 (Proposed); new `features/detection-reported-cutoff.feature`; fixtures `edge_bump12k5`, `edge_bump12k5_lp12k7`, `shelf12k7`; every approved spec that named v8 as the default updated (Q30 (c)–(h)).
+- Measured on the owner's library (aggregates only, 2026-11-21, v8, indicative): of 60 lossless tracks with a reported cutoff below 14500 Hz (38 Real), `ContentEdge` holds for 21 (18 Real). Throwaway harness in `target/probe/` (not committed).
+- `just check-fast` and `just trace` green; readiness review: no blockers, improvements applied.
+
+**Pending**
+- Owner, at G1: answer Q24–Q32 (rules.md), mainly Q24 (predicate with or without `D_Q`: 21 or ~33 of 60), Q27 (V6–V8 keep `fs`) and Q28 (v9 file with an optional key vs. no version bump); approve ADR-0052; review and merge this branch's PR.
+- Then `/feature RF-04`: the test stage changes the protected tests listed in Q30 (i), plus the `fake_evidence.rs` "every params file" loop (add v8) and a check that `detection_edge_step.rs` loads the v6 file for its v6 side.
+- Drafts to align later: RNF-14 ("v2–v8") and RP-13 ("baseline on detection v8"); RF-20 must pick `f_step` or the reported cutoff for lossless estimates. `docs/architecture/backend.md` and `.claude/skills/calibrate/SKILL.md` still name v8 defaults (update after G1; the skill needs `just agents-sync`).
+- Everything in the previous block.
+
+**Next step:** unchanged (#188, with #186 in parallel; spike #214 can start).
+
 ## 2026-11-20 - RNF-14 draft: no re-decode after an update or a recalibration (`spec/RNF-14`, G1 pending)
 
 **Done**

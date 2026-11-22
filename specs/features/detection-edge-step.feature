@@ -9,7 +9,18 @@ Feature: Edge step on the step rule V4 (detection v6)
   algorithmVersion 6, which needs the parameters of detection-params.v6.toml.
   Since detection v8 (lossy-source.md section 12.9 (f)) the defaults are
   detection-params.v8.toml, which adds only Opus rows to v7 and gives the same
-  lossless results, so the same holds. The thresholds are:
+  lossless results, so the same holds. Since detection v9 (rules.md, proposed
+  for G1, ADR-0052; Q30 (d)) the defaults are detection-params.v9.toml, which
+  adds only edge.content_edge_cutoff to v8: it gives v6's verdicts, reasons
+  and evidence everywhere and, with Q27 (2), v6's cutoffs on every fixture
+  named in this feature (edge_bump19k3 is decided by V6 and keeps fs; the
+  other edge-step fixtures are not content edges). The only fixture whose
+  cutoff differs with the defaults is edge_bump12k5 (fixtures.md, "Reported
+  cutoff"), which only "v6 gives the v5 verdicts on every other fixture"
+  analyses; that scenario checks algorithmVersion 6, so it already uses the
+  parameters of detection-params.v6.toml. With Q27 (1) "Edge-step fixtures"
+  would also need the v6 or v8 file for its v6 side, because edge_bump19k3
+  would report fe with v9. The thresholds are:
   edge.max_median_step_db = 3, edge.min_residual_db = 15, edge.max_step_db = 16,
   edge.floor_min_db = -104 (absolute; F_top is never below it, whatever the
   bit depth), floor window [20900, 22000) Hz,

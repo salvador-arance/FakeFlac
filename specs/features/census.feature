@@ -4,7 +4,10 @@ Feature: Library census
   folder, in aggregates, through the app's own use case. Checked on the census
   sample folder of census.md section 8 (synthetic fixtures, 15 tracks in 5
   albums, Unicode names) in a fresh temporary folder outside the repository.
-  Unless a scenario says otherwise the params are the defaults (detection v8).
+  Unless a scenario says otherwise the params are the defaults (detection v8;
+  detection v9 since rules.md Q28 (A) and Q30 (g), ADR-0052, proposed for G1,
+  which changes no verdict, reason or evidence, only the reported cutoff of
+  some lossless files, and the census reports no cutoff).
   "The report builder" is the pure function that turns the tracks and albums
   of a run into summary.md (census.md section 9); its scenarios give it
   analyses built in the test, so they need no audio.
@@ -19,7 +22,7 @@ Feature: Library census
     When "census" runs on the sample folder
     Then it exits 0
     And stdout is summary.md followed by one line "elapsed: <seconds> s"
-    And the header says "detection: algorithm_version 8, params default" and "tracks 15 | albums 5"
+    And the header says "detection: algorithm_version 9, params default" and "tracks 15 | albums 5"
     And the verdict table is
       | codec | tracks | real | suspicious | fake | error |
       | flac  | 14     | 5    | 1          | 6    | 2     |
