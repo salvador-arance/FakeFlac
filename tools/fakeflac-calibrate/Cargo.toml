@@ -25,7 +25,7 @@ toml = "1.1.8"
 
 [dev-dependencies]
 # Same exact package approved for Opus fixtures in ADR-0047.
-rusty-opus = "=1.1.1"
+rusty-opus = "=1.2.1"
 flacenc = "0.5.1"
 hound = "3.5.1"
 rand = "0.10.3"
