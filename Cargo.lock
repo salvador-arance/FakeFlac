@@ -291,7 +291,7 @@ checksum = "82f4b26e751e711a5302649417f2da046dce6391b2ea30a4820f37462314f0b9"
 dependencies = [
  "semver",
  "serde",
- "toml 1.2.1+spec-1.1.0",
+ "toml 1.2.2+spec-1.1.0",
 ]
 
 [[package]]
@@ -819,7 +819,7 @@ dependencies = [
  "cc",
  "memchr",
  "rustc_version",
- "toml 1.2.1+spec-1.1.0",
+ "toml 1.2.2+spec-1.1.0",
  "vswhom",
  "winreg",
 ]
@@ -892,7 +892,7 @@ dependencies = [
  "serde",
  "symphonia",
  "thiserror 2.0.21",
- "toml 1.2.1+spec-1.1.0",
+ "toml 1.2.2+spec-1.1.0",
 ]
 
 [[package]]
@@ -909,7 +909,7 @@ dependencies = [
  "rusty-opus",
  "serde",
  "serde_json",
- "toml 1.2.1+spec-1.1.0",
+ "toml 1.2.2+spec-1.1.0",
 ]
 
 [[package]]
@@ -919,7 +919,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.21",
- "toml 1.2.1+spec-1.1.0",
+ "toml 1.2.2+spec-1.1.0",
 ]
 
 [[package]]
@@ -2969,9 +2969,9 @@ checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
 
 [[package]]
 name = "rusty-opus"
-version = "1.1.1"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8acfb69e58b5082d511451aae511dd1b1d0fe693e54ddb29535b480ac48bf8b9"
+checksum = "3255d1fe9772031f725ddb6207044332972ce62ec16f838fc41eeace8983fba8"
 
 [[package]]
 name = "same-file"
@@ -3723,9 +3723,9 @@ checksum = "61c41af27dd6d1e27b1b16b489db798443478cef1f06a660c96db617ba5de3b1"
 
 [[package]]
 name = "tauri"
-version = "2.12.6"
+version = "2.12.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c2a5cad3827d1fa46c206a6bcaee8ca14203e9b0aaabe447dd4acef33ecd065"
+checksum = "30fbfbb9dc9a2697b0e96d909ddc295fb18d2d82a58ed542ab8d9eba2edbe6da"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3891,7 +3891,7 @@ dependencies = [
  "tauri-plugin",
  "tauri-utils",
  "thiserror 2.0.21",
- "toml 1.2.1+spec-1.1.0",
+ "toml 1.2.2+spec-1.1.0",
  "url",
 ]
 
@@ -4007,7 +4007,7 @@ dependencies = [
  "serde_with",
  "swift-rs",
  "thiserror 2.0.21",
- "toml 1.2.1+spec-1.1.0",
+ "toml 1.2.2+spec-1.1.0",
  "url",
  "urlpattern",
  "uuid",
@@ -4022,7 +4022,7 @@ checksum = "cc65d45c68858bfe420dd29e834b5d15dbecf8a07a8a16cf4d532c7b1f69d4b6"
 dependencies = [
  "dunce",
  "embed-resource",
- "toml 1.2.1+spec-1.1.0",
+ "toml 1.2.2+spec-1.1.0",
 ]
 
 [[package]]
@@ -4161,9 +4161,9 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "1.2.1+spec-1.1.0"
+version = "1.2.2+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5755c51863cdac711f1956baf8eb9588e060755f7d3c4c979e70ea1e1f32cd7"
+checksum = "5426cb1b964690d913f6c5c1a1ae0b42f428ec506bb4d452876d7a209c9bca3b"
 dependencies = [
  "indexmap 2.14.2",
  "serde_core",
@@ -4230,9 +4230,9 @@ dependencies = [
 
 [[package]]
 name = "toml_parser"
-version = "1.1.5+spec-1.1.0"
+version = "1.1.7+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "baa693a8032d7e1cada7d0041e96126df243179ff061456783ac7f12bda4744c"
+checksum = "0bb28d6e049a9766c3bd91a8326e6179f5b132dec87906bb97018ef7a2f3431a"
 dependencies = [
  "winnow 1.0.4",
 ]
@@ -4452,9 +4452,9 @@ dependencies = [
 
 [[package]]
 name = "walkdir"
-version = "2.5.0"
+version = "2.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29790946404f91d9c5d06f9874efddea1dc06c5efe94541a7d6863108e3a5e4b"
+checksum = "b42e295b7452c4604982280d8586001fcad9b8b201cac67bca9771e7a7475403"
 dependencies = [
  "same-file",
  "winapi-util",
